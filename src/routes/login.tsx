@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,8 +7,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Logo } from "@/components/logo";
 import { ArrowRight, Sparkles, ShieldCheck, Zap } from "lucide-react";
 import { useState } from "react";
+import { getAuthSessionFn, loginFn } from "@/lib/auth/auth.server";
 
 export const Route = createFileRoute("/login")({
+  beforeLoad: async () => {
+    const session = await getAuthSessionFn();
+    if (session) {
+      throw redirect({ to: "/app" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Entrar — Sinal Verde CRM" },
@@ -19,11 +27,12 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const login = useServerFn(loginFn);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2 bg-background">
-      {/* Brand panel */}
       <div className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-primary text-primary-foreground p-10">
         <div className="absolute inset-0 opacity-30">
           <div className="absolute -top-32 -left-32 size-[480px] rounded-full bg-accent/40 blur-3xl" />
@@ -66,7 +75,6 @@ function LoginPage() {
         </div>
       </div>
 
-      {/* Form panel */}
       <div className="flex flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
@@ -81,15 +89,34 @@ function LoginPage() {
 
           <form
             className="space-y-4"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
+              setError(null);
               setLoading(true);
-              setTimeout(() => navigate({ to: "/app" }), 600);
+              const form = e.currentTarget;
+              const loginValue = (form.elements.namedItem("login") as HTMLInputElement).value;
+              const password = (form.elements.namedItem("senha") as HTMLInputElement).value;
+
+              try {
+                await login({ data: { login: loginValue, password } });
+                await navigate({ to: "/app" });
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Não foi possível entrar.");
+              } finally {
+                setLoading(false);
+              }
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="email">Email corporativo</Label>
-              <Input id="email" type="email" placeholder="voce@sinalverde.com.br" defaultValue="carla@sinalverde.com.br" required />
+              <Label htmlFor="login">Login</Label>
+              <Input
+                id="login"
+                name="login"
+                type="text"
+                autoComplete="username"
+                placeholder="mozart.sinalverde.com"
+                required
+              />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -98,7 +125,14 @@ function LoginPage() {
                   Esqueci minha senha
                 </a>
               </div>
-              <Input id="senha" type="password" placeholder="••••••••" defaultValue="demo1234" required />
+              <Input
+                id="senha"
+                name="senha"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                required
+              />
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="remember" defaultChecked />
@@ -106,6 +140,11 @@ function LoginPage() {
                 Manter-me conectado
               </Label>
             </div>
+            {error ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
             <Button
               type="submit"
               disabled={loading}
@@ -117,14 +156,6 @@ function LoginPage() {
 
           <div className="mt-6 text-center text-xs text-muted-foreground">
             Ao continuar você concorda com os Termos de Uso e Política de Privacidade.
-          </div>
-
-          <div className="mt-10 rounded-xl border border-dashed border-border bg-muted/40 p-3 text-center text-xs text-muted-foreground">
-            Demo: pressione <span className="font-semibold text-foreground">Entrar</span> para acessar o painel.
-            <br />
-            <Link to="/app" className="mt-1 inline-block font-medium text-primary hover:underline">
-              Pular login →
-            </Link>
           </div>
         </div>
       </div>

@@ -1,9 +1,12 @@
-import { useRouterState, Link } from "@tanstack/react-router";
+import { useRouterState, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bell, Search, Sun, Moon, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { SessionData } from "@/lib/auth/session-config";
+import { logoutFn } from "@/lib/auth/auth.server";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,8 +29,19 @@ const TITLES: Record<string, string> = {
   "/app/configuracoes": "Configurações",
 };
 
-export function AppTopbar() {
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export function AppTopbar({ user }: { user: SessionData }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const logout = useServerFn(logoutFn);
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
@@ -85,11 +99,11 @@ export function AppTopbar() {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 hover:bg-muted transition-colors">
               <span className="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                CM
+                {initials(user.name)}
               </span>
               <span className="hidden md:block text-left leading-tight">
-                <span className="block text-xs font-semibold">Carla Mendes</span>
-                <span className="block text-[10px] text-muted-foreground">Gerente</span>
+                <span className="block text-xs font-semibold">{user.name}</span>
+                <span className="block text-[10px] text-muted-foreground capitalize">{user.role}</span>
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -99,8 +113,13 @@ export function AppTopbar() {
             <DropdownMenuItem>Perfil</DropdownMenuItem>
             <DropdownMenuItem>Preferências</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link to="/login">Sair</Link>
+            <DropdownMenuItem
+              onClick={async () => {
+                await logout();
+                await navigate({ to: "/login" });
+              }}
+            >
+              Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

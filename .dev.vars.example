@@ -1,0 +1,2 @@
+# Copie para .dev.vars (não versionar) antes do deploy Cloudflare.
+SESSION_SECRET=troque-por-uma-chave-aleatoria-com-pelo-menos-32-caracteres
