@@ -13,7 +13,6 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
-import { Route as AppWhatsappRouteImport } from './routes/app/whatsapp'
 import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
 import { Route as AppRelatoriosRouteImport } from './routes/app/relatorios'
 import { Route as AppDocumentosRouteImport } from './routes/app/documentos'
@@ -40,11 +39,6 @@ const IndexRoute = IndexRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppWhatsappRoute = AppWhatsappRouteImport.update({
-  id: '/whatsapp',
-  path: '/whatsapp',
   getParentRoute: () => AppRoute,
 } as any)
 const AppRemarketingRoute = AppRemarketingRouteImport.update({
@@ -93,7 +87,6 @@ export interface FileRoutesByFullPath {
   '/app/documentos': typeof AppDocumentosRoute
   '/app/relatorios': typeof AppRelatoriosRoute
   '/app/remarketing': typeof AppRemarketingRoute
-  '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
 }
@@ -106,7 +99,6 @@ export interface FileRoutesByTo {
   '/app/documentos': typeof AppDocumentosRoute
   '/app/relatorios': typeof AppRelatoriosRoute
   '/app/remarketing': typeof AppRemarketingRoute
-  '/app/whatsapp': typeof AppWhatsappRoute
   '/app': typeof AppIndexRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
 }
@@ -121,7 +113,6 @@ export interface FileRoutesById {
   '/app/documentos': typeof AppDocumentosRoute
   '/app/relatorios': typeof AppRelatoriosRoute
   '/app/remarketing': typeof AppRemarketingRoute
-  '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
 }
@@ -137,7 +128,6 @@ export interface FileRouteTypes {
     | '/app/documentos'
     | '/app/relatorios'
     | '/app/remarketing'
-    | '/app/whatsapp'
     | '/app/'
     | '/app/clientes/novo'
   fileRoutesByTo: FileRoutesByTo
@@ -150,7 +140,6 @@ export interface FileRouteTypes {
     | '/app/documentos'
     | '/app/relatorios'
     | '/app/remarketing'
-    | '/app/whatsapp'
     | '/app'
     | '/app/clientes/novo'
   id:
@@ -164,7 +153,6 @@ export interface FileRouteTypes {
     | '/app/documentos'
     | '/app/relatorios'
     | '/app/remarketing'
-    | '/app/whatsapp'
     | '/app/'
     | '/app/clientes/novo'
   fileRoutesById: FileRoutesById
@@ -203,13 +191,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/whatsapp': {
-      id: '/app/whatsapp'
-      path: '/whatsapp'
-      fullPath: '/app/whatsapp'
-      preLoaderRoute: typeof AppWhatsappRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/remarketing': {
@@ -283,7 +264,6 @@ interface AppRouteChildren {
   AppDocumentosRoute: typeof AppDocumentosRoute
   AppRelatoriosRoute: typeof AppRelatoriosRoute
   AppRemarketingRoute: typeof AppRemarketingRoute
-  AppWhatsappRoute: typeof AppWhatsappRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -294,7 +274,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppDocumentosRoute: AppDocumentosRoute,
   AppRelatoriosRoute: AppRelatoriosRoute,
   AppRemarketingRoute: AppRemarketingRoute,
-  AppWhatsappRoute: AppWhatsappRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

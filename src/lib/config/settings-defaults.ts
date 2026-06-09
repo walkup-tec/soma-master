@@ -1,5 +1,5 @@
 import { ALL_CLIENT_FIELD_IDS } from "@/lib/config/client-fields";
-import { ALL_MENU_ITEM_IDS } from "@/lib/config/menu-items";
+import { ALL_MENU_ITEM_IDS, type MenuItemId } from "@/lib/config/menu-items";
 import type { SystemSettings } from "@/lib/config/settings-types";
 
 const masterCategoryId = "cat-master";
@@ -17,7 +17,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     {
       id: atendenteCategoryId,
       name: "Atendente",
-      menuIds: ["dashboard", "clientes", "agenda", "whatsapp"],
+      menuIds: ["dashboard", "clientes", "agenda"],
       isDefault: true,
     },
   ],
@@ -74,9 +74,11 @@ export function normalizeSettings(settings: SystemSettings): SystemSettings {
     ? settings.defaultCategoryId
     : (categories.find((c) => c.isDefault)?.id ?? categories[0].id);
 
+  const validMenuIds = new Set(ALL_MENU_ITEM_IDS);
   const normalizedCategories = categories.map((c) => ({
     ...c,
     isDefault: c.id === defaultCategoryId,
+    menuIds: c.menuIds.filter((id): id is MenuItemId => validMenuIds.has(id as MenuItemId)),
   }));
 
   const products = settings.products.map((p) => {

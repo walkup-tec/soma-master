@@ -19,7 +19,6 @@ import {
   CalendarDays,
   Folder,
   BarChart3,
-  MessageCircle,
   Settings,
   Sparkles,
 } from "lucide-react";
@@ -34,7 +33,6 @@ const OPERACAO: NavItem[] = [
 const COMERCIAL: NavItem[] = [
   { title: "Remarketing", url: "/app/remarketing", icon: Megaphone },
   { title: "Agenda", url: "/app/agenda", icon: CalendarDays },
-  { title: "WhatsApp", url: "/app/whatsapp", icon: MessageCircle },
 ];
 const GESTAO: NavItem[] = [
   { title: "Documentos", url: "/app/documentos", icon: Folder },
