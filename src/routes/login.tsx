@@ -39,7 +39,7 @@ function LoginPage() {
           <div className="absolute bottom-0 right-0 size-[420px] rounded-full bg-accent/20 blur-3xl" />
         </div>
         <div className="relative z-10">
-          <Logo size="xl" />
+          <Logo size="xl-login" />
         </div>
         <div className="relative z-10 max-w-md space-y-6">
           <h2 className="font-display text-4xl font-bold leading-tight tracking-tight">
@@ -78,7 +78,7 @@ function LoginPage() {
       <div className="flex flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <Logo size="lg" />
+            <Logo size="lg-login" />
           </div>
           <div className="mb-8">
             <h1 className="font-display text-2xl font-bold tracking-tight">Bem-vindo de volta</h1>
