@@ -1,10 +1,15 @@
-import type { UserRole } from "@/lib/auth/master-user";
+import type { MenuItemId } from "@/lib/config/menu-items";
+import type { UserRole } from "@/lib/users/user.types";
 
 export type SessionData = {
   userId: string;
-  login: string;
+  email: string;
   name: string;
   role: UserRole;
+  categoryId: string;
+  menuIds: MenuItemId[];
+  /** Tela inicial do tipo de usuário (categoria). */
+  homeMenuId: MenuItemId;
 };
 
 export function getSessionPassword(): string {

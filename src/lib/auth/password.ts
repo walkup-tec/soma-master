@@ -9,12 +9,11 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
-export async function verifyPassword(
-  password: string,
-  saltBase64: string,
-  expectedHashBase64: string,
-): Promise<boolean> {
-  const salt = decodeBase64(saltBase64);
+function encodeBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+async function deriveHash(password: string, salt: Uint8Array): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
@@ -22,6 +21,26 @@ export async function verifyPassword(
     key,
     256,
   );
-  const hash = btoa(String.fromCharCode(...new Uint8Array(bits)));
+  return encodeBase64(new Uint8Array(bits));
+}
+
+export async function verifyPassword(
+  password: string,
+  saltBase64: string,
+  expectedHashBase64: string,
+): Promise<boolean> {
+  const hash = await deriveHash(password, decodeBase64(saltBase64));
   return hash === expectedHashBase64;
+}
+
+export async function hashPassword(password: string): Promise<{ saltB64: string; hashB64: string }> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hashB64 = await deriveHash(password, salt);
+  return { saltB64: encodeBase64(salt), hashB64 };
+}
+
+export function generateTemporaryPassword(length = 12): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
 }

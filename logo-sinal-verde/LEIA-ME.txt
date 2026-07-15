@@ -7,5 +7,6 @@ Arquivos:
 - logo-canva-screen.png — preview 1024x1024
 
 O sistema usa Logo-melhorada.png (300x110, transparente) em src/assets e public/.
+Favicon: logo-sinal-verde/favicon.png → public/favicon.png
 
 Arquivo principal do app: logo-sinal-verde/Logo-melhorada.png

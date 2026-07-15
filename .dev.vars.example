@@ -1,2 +1,18 @@
 # Copie para .dev.vars (não versionar) antes do deploy Cloudflare.
 SESSION_SECRET=troque-por-uma-chave-aleatoria-com-pelo-menos-32-caracteres
+
+SUPABASE_URL=https://SEU-PROJECT-REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
+DATABASE_URL=postgresql://postgres.SEU-PROJECT-REF:[SENHA]@....pooler.supabase.com:6543/postgres
+
+APP_URL=http://localhost:8080
+
+# --- E-mail transacional ---
+MAIL_MODE=smtp
+MAIL_FROM=Drax Sistemas <draxsistemas@gmail.com>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=draxsistemas@gmail.com
+SMTP_PASS=

@@ -16,9 +16,25 @@ dist-ssr
 .nitro
 *.local
 
-# Wrangler / Cloudflare
+# Wrangler / Cloudflare / env
 .wrangler/
 .dev.vars
+.env
+.env.*
+!.env.example
+
+# Dados locais / runtime (não versionar em repo público)
+data/users.json
+data/system-settings.json
+data/master-user.json
+data/clients.json
+data/client-attachments/
+data/uploads/
+data/import-jobs/
+*.xlsx
+tmp-*.html
+Reuniões/
+Reunioes/
 
 # Editor directories and files
 .vscode/*

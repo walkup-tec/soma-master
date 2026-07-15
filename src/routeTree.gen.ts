@@ -13,9 +13,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
+import { Route as AppUsuariosRouteImport } from './routes/app/usuarios'
 import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
-import { Route as AppRelatoriosRouteImport } from './routes/app/relatorios'
-import { Route as AppDocumentosRouteImport } from './routes/app/documentos'
+import { Route as AppKanbanRouteImport } from './routes/app/kanban'
 import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
 import { Route as AppClientesRouteImport } from './routes/app/clientes'
 import { Route as AppAgendaRouteImport } from './routes/app/agenda'
@@ -41,19 +41,19 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppUsuariosRoute = AppUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRemarketingRoute = AppRemarketingRouteImport.update({
   id: '/remarketing',
   path: '/remarketing',
   getParentRoute: () => AppRoute,
 } as any)
-const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
-  id: '/relatorios',
-  path: '/relatorios',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDocumentosRoute = AppDocumentosRouteImport.update({
-  id: '/documentos',
-  path: '/documentos',
+const AppKanbanRoute = AppKanbanRouteImport.update({
+  id: '/kanban',
+  path: '/kanban',
   getParentRoute: () => AppRoute,
 } as any)
 const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
@@ -84,9 +84,9 @@ export interface FileRoutesByFullPath {
   '/app/agenda': typeof AppAgendaRoute
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
-  '/app/documentos': typeof AppDocumentosRoute
-  '/app/relatorios': typeof AppRelatoriosRoute
+  '/app/kanban': typeof AppKanbanRoute
   '/app/remarketing': typeof AppRemarketingRoute
+  '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
 }
@@ -96,9 +96,9 @@ export interface FileRoutesByTo {
   '/app/agenda': typeof AppAgendaRoute
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
-  '/app/documentos': typeof AppDocumentosRoute
-  '/app/relatorios': typeof AppRelatoriosRoute
+  '/app/kanban': typeof AppKanbanRoute
   '/app/remarketing': typeof AppRemarketingRoute
+  '/app/usuarios': typeof AppUsuariosRoute
   '/app': typeof AppIndexRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
 }
@@ -110,9 +110,9 @@ export interface FileRoutesById {
   '/app/agenda': typeof AppAgendaRoute
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
-  '/app/documentos': typeof AppDocumentosRoute
-  '/app/relatorios': typeof AppRelatoriosRoute
+  '/app/kanban': typeof AppKanbanRoute
   '/app/remarketing': typeof AppRemarketingRoute
+  '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
 }
@@ -125,9 +125,9 @@ export interface FileRouteTypes {
     | '/app/agenda'
     | '/app/clientes'
     | '/app/configuracoes'
-    | '/app/documentos'
-    | '/app/relatorios'
+    | '/app/kanban'
     | '/app/remarketing'
+    | '/app/usuarios'
     | '/app/'
     | '/app/clientes/novo'
   fileRoutesByTo: FileRoutesByTo
@@ -137,9 +137,9 @@ export interface FileRouteTypes {
     | '/app/agenda'
     | '/app/clientes'
     | '/app/configuracoes'
-    | '/app/documentos'
-    | '/app/relatorios'
+    | '/app/kanban'
     | '/app/remarketing'
+    | '/app/usuarios'
     | '/app'
     | '/app/clientes/novo'
   id:
@@ -150,9 +150,9 @@ export interface FileRouteTypes {
     | '/app/agenda'
     | '/app/clientes'
     | '/app/configuracoes'
-    | '/app/documentos'
-    | '/app/relatorios'
+    | '/app/kanban'
     | '/app/remarketing'
+    | '/app/usuarios'
     | '/app/'
     | '/app/clientes/novo'
   fileRoutesById: FileRoutesById
@@ -193,6 +193,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/usuarios': {
+      id: '/app/usuarios'
+      path: '/usuarios'
+      fullPath: '/app/usuarios'
+      preLoaderRoute: typeof AppUsuariosRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/remarketing': {
       id: '/app/remarketing'
       path: '/remarketing'
@@ -200,18 +207,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRemarketingRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/relatorios': {
-      id: '/app/relatorios'
-      path: '/relatorios'
-      fullPath: '/app/relatorios'
-      preLoaderRoute: typeof AppRelatoriosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/documentos': {
-      id: '/app/documentos'
-      path: '/documentos'
-      fullPath: '/app/documentos'
-      preLoaderRoute: typeof AppDocumentosRouteImport
+    '/app/kanban': {
+      id: '/app/kanban'
+      path: '/kanban'
+      fullPath: '/app/kanban'
+      preLoaderRoute: typeof AppKanbanRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/configuracoes': {
@@ -261,9 +261,9 @@ interface AppRouteChildren {
   AppAgendaRoute: typeof AppAgendaRoute
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
-  AppDocumentosRoute: typeof AppDocumentosRoute
-  AppRelatoriosRoute: typeof AppRelatoriosRoute
+  AppKanbanRoute: typeof AppKanbanRoute
   AppRemarketingRoute: typeof AppRemarketingRoute
+  AppUsuariosRoute: typeof AppUsuariosRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -271,9 +271,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppAgendaRoute: AppAgendaRoute,
   AppClientesRoute: AppClientesRouteWithChildren,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
-  AppDocumentosRoute: AppDocumentosRoute,
-  AppRelatoriosRoute: AppRelatoriosRoute,
+  AppKanbanRoute: AppKanbanRoute,
   AppRemarketingRoute: AppRemarketingRoute,
+  AppUsuariosRoute: AppUsuariosRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

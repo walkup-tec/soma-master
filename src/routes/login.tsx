@@ -7,13 +7,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Logo } from "@/components/logo";
 import { ArrowRight, Sparkles, ShieldCheck, Zap } from "lucide-react";
 import { useState } from "react";
+import { firstAllowedAppPath } from "@/lib/auth/menu-access";
 import { getAuthSessionFn, loginFn } from "@/lib/auth/auth.server";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
     const session = await getAuthSessionFn();
     if (session) {
-      throw redirect({ to: "/app" });
+      throw redirect({ to: firstAllowedAppPath(session) });
     }
   },
   head: () => ({
@@ -46,8 +47,8 @@ function LoginPage() {
             O CRM que <span className="text-accent">acelera</span> sua operação comercial.
           </h2>
           <p className="text-primary-foreground/80">
-            Pipeline de propostas, remarketing inteligente, follow-up automático e
-            atendimento centralizado em um só lugar.
+            Pipeline de propostas, agenda de contatos, follow-up e atendimento
+            centralizado em um só lugar.
           </p>
           <ul className="space-y-3 text-sm">
             <li className="flex items-center gap-3">
@@ -60,7 +61,7 @@ function LoginPage() {
               <span className="grid size-8 place-items-center rounded-lg bg-accent/20 text-accent">
                 <Sparkles className="size-4" />
               </span>
-              Sugestões de remarketing baseadas em score
+              Agenda e follow-up organizados por prioridade
             </li>
             <li className="flex items-center gap-3">
               <span className="grid size-8 place-items-center rounded-lg bg-accent/20 text-accent">
@@ -94,12 +95,12 @@ function LoginPage() {
               setError(null);
               setLoading(true);
               const form = e.currentTarget;
-              const loginValue = (form.elements.namedItem("login") as HTMLInputElement).value;
+              const email = (form.elements.namedItem("email") as HTMLInputElement).value;
               const password = (form.elements.namedItem("senha") as HTMLInputElement).value;
 
               try {
-                await login({ data: { login: loginValue, password } });
-                await navigate({ to: "/app" });
+                const session = await login({ data: { email, password } });
+                await navigate({ to: firstAllowedAppPath(session) });
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Não foi possível entrar.");
               } finally {
@@ -108,13 +109,13 @@ function LoginPage() {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="login">Login</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input
-                id="login"
-                name="login"
-                type="text"
+                id="email"
+                name="email"
+                type="email"
                 autoComplete="username"
-                placeholder="mozart.sinalverde.com"
+                placeholder="mozart@sinalverde.com"
                 required
               />
             </div>

@@ -1,11 +1,12 @@
 import { useRouterState, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { AgendaTopbarAlerts } from "@/components/agenda/agenda-topbar-alerts";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Bell, Search, Sun, Moon, Plus } from "lucide-react";
+import { Sun, Moon, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { SessionData } from "@/lib/auth/session-config";
+import { sessionCanAccessMenu } from "@/lib/auth/menu-access";
 import { logoutFn } from "@/lib/auth/auth.server";
 import {
   DropdownMenu,
@@ -20,10 +21,10 @@ const TITLES: Record<string, string> = {
   "/app": "Dashboard",
   "/app/clientes": "Clientes",
   "/app/clientes/novo": "Novo cliente",
+  "/app/kanban": "Kanban",
   "/app/remarketing": "Remarketing",
   "/app/agenda": "Agenda & Follow-up",
-  "/app/documentos": "Documentos",
-  "/app/relatorios": "Relatórios",
+  "/app/usuarios": "Usuários",
   "/app/configuracoes": "Configurações",
 };
 
@@ -71,27 +72,16 @@ export function AppTopbar({ user }: { user: SessionData }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="relative hidden md:block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar cliente, CPF, proposta…"
-            className="h-9 w-72 pl-9 bg-muted/50 border-transparent focus-visible:bg-surface"
-          />
-          <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 select-none rounded border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline-block">
-            ⌘K
-          </kbd>
-        </div>
-        <Button asChild size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-soft hidden sm:inline-flex">
-          <Link to="/app/clientes/novo">
-            <Plus className="size-4" /> Novo cliente
-          </Link>
-        </Button>
+        {sessionCanAccessMenu(user, "agenda") ? <AgendaTopbarAlerts /> : null}
+        {sessionCanAccessMenu(user, "clientes") ? (
+          <Button asChild size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-soft hidden sm:inline-flex">
+            <Link to="/app/clientes/novo">
+              <Plus className="size-4" /> Novo cliente
+            </Link>
+          </Button>
+        ) : null}
         <Button variant="ghost" size="icon" onClick={() => setDark((v) => !v)} aria-label="Alternar tema">
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-        </Button>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notificações">
-          <Bell className="size-4" />
-          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

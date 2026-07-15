@@ -1,101 +1,235 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CLIENT_FIELD_GROUPS, type ClientFieldId } from "@/lib/config/client-fields";
-import { createEmptyProduct } from "@/lib/config/settings-defaults";
+import { createEmptyProduct, normalizeProductFields } from "@/lib/config/settings-defaults";
 import type { ProductConfig, SystemSettings } from "@/lib/config/settings-types";
 
 type Props = {
   settings: SystemSettings;
-  onChange: (settings: SystemSettings) => void;
+  onChange: (settings: SystemSettings) => Promise<SystemSettings>;
 };
 
+/** Persistência já chega filtrada pela seção "products" em Configurações. */
 export function ProductsSettings({ settings, onChange }: Props) {
+  const [products, setProducts] = useState<ProductConfig[]>(settings.products);
   const [selectedId, setSelectedId] = useState(settings.products[0]?.id ?? "");
-  const selected = settings.products.find((p) => p.id === selectedId) ?? settings.products[0];
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
+  const productsRef = useRef(products);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  productsRef.current = products;
 
-  const updateProducts = (products: ProductConfig[]) => {
-    onChange({ ...settings, products });
+  useEffect(() => {
+    setProducts(settings.products);
+    productsRef.current = settings.products;
+    setSelectedId((current) => {
+      if (current && settings.products.some((product) => product.id === current)) return current;
+      return settings.products[0]?.id ?? "";
+    });
+    setCheckedIds((current) => current.filter((id) => settings.products.some((p) => p.id === id)));
+  }, [settings.products]);
+
+  const selected = products.find((product) => product.id === selectedId) ?? products[0];
+
+  const persistProducts = (
+    nextProducts: ProductConfig[],
+    options?: { successMessage?: string; quiet?: boolean },
+  ) => {
+    setProducts(nextProducts);
+    productsRef.current = nextProducts;
+    if (!options?.quiet) setSaving(true);
+
+    const run = async () => {
+      try {
+        const saved = await onChange({ ...settings, products: productsRef.current });
+        if (saved?.products) {
+          setProducts(saved.products);
+          productsRef.current = saved.products;
+          setSelectedId((current) => {
+            if (current && saved.products.some((product) => product.id === current)) return current;
+            return saved.products[0]?.id ?? "";
+          });
+          setCheckedIds((current) =>
+            current.filter((id) => saved.products.some((product) => product.id === id)),
+          );
+        }
+        if (!options?.quiet) {
+          toast.success(options?.successMessage ?? "Produtos salvos.");
+        }
+      } catch (error) {
+        setProducts(settings.products);
+        productsRef.current = settings.products;
+        toast.error(error instanceof Error ? error.message : "Não foi possível salvar os produtos.");
+        throw error;
+      } finally {
+        if (!options?.quiet) setSaving(false);
+      }
+    };
+
+    const queued = saveChainRef.current.then(run, run);
+    saveChainRef.current = queued.then(
+      () => undefined,
+      () => undefined,
+    );
+    return queued;
   };
 
   const updateSelected = (patch: Partial<ProductConfig>) => {
     if (!selected) return;
-    updateProducts(settings.products.map((p) => (p.id === selected.id ? { ...p, ...patch } : p)));
+    const next = normalizeProductFields({ ...selected, ...patch });
+    const nextProducts = products.map((product) => (product.id === selected.id ? next : product));
+    void persistProducts(nextProducts, { quiet: true });
   };
 
-  const toggleField = (fieldId: ClientFieldId, mode: "available" | "required", checked: boolean) => {
+  const setFieldRequired = (fieldId: ClientFieldId, required: boolean) => {
     if (!selected) return;
 
-    let availableFieldIds = [...selected.availableFieldIds];
-    let requiredFieldIds = [...selected.requiredFieldIds];
+    const requiredFieldIds = required
+      ? [...new Set([...selected.requiredFieldIds, fieldId])]
+      : selected.requiredFieldIds.filter((id) => id !== fieldId);
 
-    if (mode === "available") {
-      if (checked) {
-        if (!availableFieldIds.includes(fieldId)) availableFieldIds.push(fieldId);
-      } else {
-        availableFieldIds = availableFieldIds.filter((id) => id !== fieldId);
-        requiredFieldIds = requiredFieldIds.filter((id) => id !== fieldId);
-      }
-    } else if (checked) {
-      if (!availableFieldIds.includes(fieldId)) availableFieldIds.push(fieldId);
-      if (!requiredFieldIds.includes(fieldId)) requiredFieldIds.push(fieldId);
-    } else {
-      requiredFieldIds = requiredFieldIds.filter((id) => id !== fieldId);
-    }
-
-    updateSelected({ availableFieldIds, requiredFieldIds });
+    updateSelected({ requiredFieldIds });
   };
 
   const addProduct = () => {
     const product = createEmptyProduct();
     product.name = "Novo produto";
-    updateProducts([...settings.products, product]);
+    const nextProducts = [...products, product];
+    setProducts(nextProducts);
     setSelectedId(product.id);
+    void persistProducts(nextProducts, { successMessage: "Produto criado." });
   };
 
-  const removeProduct = (id: string) => {
-    const products = settings.products.filter((p) => p.id !== id);
-    if (products.length === 0) {
+  const toggleChecked = (id: string, checked: boolean) => {
+    setCheckedIds((current) => {
+      if (checked) return current.includes(id) ? current : [...current, id];
+      return current.filter((item) => item !== id);
+    });
+  };
+
+  const requestDeleteIds = (ids: string[]) => {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return;
+
+    if (products.length - uniqueIds.length < 1) {
       toast.error("Mantenha ao menos um produto.");
       return;
     }
-    updateProducts(products);
-    setSelectedId(products[0].id);
+
+    setPendingDeleteIds(uniqueIds);
   };
 
+  const confirmDelete = async () => {
+    if (!pendingDeleteIds?.length) return;
+    const idsToRemove = [...pendingDeleteIds];
+    const removeSet = new Set(idsToRemove);
+    const nextProducts = products.filter((product) => !removeSet.has(product.id));
+
+    if (nextProducts.length < 1) {
+      toast.error("Mantenha ao menos um produto.");
+      setPendingDeleteIds(null);
+      return;
+    }
+
+    setPendingDeleteIds(null);
+    if (selectedId && removeSet.has(selectedId)) {
+      setSelectedId(nextProducts[0]?.id ?? "");
+    }
+    setCheckedIds((current) => current.filter((id) => !removeSet.has(id)));
+
+    try {
+      await persistProducts(nextProducts, {
+        successMessage:
+          idsToRemove.length > 1 ? `${idsToRemove.length} produtos excluídos.` : "Produto excluído.",
+      });
+    } catch {
+      // toast already shown
+    }
+  };
+
+  const deleteDialogCount = pendingDeleteIds?.length ?? 0;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+    <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
       <Card className="border-border/60 shadow-soft h-fit">
         <CardHeader className="pb-3">
           <CardTitle className="font-display text-base">Produtos</CardTitle>
-          <CardDescription>Campos exigidos no cadastro de cliente por produto.</CardDescription>
+          <CardDescription>
+            Marque um ou mais para excluir em lote. Clique no nome para editar.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {settings.products.map((product) => (
-            <button
-              key={product.id}
-              type="button"
-              onClick={() => setSelectedId(product.id)}
-              className={`flex w-full flex-col rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                selected?.id === product.id
-                  ? "border-primary/40 bg-primary/10"
-                  : "border-border/60 hover:bg-muted/50"
-              }`}
-            >
-              <span className="font-medium">{product.name || "Sem nome"}</span>
-              <span className="text-xs text-muted-foreground">
-                {product.requiredFieldIds.length} obrigatório(s) · {product.availableFieldIds.length} disponível(is)
-              </span>
-            </button>
-          ))}
-          <Button type="button" variant="outline" className="w-full" onClick={addProduct}>
-            <Plus className="size-4" /> Novo produto
-          </Button>
+          {products.map((product) => {
+            const isSelected = selected?.id === product.id;
+            const isChecked = checkedIds.includes(product.id);
+
+            return (
+              <div
+                key={product.id}
+                className={`flex items-start gap-2 rounded-lg border px-2 py-1.5 transition-colors ${
+                  isSelected
+                    ? "border-primary/40 bg-primary/10"
+                    : "border-border/60 hover:bg-muted/50"
+                }`}
+              >
+                <Checkbox
+                  className="mt-1.5"
+                  checked={isChecked}
+                  disabled={saving}
+                  onCheckedChange={(value) => toggleChecked(product.id, Boolean(value))}
+                  aria-label={`Selecionar ${product.name || "produto"}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(product.id)}
+                  className="min-w-0 flex-1 rounded-md px-1 py-1 text-left text-sm"
+                >
+                  <span className={`block truncate ${isSelected ? "font-medium" : ""}`}>
+                    {product.name || "Sem nome"}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {product.requiredFieldIds.length} obrigatório(s) · {product.availableFieldIds.length}{" "}
+                    disponível(is)
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+
+          <div className="flex flex-col gap-2 pt-2">
+            {checkedIds.length > 0 ? (
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full"
+                disabled={saving}
+                onClick={() => requestDeleteIds(checkedIds)}
+              >
+                <Trash2 className="size-4" />
+                Excluir selecionados ({checkedIds.length})
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" className="w-full" onClick={addProduct} disabled={saving}>
+              <Plus className="size-4" /> Novo produto
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -113,7 +247,9 @@ export function ProductsSettings({ settings, onChange }: Props) {
               size="sm"
               variant="ghost"
               className="text-destructive hover:text-destructive"
-              onClick={() => removeProduct(selected.id)}
+              onClick={() => requestDeleteIds([selected.id])}
+              disabled={saving}
+              title="Excluir produto"
             >
               <Trash2 className="size-4" />
             </Button>
@@ -124,15 +260,24 @@ export function ProductsSettings({ settings, onChange }: Props) {
               <Input
                 id="product-name"
                 value={selected.name}
-                onChange={(e) => updateSelected({ name: e.target.value })}
+                onChange={(e) => {
+                  const nextProducts = products.map((product) =>
+                    product.id === selected.id ? { ...product, name: e.target.value } : product,
+                  );
+                  setProducts(nextProducts);
+                }}
+                onBlur={() => {
+                  if (!selected) return;
+                  void persistProducts(products, { quiet: true });
+                }}
                 placeholder="Ex.: Empréstimo CLT, FGTS, Cartão consignado"
               />
             </div>
 
             <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-              Marque <strong className="text-foreground">Disponível</strong> para liberar o campo no cadastro.
-              Marque <strong className="text-foreground">Obrigatório</strong> para exigir o preenchimento (somente entre
-              os disponíveis).
+              Todos os campos começam como <strong className="text-foreground">Disponível</strong> (opcional). Ao marcar{" "}
+              <strong className="text-foreground">Obrigatório</strong>, o campo passa a ser exigido no cadastro. Ao
+              desmarcar, volta a ser disponível.
             </div>
 
             <div className="space-y-6">
@@ -150,8 +295,8 @@ export function ProductsSettings({ settings, onChange }: Props) {
                       </thead>
                       <tbody>
                         {group.fields.map((field) => {
-                          const available = selected.availableFieldIds.includes(field.id);
                           const required = selected.requiredFieldIds.includes(field.id);
+                          const available = !required;
                           return (
                             <tr key={field.id} className="border-t border-border/60">
                               <td className="px-4 py-3">
@@ -163,14 +308,14 @@ export function ProductsSettings({ settings, onChange }: Props) {
                               <td className="px-4 py-3 text-center">
                                 <Checkbox
                                   checked={available}
-                                  onCheckedChange={(value) => toggleField(field.id, "available", value === true)}
+                                  disabled={available}
+                                  onCheckedChange={() => setFieldRequired(field.id, false)}
                                 />
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <Checkbox
                                   checked={required}
-                                  disabled={!available}
-                                  onCheckedChange={(value) => toggleField(field.id, "required", value === true)}
+                                  onCheckedChange={(value) => setFieldRequired(field.id, value === true)}
                                 />
                               </td>
                             </tr>
@@ -185,6 +330,39 @@ export function ProductsSettings({ settings, onChange }: Props) {
           </CardContent>
         </Card>
       ) : null}
+
+      <AlertDialog
+        open={pendingDeleteIds !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteIds(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteDialogCount > 1 ? `Excluir ${deleteDialogCount} produtos?` : "Excluir produto?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteDialogCount > 1
+                ? "Os produtos selecionados serão removidos. Clientes já cadastrados não são apagados."
+                : "Este produto será removido. Clientes já cadastrados não são apagados."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={saving}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

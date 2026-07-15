@@ -1,7 +1,14 @@
+import { loadLocalEnvFile } from "./lib/db/load-env-file";
 import "./lib/error-capture";
 
+loadLocalEnvFile();
+
+import { handleClientAttachmentDownload } from "./lib/clients/client-attachment-download.handler";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { warmDatabaseConnection } from "./lib/db/postgres";
+
+warmDatabaseConnection();
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -69,6 +76,9 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const attachmentResponse = await handleClientAttachmentDownload(request);
+      if (attachmentResponse) return attachmentResponse;
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
