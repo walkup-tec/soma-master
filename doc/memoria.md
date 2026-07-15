@@ -1,3 +1,14 @@
+﻿## 2026-07-14 — Bootstrap Projeto Soma
+
+- **Pasta local:** `D:\Soma`
+- **Repositório:** https://github.com/walkup-tec/soma-master (branch `main`)
+- **Origem:** cópia de `D:\CRM-SinalVerde` (histórico Git + working tree local)
+- **Commit bootstrap:** `9d88ecf`
+- **LOG:** `doc/LOG-2026-07-14__220500__bootstrap-projeto-soma-copia-crm.md`
+- **Próximos passos:** rebranding Soma, env próprio, demais alterações de produto
+- **Palavras-chave:** soma, soma-master, bootstrap, crm-sinal-verde
+
+---
 ## 2026-06-09 — Setup local Sinal Verde CRM
 
 - **Repo:** https://github.com/walkup-tec/sinal-verde-pro (`main`)
@@ -314,4 +325,5 @@
 ## 2026-07-14 — Dashboard pie tooltip
 - Hover: quantidade + %; fontes menores (legend 10px)
 - Keywords: pie tooltip, percentual status
+
 
