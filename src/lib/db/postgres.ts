@@ -21,8 +21,12 @@ export async function getSql(): Promise<Sql> {
   }
 
   if (!sqlInstance) {
+    // Via 172.17.0.1/socat ou IP: cert do Supabase não casa o hostname → SSL_INSECURE.
+    const insecure =
+      process.env.DATABASE_SSL_INSECURE === "1" ||
+      process.env.DATABASE_SSL_INSECURE === "true";
     sqlInstance = postgres(url, {
-      ssl: "require",
+      ssl: insecure ? { rejectUnauthorized: false } : "require",
       prepare: false,
       max: 10,
       connect_timeout: 15,

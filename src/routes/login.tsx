@@ -34,23 +34,24 @@ function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2 bg-background">
-      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-login-brand text-primary-foreground p-10">
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute -top-32 -left-32 size-[480px] rounded-full bg-accent/40 blur-3xl" />
-          <div className="absolute bottom-0 right-0 size-[420px] rounded-full bg-accent/20 blur-3xl" />
+      <div className="login-brand-panel relative hidden lg:flex flex-col justify-between overflow-hidden p-10">
+        <div className="absolute inset-0 opacity-25 pointer-events-none">
+          <div className="absolute -top-32 -left-32 size-[480px] rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute bottom-0 right-0 size-[420px] rounded-full bg-accent/25 blur-3xl" />
         </div>
         <div className="relative z-10">
-          <Logo size="xl-login" surface="on-dark" />
+          {/* Painel escuro/degradê: logo-claro (colorida), não a branca on-dark */}
+          <Logo size="xl-login" surface="on-light" />
         </div>
         <div className="relative z-10 max-w-md space-y-6">
           <h2 className="font-display text-4xl font-bold leading-tight tracking-tight">
             O CRM que <span className="text-highlight">acelera</span> sua operação comercial.
           </h2>
-          <p className="text-primary-foreground/80">
+          <p className="text-white/80">
             Pipeline de propostas, agenda de contatos, follow-up e atendimento
             centralizado em um só lugar.
           </p>
-          <ul className="space-y-3 text-sm">
+          <ul className="space-y-3 text-sm text-white">
             <li className="flex items-center gap-3">
               <span className="grid size-8 place-items-center rounded-lg bg-accent/20 text-accent">
                 <Zap className="size-4" />
@@ -71,7 +72,7 @@ function LoginPage() {
             </li>
           </ul>
         </div>
-        <div className="relative z-10 text-xs text-primary-foreground/60">
+        <div className="relative z-10 text-xs text-white/60">
           © {new Date().getFullYear()} Soma Promotora — Todos os direitos reservados.
         </div>
       </div>
