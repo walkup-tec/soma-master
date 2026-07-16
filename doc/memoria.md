@@ -1,12 +1,16 @@
 # Memória Soma
 
-## 2026-07-16 — Fix PORT=80 Easypanel (Nitro fecha / 502)
+## 2026-07-16 — PORT Easypanel = porta do Traefik (não forçar 3000)
 
-- Sintoma: logs `Listening on: http://localhost/` (sem `:3000` = porta **80**) + `Server closed`; host Easypanel 502; `app.somaconecta.com.br` 404 JSON + “Não seguro”.
-- Causa: Easypanel injeta `PORT=80`; Traefik aponta para **3000** → backend morto/errado.
-- Fix: `docker-entrypoint.sh` força `PORT`/`NITRO_PORT=3000` se raw for vazio/80/443; log `soma-entrypoint: listening…`.
-- Após push: Redeploy `gestao-interno`; domínio continua HTTP **3000**.
-- Keywords: `PORT=80`, `nitro`, `502`, `localhost/`, `entrypoint`
+- Sintoma: Nitro sobe e logo `Server closed successfully` (SIGTERM) + 502/404.
+- Causa real: painel injeta `PORT=80` (= porta do domínio/Traefik). Forçar app em **3000** deixava Traefik sem backend → healthcheck/orquestrador mata o container.
+- Fix: escutar `PORT` do ambiente; imagem como root (bind :80); `docker-signal-log.mjs` loga SIGTERM.
+- Painel: Domínio HTTP = **mesma** porta do log (`80` se raw PORT=80). Não misturar 80 no env e 3000 no domínio.
+- Keywords: `PORT=80`, `SIGTERM`, `Server closed successfully`, `nitro`, `502`
+
+## 2026-07-16 — (obsoleto) forçar Nitro 3000
+
+- Tentativa `2bbfc76` forçou 3000; piorou o mismatch. Substituída pelo fix acima.
 
 ## 2026-07-16 — Traefik / mesmo VPS que WABA
 

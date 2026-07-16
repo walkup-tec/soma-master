@@ -1,9 +1,9 @@
 # Soma Promotora CRM — Node + Nitro (TanStack Start) para Easypanel
 # Doc: https://tanstack.com/start/latest/docs/framework/react/guide/hosting
-# Porta interna: 3000
+# Doc Nitro PORT: https://nitro.build/deploy/runtimes/node
 #
-# Importante: o `vite build` DEVE rodar sob Node (não `bun run`), senão o Nitro/srvx
-# embute Bun.serve e o container Node cai com "Bun is not defined".
+# Porta: respeitar PORT do Easypanel (ex.: 80). Domínio HTTP no painel = mesma porta.
+# Importante: vite build sob Node (não bun run) — evita "Bun is not defined".
 
 FROM oven/bun:1.3 AS deps
 WORKDIR /app
@@ -17,25 +17,23 @@ COPY . .
 ENV DEPLOY_TARGET=node
 ENV NITRO_PRESET=node-server
 ENV NODE_ENV=production
-# Usa o Node embutido na imagem Bun — evita preset Bun no output
 RUN node ./node_modules/vite/bin/vite.js build
 
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# App sempre em 3000. Entrypoint ignora PORT=80 injetado pelo Easypanel.
-ENV PORT=3000
-ENV NITRO_PORT=3000
+# Default se o painel não injetar PORT; Easypanel costuma sobrescrever com 80
+ENV PORT=80
+ENV NITRO_PORT=80
 ENV HOST=0.0.0.0
 ENV NITRO_HOST=0.0.0.0
 
 COPY --from=build /app/.output ./.output
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh \
-  && groupadd -r app \
-  && useradd -r -g app app \
-  && chown -R app:app /app
+COPY docker-signal-log.mjs ./docker-signal-log.mjs
 
-USER app
-EXPOSE 3000
+# root: necessário para bind em :80 (PORT do Easypanel). Sem isso EACCES e restart.
+RUN chmod +x ./docker-entrypoint.sh
+
+EXPOSE 80
 ENTRYPOINT ["./docker-entrypoint.sh"]
