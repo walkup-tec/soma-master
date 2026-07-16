@@ -18,14 +18,14 @@ export function getSessionPassword(): string {
   if (process.env.NODE_ENV === "production") {
     throw new Error("SESSION_SECRET é obrigatório em produção.");
   }
-  return "dev-only-sinal-verde-session-secret-min-32-chars!!";
+  return "dev-only-soma-promotora-session-secret-min-32-chars!!";
 }
 
 export const sessionConfig = {
   get password() {
     return getSessionPassword();
   },
-  name: "sinal-verde-session",
+  name: "soma-promotora-session",
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

@@ -2,6 +2,7 @@
 @source "../src";
 @import "tw-animate-css";
 
+/* Mesmo padrão do CRM Sinal Verde — class strategy no <html class="dark"> */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -41,6 +42,8 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -58,125 +61,239 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-login-brand: var(--login-brand-bg);
+  --color-brand-magenta: var(--brand-magenta);
+  --color-brand-lime: var(--brand-lime);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-neutral: var(--brand-neutral);
 
-  --shadow-soft: 0 1px 2px oklch(0.2 0.05 145 / 0.04), 0 4px 12px oklch(0.2 0.05 145 / 0.06);
-  --shadow-elevated: 0 8px 32px oklch(0.2 0.05 145 / 0.10), 0 2px 6px oklch(0.2 0.05 145 / 0.05);
+  --shadow-soft: 0 1px 2px color-mix(in srgb, var(--brand-magenta) 8%, transparent),
+    0 4px 12px color-mix(in srgb, var(--brand-blue) 8%, transparent);
+  --shadow-elevated: 0 8px 32px color-mix(in srgb, var(--brand-magenta) 14%, transparent),
+    0 2px 6px color-mix(in srgb, var(--brand-blue) 8%, transparent);
 }
 
+/*
+  Soma brand core
+  #be1c6a magenta · #ecf759 lima · #2775e5 azul · #f5f5f5 neutro
+*/
 :root {
   --radius: 0.875rem;
 
-  /* Brand: #153013 login panel, #2b5330 primary, #76b43c accent, #fcffde bg */
-  --login-brand-bg: #153013;
-  --background: oklch(0.985 0.04 110);   /* #fcffde-ish */
-  --foreground: oklch(0.22 0.04 150);
-  --surface: oklch(1 0 0);
-  --surface-foreground: oklch(0.22 0.04 150);
+  --brand-magenta: #be1c6a;
+  --brand-lime: #ecf759;
+  --brand-blue: #2775e5;
+  --brand-neutral: #f5f5f5;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.04 150);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.04 150);
+  --login-brand-bg: #9e1758;
 
-  --primary: oklch(0.36 0.07 145);        /* #2b5330 */
-  --primary-foreground: oklch(0.985 0.04 110);
-  --primary-soft: oklch(0.94 0.05 140);
+  /* Canvas */
+  --background: #f5f5f5;
+  --foreground: #1a1a1a;
+  --surface: #ffffff;
+  --surface-foreground: #1a1a1a;
 
-  --accent: oklch(0.72 0.18 132);         /* #76b43c */
-  --accent-foreground: oklch(0.18 0.04 150);
-  --accent-soft: oklch(0.93 0.09 130);
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
 
-  --secondary: oklch(0.96 0.03 130);
-  --secondary-foreground: oklch(0.28 0.05 150);
+  /* Magenta = ação principal */
+  --primary: #be1c6a;
+  --primary-foreground: #ffffff;
+  --primary-soft: color-mix(in srgb, #be1c6a 12%, #ffffff);
 
-  --muted: oklch(0.96 0.02 130);
-  --muted-foreground: oklch(0.5 0.03 150);
+  /* Lima = destaque pontual (não base de UI chrome) */
+  --highlight: #ecf759;
+  --highlight-foreground: #1a1a1a;
+  --accent: color-mix(in srgb, #ecf759 55%, #ffffff);
+  --accent-foreground: #1a1a1a;
+  --accent-soft: color-mix(in srgb, #ecf759 28%, #ffffff);
 
-  --destructive: oklch(0.6 0.21 27);
-  --destructive-foreground: oklch(0.99 0.02 100);
-  --success: oklch(0.65 0.17 145);
-  --success-foreground: oklch(0.99 0.02 100);
-  --warning: oklch(0.78 0.15 75);
-  --warning-foreground: oklch(0.22 0.04 150);
-  --info: oklch(0.62 0.13 235);
-  --info-foreground: oklch(0.99 0.02 100);
+  /* Azul = secundário / info */
+  --secondary: color-mix(in srgb, #2775e5 10%, #f5f5f5);
+  --secondary-foreground: #1a3f7a;
+  --info: #2775e5;
+  --info-foreground: #ffffff;
 
-  --border: oklch(0.9 0.03 130);
-  --input: oklch(0.92 0.02 130);
-  --ring: oklch(0.72 0.18 132);
+  --muted: #ececec;
+  --muted-foreground: #5c5c5c;
 
-  --chart-1: oklch(0.36 0.07 145);
-  --chart-2: oklch(0.72 0.18 132);
-  --chart-3: oklch(0.62 0.13 235);
-  --chart-4: oklch(0.78 0.15 75);
-  --chart-5: oklch(0.55 0.15 320);
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #d4a017;
+  --warning-foreground: #1a1a1a;
 
-  --sidebar: oklch(0.32 0.06 145);
-  --sidebar-foreground: oklch(0.95 0.04 110);
-  --sidebar-primary: oklch(0.72 0.18 132);
-  --sidebar-primary-foreground: oklch(0.18 0.04 150);
-  --sidebar-accent: oklch(0.4 0.07 145);
-  --sidebar-accent-foreground: oklch(0.97 0.04 110);
-  --sidebar-border: oklch(0.4 0.06 145);
-  --sidebar-ring: oklch(0.72 0.18 132);
+  --border: #e4e4e4;
+  --input: #e8e8e8;
+  --ring: #be1c6a;
+
+  --chart-1: #be1c6a;
+  --chart-2: #2775e5;
+  --chart-3: #ecf759;
+  --chart-4: #16a34a;
+  --chart-5: #7c3aed;
+
+  /* Sidebar (modo claro): fundo claro + ativo em magenta */
+  --sidebar: #f7f2f5;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #be1c6a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in srgb, #be1c6a 12%, #f7f2f5);
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #e8dde3;
+  --sidebar-ring: #be1c6a;
 }
 
+/*
+  Dark: degradê preto → azul-noite (não roxo/magenta de fundo).
+  Magenta/lima só em ações e destaques pontuais.
+*/
 .dark {
-  --background: oklch(0.18 0.03 150);
-  --foreground: oklch(0.96 0.03 110);
-  --surface: oklch(0.22 0.03 150);
-  --surface-foreground: oklch(0.96 0.03 110);
-  --card: oklch(0.22 0.03 150);
-  --card-foreground: oklch(0.96 0.03 110);
-  --popover: oklch(0.22 0.03 150);
-  --popover-foreground: oklch(0.96 0.03 110);
-  --primary: oklch(0.72 0.18 132);
-  --primary-foreground: oklch(0.18 0.04 150);
-  --primary-soft: oklch(0.3 0.06 145);
-  --accent: oklch(0.72 0.18 132);
-  --accent-foreground: oklch(0.18 0.04 150);
-  --accent-soft: oklch(0.3 0.08 140);
-  --secondary: oklch(0.28 0.04 150);
-  --secondary-foreground: oklch(0.96 0.03 110);
-  --muted: oklch(0.26 0.03 150);
-  --muted-foreground: oklch(0.7 0.03 130);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.72 0.18 132);
-  --sidebar: oklch(0.16 0.03 150);
-  --sidebar-foreground: oklch(0.95 0.04 110);
-  --sidebar-primary: oklch(0.72 0.18 132);
-  --sidebar-primary-foreground: oklch(0.18 0.04 150);
-  --sidebar-accent: oklch(0.24 0.04 150);
-  --sidebar-accent-foreground: oklch(0.97 0.04 110);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.72 0.18 132);
+  --login-brand-bg: #0a1628;
+
+  --background: #050912;
+  --foreground: #eef3fb;
+  --surface: #0b1422;
+  --surface-foreground: #eef3fb;
+
+  --card: #0e1828;
+  --card-foreground: #eef3fb;
+  --popover: #122034;
+  --popover-foreground: #eef3fb;
+
+  --primary: #e23a82;
+  --primary-foreground: #ffffff;
+  --primary-soft: color-mix(in srgb, #be1c6a 26%, #0b1422);
+
+  --highlight: #ecf759;
+  --highlight-foreground: #0a1020;
+  --accent: color-mix(in srgb, #2775e5 28%, #0b1422);
+  --accent-foreground: #c5dbff;
+  --accent-soft: color-mix(in srgb, #2775e5 16%, #0b1422);
+
+  --secondary: color-mix(in srgb, #2775e5 24%, #0a1424);
+  --secondary-foreground: #b7d0ff;
+  --info: #5b9cff;
+  --info-foreground: #041018;
+
+  --muted: #152238;
+  --muted-foreground: #9ab0c8;
+
+  --destructive: #f87171;
+  --destructive-foreground: #1a0a0a;
+  --success: #4ade80;
+  --success-foreground: #052e16;
+  --warning: #fbbf24;
+  --warning-foreground: #1a1a1a;
+
+  --border: color-mix(in srgb, #7eb6ff 14%, transparent);
+  --input: color-mix(in srgb, #7eb6ff 16%, transparent);
+  --ring: #4d8ef0;
+
+  --chart-1: #5b9cff;
+  --chart-2: #e23a82;
+  --chart-3: #ecf759;
+  --chart-4: #4ade80;
+  --chart-5: #8b9cff;
+
+  --sidebar: #02060e;
+  --sidebar-foreground: #eef3fb;
+  --sidebar-primary: #5b9cff;
+  --sidebar-primary-foreground: #041018;
+  --sidebar-accent: color-mix(in srgb, #2775e5 28%, #02060e);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: color-mix(in srgb, #7eb6ff 12%, transparent);
+  --sidebar-ring: #5b9cff;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
-  html, body {
+  html,
+  body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
-  h1, h2, h3, h4, h5, h6 {
+  /* Canvas dark: preto → azul-noite (fixo, cobre o app inteiro) */
+  html.dark,
+  html.dark body {
+    background-color: #000000;
+    background-image: linear-gradient(
+      165deg in oklab,
+      #000000 0%,
+      #02060e 28%,
+      #071426 58%,
+      #0c1f3c 100%
+    );
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    min-height: 100%;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-display);
     letter-spacing: -0.01em;
   }
 }
 
 /* Scrollbars */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: oklch(0.85 0.03 130); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: oklch(0.75 0.05 130); }
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--brand-magenta) 22%, #d4d4d4);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--brand-magenta) 40%, #c4c4c4);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, #2775e5 40%, #1a2438);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, #2775e5 58%, #24334c);
+}
+
+/* Login brand panel — topo preto (contraste com logo-escuro) → azul → magenta */
+.login-brand-panel {
+  background: linear-gradient(
+    165deg in oklab,
+    #000000 0%,
+    #07070c 12%,
+    #0b1220 26%,
+    #101c38 40%,
+    #163056 52%,
+    #1e4a88 64%,
+    #4a4a9a 76%,
+    #8a2d78 88%,
+    #be1c6a 100%
+  );
+  color: #ffffff;
+}
+
+.login-brand-panel .text-highlight {
+  color: #ecf759;
+}
 
 /* Utility: glass card */
 .glass {
   background: color-mix(in oklab, var(--surface) 85%, transparent);
   backdrop-filter: blur(8px);
+}
+
+/* Destaque lima pontual (chips, bullets, badges de energia) */
+.brand-highlight {
+  background-color: var(--highlight);
+  color: var(--highlight-foreground);
 }

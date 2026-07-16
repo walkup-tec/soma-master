@@ -11,6 +11,7 @@ import {
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SOMA_THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme/soma-theme";
 
 function NotFoundComponent() {
   return (
@@ -74,17 +75,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Sinal Verde — CRM Financeiro" },
-      { name: "description", content: "CRM e gestão comercial premium para operações financeiras." },
-      { name: "author", content: "Sinal Verde" },
-      { property: "og:title", content: "Sinal Verde — CRM Financeiro" },
-      { property: "og:description", content: "CRM e gestão comercial premium para operações financeiras." },
+      { title: "Soma Promotora — CRM" },
+      { name: "description", content: "CRM e gestão comercial Soma Promotora." },
+      { name: "author", content: "Soma Promotora" },
+      { property: "og:title", content: "Soma Promotora — CRM" },
+      { property: "og:description", content: "CRM e gestão comercial Soma Promotora." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
-      { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png?v=3" },
+      { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png?v=3" },
+      { rel: "icon", type: "image/png", href: "/favicon-soma.png?v=3" },
+      { rel: "shortcut icon", href: "/favicon.ico?v=3" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png?v=3" },
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
@@ -102,11 +106,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* Tema: anti-FOUC + clique [data-theme-toggle] sem depender do React */}
+        <script dangerouslySetInnerHTML={{ __html: SOMA_THEME_BOOTSTRAP_SCRIPT }} />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
         <Scripts />
       </body>

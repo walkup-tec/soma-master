@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Columns3,
   LayoutDashboard,
+  MessageCircle,
   Megaphone,
   Settings,
   UserCog,
@@ -16,6 +17,7 @@ export const MENU_ICONS: Record<MenuItemId, ComponentType<{ className?: string }
   kanban: Columns3,
   remarketing: Megaphone,
   agenda: CalendarDays,
+  chat: MessageCircle,
   usuarios: UserCog,
   configuracoes: Settings,
 };

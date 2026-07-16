@@ -4,10 +4,10 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite dev --port 3090 --strictPort --host 127.0.0.1",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "preview": "vite preview",
+    "preview": "vite preview --port 3091 --strictPort --host 127.0.0.1",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -55,6 +55,7 @@
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.575.0",
+    "nitro": "^3.0.260610-beta",
     "nodemailer": "^9.0.3",
     "postgres": "^3.4.9",
     "react": "^19.2.0",

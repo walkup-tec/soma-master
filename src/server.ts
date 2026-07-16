@@ -4,6 +4,7 @@ import "./lib/error-capture";
 loadLocalEnvFile();
 
 import { handleClientAttachmentDownload } from "./lib/clients/client-attachment-download.handler";
+import { handleEvolutionWebhook } from "./lib/chat/webhook.handler";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { warmDatabaseConnection } from "./lib/db/postgres";
@@ -78,6 +79,11 @@ export default {
     try {
       const attachmentResponse = await handleClientAttachmentDownload(request);
       if (attachmentResponse) return attachmentResponse;
+
+      const url = new URL(request.url);
+      if (url.pathname === "/api/chat/whatsapp-webhook" || url.pathname === "/api/webhooks/evolution") {
+        return handleEvolutionWebhook(request);
+      }
 
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

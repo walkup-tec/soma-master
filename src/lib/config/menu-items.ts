@@ -4,6 +4,7 @@ export type MenuItemId =
   | "kanban"
   | "remarketing"
   | "agenda"
+  | "chat"
   | "usuarios"
   | "configuracoes";
 
@@ -24,6 +25,7 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
   { id: "kanban", label: "Kanban", group: "Comercial", path: "/app/kanban" },
   { id: "remarketing", label: "Remarketing", group: "Comercial", path: "/app/remarketing" },
   { id: "agenda", label: "Agenda", group: "Comercial", path: "/app/agenda" },
+  { id: "chat", label: "Chat WhatsApp", group: "Comercial", path: "/app/chat" },
   { id: "usuarios", label: "Usuários", group: "Gestão", path: "/app/usuarios" },
   { id: "configuracoes", label: "Configurações", group: "Gestão", path: "/app/configuracoes" },
 ];

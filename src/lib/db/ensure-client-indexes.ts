@@ -1,4 +1,5 @@
 import { DEFAULT_ATTENDANCE_STATUSES } from "@/lib/config/settings-defaults";
+import { ensureChatSchema } from "@/lib/chat/ensure-chat-schema";
 import type { Sql } from "@/lib/db/postgres";
 
 let ensured = false;
@@ -54,6 +55,7 @@ export async function ensureClientListIndexes(sql: Sql): Promise<void> {
   if (ready) {
     await ensureClientProductsTable(sql);
     await ensureAttendanceStatusColorColumn(sql);
+    await ensureChatSchema(sql);
     ensured = true;
     return;
   }
@@ -142,4 +144,6 @@ export async function ensureClientListIndexes(sql: Sql): Promise<void> {
       on conflict (id) do nothing
     `;
   }
+
+  await ensureChatSchema(sql);
 }

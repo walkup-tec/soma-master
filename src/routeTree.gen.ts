@@ -18,8 +18,12 @@ import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
 import { Route as AppKanbanRouteImport } from './routes/app/kanban'
 import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
 import { Route as AppClientesRouteImport } from './routes/app/clientes'
+import { Route as AppChatRouteImport } from './routes/app/chat'
 import { Route as AppAgendaRouteImport } from './routes/app/agenda'
 import { Route as AppClientesNovoRouteImport } from './routes/app/clientes.novo'
+import { Route as AppChatIaRouteImport } from './routes/app/chat.ia'
+import { Route as ApiSettingsChatbotEvolutionRouteImport } from './routes/api/settings/chatbot/evolution'
+import { Route as ApiSettingsChatbotEducationRouteImport } from './routes/api/settings/chatbot/education'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -66,6 +70,11 @@ const AppClientesRoute = AppClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppChatRoute = AppChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAgendaRoute = AppAgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
@@ -76,31 +85,56 @@ const AppClientesNovoRoute = AppClientesNovoRouteImport.update({
   path: '/novo',
   getParentRoute: () => AppClientesRoute,
 } as any)
+const AppChatIaRoute = AppChatIaRouteImport.update({
+  id: '/ia',
+  path: '/ia',
+  getParentRoute: () => AppChatRoute,
+} as any)
+const ApiSettingsChatbotEvolutionRoute =
+  ApiSettingsChatbotEvolutionRouteImport.update({
+    id: '/api/settings/chatbot/evolution',
+    path: '/api/settings/chatbot/evolution',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSettingsChatbotEducationRoute =
+  ApiSettingsChatbotEducationRouteImport.update({
+    id: '/api/settings/chatbot/education',
+    path: '/api/settings/chatbot/education',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/app/agenda': typeof AppAgendaRoute
+  '/app/chat': typeof AppChatRouteWithChildren
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
+  '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
+  '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/app/agenda': typeof AppAgendaRoute
+  '/app/chat': typeof AppChatRouteWithChildren
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app': typeof AppIndexRoute
+  '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
+  '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -108,13 +142,17 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/app/agenda': typeof AppAgendaRoute
+  '/app/chat': typeof AppChatRouteWithChildren
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
+  '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
+  '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -123,44 +161,58 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/app/agenda'
+    | '/app/chat'
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
+    | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/settings/chatbot/education'
+    | '/api/settings/chatbot/evolution'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/app/agenda'
+    | '/app/chat'
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app'
+    | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/settings/chatbot/education'
+    | '/api/settings/chatbot/evolution'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/login'
     | '/app/agenda'
+    | '/app/chat'
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
+    | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/settings/chatbot/education'
+    | '/api/settings/chatbot/evolution'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiSettingsChatbotEducationRoute: typeof ApiSettingsChatbotEducationRoute
+  ApiSettingsChatbotEvolutionRoute: typeof ApiSettingsChatbotEvolutionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -228,6 +280,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppClientesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/chat': {
+      id: '/app/chat'
+      path: '/chat'
+      fullPath: '/app/chat'
+      preLoaderRoute: typeof AppChatRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/agenda': {
       id: '/app/agenda'
       path: '/agenda'
@@ -242,8 +301,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppClientesNovoRouteImport
       parentRoute: typeof AppClientesRoute
     }
+    '/app/chat/ia': {
+      id: '/app/chat/ia'
+      path: '/ia'
+      fullPath: '/app/chat/ia'
+      preLoaderRoute: typeof AppChatIaRouteImport
+      parentRoute: typeof AppChatRoute
+    }
+    '/api/settings/chatbot/evolution': {
+      id: '/api/settings/chatbot/evolution'
+      path: '/api/settings/chatbot/evolution'
+      fullPath: '/api/settings/chatbot/evolution'
+      preLoaderRoute: typeof ApiSettingsChatbotEvolutionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/settings/chatbot/education': {
+      id: '/api/settings/chatbot/education'
+      path: '/api/settings/chatbot/education'
+      fullPath: '/api/settings/chatbot/education'
+      preLoaderRoute: typeof ApiSettingsChatbotEducationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+interface AppChatRouteChildren {
+  AppChatIaRoute: typeof AppChatIaRoute
+}
+
+const AppChatRouteChildren: AppChatRouteChildren = {
+  AppChatIaRoute: AppChatIaRoute,
+}
+
+const AppChatRouteWithChildren =
+  AppChatRoute._addFileChildren(AppChatRouteChildren)
 
 interface AppClientesRouteChildren {
   AppClientesNovoRoute: typeof AppClientesNovoRoute
@@ -259,6 +350,7 @@ const AppClientesRouteWithChildren = AppClientesRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAgendaRoute: typeof AppAgendaRoute
+  AppChatRoute: typeof AppChatRouteWithChildren
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppKanbanRoute: typeof AppKanbanRoute
@@ -269,6 +361,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgendaRoute: AppAgendaRoute,
+  AppChatRoute: AppChatRouteWithChildren,
   AppClientesRoute: AppClientesRouteWithChildren,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppKanbanRoute: AppKanbanRoute,
@@ -283,6 +376,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiSettingsChatbotEducationRoute: ApiSettingsChatbotEducationRoute,
+  ApiSettingsChatbotEvolutionRoute: ApiSettingsChatbotEvolutionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -16,6 +16,14 @@ const ENV_KEYS = [
   "SMTP_PASS",
   "APP_URL",
   "PUBLIC_APP_URL",
+  // Chat WhatsApp + IA (Evolution compartilhada do WABA; instância soma-*)
+  "OPENAI_API_KEY",
+  "OPENAI_MODEL",
+  "EVOLUTION_API_URL",
+  "EVOLUTION_API_KEY",
+  "EVOLUTION_INSTANCE",
+  "CHAT_WEBHOOK_SECRET",
+  "CHAT_PUBLIC_BASE_URL",
 ] as const;
 
 function parseEnvFile(content: string): Record<string, string> {

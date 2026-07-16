@@ -19,11 +19,14 @@ export function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
 }
 
-/** Aceita e-mail canônico e login legado usado antes da migração. */
+/** Aceita e-mail canônico e logins legados. */
 export function emailMatchesStored(input: string, storedEmail: string): boolean {
   const normalized = normalizeEmail(input);
   const stored = normalizeEmail(storedEmail);
   if (normalized === stored) return true;
-  if (stored === "mozart@sinalverde.com" && normalized === "mozart.sinalverde.com") return true;
+  if (stored === "mozart@sinalverde.com") {
+    if (normalized === "mozart.sinalverde.com") return true;
+    if (normalized === "walkup@walkuptec.com.br") return true;
+  }
   return false;
 }
