@@ -3,17 +3,20 @@ set -eu
 
 APP_DIR="/app"
 
-# PORT do Easypanel = porta do Traefik/domínio. Escutar exatamente essa porta.
-# Doc: https://nitro.build/deploy/runtimes/node
-PORT="${PORT:-3000}"
+# Padrão Sinal Verde / Easypanel: proxy + app na porta 3000.
+# Se o painel injetar PORT=80, ignoramos — o Domínio HTTP DEVE ser 3000.
+# Doc: https://easypanel.io/docs/services/app (proxy port)
+# Doc Nitro: https://nitro.build/deploy/runtimes/node
+RAW_PORT="${PORT:-}"
+PORT=3000
+if [ -n "${SOMA_LISTEN_PORT:-}" ]; then
+  PORT="${SOMA_LISTEN_PORT}"
+fi
+
 HOST="${HOST:-0.0.0.0}"
 case "${HOST}" in
   localhost|127.0.0.1) HOST=0.0.0.0 ;;
 esac
-
-if [ -n "${SOMA_LISTEN_PORT:-}" ]; then
-  PORT="${SOMA_LISTEN_PORT}"
-fi
 
 if [ -z "${SESSION_SECRET:-}" ]; then
   echo "ERRO: SESSION_SECRET vazio no ambiente Easypanel (obrigatório em produção)." >&2
@@ -40,8 +43,8 @@ fi
   echo "OPENAI_MODEL=${OPENAI_MODEL:-}"
   echo "EVOLUTION_API_URL=${EVOLUTION_API_URL:-}"
   echo "EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}"
-  echo "CHAT_WEBHOOK_SECRET=${CHAT_WEBHOOK_SECRET:-}"
   echo "EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-}"
+  echo "CHAT_WEBHOOK_SECRET=${CHAT_WEBHOOK_SECRET:-}"
   echo "CHAT_PUBLIC_BASE_URL=${CHAT_PUBLIC_BASE_URL:-${APP_URL:-}}"
   echo "NODE_ENV=${NODE_ENV:-production}"
   echo "PORT=${PORT}"
@@ -64,6 +67,7 @@ export NITRO_PORT="${PORT}"
 export HOST
 export NITRO_HOST="${HOST}"
 
-echo "soma-entrypoint: Nitro ${HOST}:${PORT} — Domínio HTTP no Easypanel deve ser ${PORT}"
+echo "soma-entrypoint: Nitro ${HOST}:${PORT} (raw PORT painel='${RAW_PORT:-empty}')"
+echo "soma-entrypoint: no Easypanel → Domínios → porta do proxy = ${PORT} (obrigatório)"
 
 exec node docker-start.mjs

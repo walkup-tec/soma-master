@@ -5,7 +5,7 @@
 for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
   process.on(signal, () => {
     console.error(
-      `soma-signal: received ${signal} (porta do app deve = Domínio HTTP / healthcheck)`,
+      `soma-signal: received ${signal} — Easypanel/Docker a parar o container (redeploy, porta proxy≠${process.env.PORT || "3000"}, ou healthcheck)`,
     );
   });
 }
