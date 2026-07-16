@@ -23,8 +23,11 @@ RUN node ./node_modules/vite/bin/vite.js build
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# App sempre em 3000. Entrypoint ignora PORT=80 injetado pelo Easypanel.
 ENV PORT=3000
+ENV NITRO_PORT=3000
 ENV HOST=0.0.0.0
+ENV NITRO_HOST=0.0.0.0
 
 COPY --from=build /app/.output ./.output
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

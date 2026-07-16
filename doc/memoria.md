@@ -1,5 +1,27 @@
 # Memória Soma
 
+## 2026-07-16 — Fix PORT=80 Easypanel (Nitro fecha / 502)
+
+- Sintoma: logs `Listening on: http://localhost/` (sem `:3000` = porta **80**) + `Server closed`; host Easypanel 502; `app.somaconecta.com.br` 404 JSON + “Não seguro”.
+- Causa: Easypanel injeta `PORT=80`; Traefik aponta para **3000** → backend morto/errado.
+- Fix: `docker-entrypoint.sh` força `PORT`/`NITRO_PORT=3000` se raw for vazio/80/443; log `soma-entrypoint: listening…`.
+- Após push: Redeploy `gestao-interno`; domínio continua HTTP **3000**.
+- Keywords: `PORT=80`, `nitro`, `502`, `localhost/`, `entrypoint`
+
+## 2026-07-16 — Traefik / mesmo VPS que WABA
+
+- **IP compartilhado:** `72.60.51.127` (Soma `*.achpyp.easypanel.host`, `app.somaconecta.com.br`, Evolution walkup, WABA).
+- Traefik do WABA **já está de pé** (`wabadisparos.com.br` 200). Problema atual Soma: host Easypanel **502** + domínio custom **404** → app/domínio, não “Traefik morto”.
+- Lições WABA aplicam: entryPoints só `http`/`https`; sem `force` Traefik; sem thrash de heals; backend preferir host gateway após inspeção.
+- **Não** instalar heals WABA (`30180`/`30210`) para o Soma. Rule: `.cursor/rules/soma-traefik-mesmo-vps-waba.mdc`.
+- Ordem: Redeploy até easypanel.host **/login = 200** → domínio :3000 → cert ACME.
+- Keywords: `traefik`, `502`, `404 not-found`, `entrypoints`, `achpyp`, `72.60.51.127`, `waba-shared-vps`
+
+## 2026-07-16 — Ambientes + logo menu
+
+- Local fixo: `http://127.0.0.1:3090` (`.env.local`); produção só via build Easypanel
+- Menu lateral: sempre `logo-claro` (`surface="on-light"`)
+
 ## 2026-07-16 — Deploy Easypanel Soma
 
 - Repo: `https://github.com/walkup-tec/soma-master.git` (`main`)

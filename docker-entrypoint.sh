@@ -1,8 +1,26 @@
 #!/bin/sh
 set -eu
 
-PORT="${PORT:-3000}"
 APP_DIR="/app"
+
+# Easypanel costuma injetar PORT=80 (porta do proxy). O CRM/Nitro deve
+# escutar sempre 3000 — Traefik/domínio no painel apontam para HTTP :3000.
+# Doc Nitro: https://nitro.build/deploy/runtimes/node (NITRO_PORT / PORT)
+RAW_PORT="${PORT:-}"
+case "${RAW_PORT}" in
+  ""|80|443) PORT=3000 ;;
+  *) PORT="${RAW_PORT}" ;;
+esac
+
+# Override explícito se precisar (raro)
+if [ -n "${SOMA_LISTEN_PORT:-}" ]; then
+  PORT="${SOMA_LISTEN_PORT}"
+fi
+
+HOST="${HOST:-0.0.0.0}"
+case "${HOST}" in
+  localhost|127.0.0.1) HOST=0.0.0.0 ;;
+esac
 
 # Garante .env.local para loadLocalEnvFile() do CRM
 {
@@ -29,6 +47,7 @@ APP_DIR="/app"
   echo "CHAT_PUBLIC_BASE_URL=${CHAT_PUBLIC_BASE_URL:-${APP_URL:-}}"
   echo "NODE_ENV=${NODE_ENV:-production}"
   echo "PORT=${PORT}"
+  echo "HOST=${HOST}"
 } > "${APP_DIR}/.env.local"
 
 if [ ! -f "${APP_DIR}/.output/server/index.mjs" ]; then
@@ -38,5 +57,10 @@ fi
 
 cd "${APP_DIR}"
 export PORT
-export HOST="${HOST:-0.0.0.0}"
+export NITRO_PORT="${PORT}"
+export HOST
+export NITRO_HOST="${HOST}"
+
+echo "soma-entrypoint: listening Nitro on ${HOST}:${PORT} (raw PORT was '${RAW_PORT:-empty}')"
+
 exec node .output/server/index.mjs
