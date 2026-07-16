@@ -37,4 +37,10 @@ RUN sed -i 's/\r$//' docker-entrypoint.sh \
 
 USER app
 EXPOSE 3000
+
+# Swarm/Easypanel usam isto para não matar o task antes do Nitro estabilizar.
+# Path dedicado ( "/" redireciona para /login → healthcheck com curl -f falha).
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=4 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 ENTRYPOINT ["./docker-entrypoint.sh"]

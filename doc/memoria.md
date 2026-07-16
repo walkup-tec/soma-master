@@ -1,4 +1,11 @@
-﻿## 2026-07-16 — SIGTERM apos Listening
+﻿## 2026-07-16 — Especialista infra: SIGTERM com PORT=3000
+
+- Traefik VPS OK (WABA 200). App Listening + SIGTERM = Swarm/Easypanel, nao Traefik morto.
+- Env PORT=3000 nao basta: **Domínios → proxy port** tem de ser 3000 (doc Easypanel).
+- SSH daqui bloqueado; diagnostico: `scripts/diagnose-soma-easypanel-vps.sh` no Hostinger.
+- HEALTHCHECK Docker em `/api/health` (start-period 60s).
+- Keywords: SIGTERM, proxy port Domains, HEALTHCHECK, gestao-interno
+## 2026-07-16 — SIGTERM apos Listening
 
 - Listening OK; SIGTERM = Easypanel/Docker (nao Traefik morto).
 - Alinhar proxy do painel a **3000** (como Sinal Verde) + `/api/health`.
@@ -104,4 +111,5 @@
 | Cores | `src/styles.css` â€” `#be1c6a` `#ecf759` `#2775e5` `#f5f5f5` |
 | Logo component | `src/components/logo.tsx` + `src/lib/theme/soma-theme.ts` |
 | Backup | `D:\Soma-reimplant-preserve-20260716-142637` |
+
 
