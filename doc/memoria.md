@@ -1,4 +1,11 @@
-﻿## 2026-07-16 — Especialista infra: SIGTERM com PORT=3000
+﻿## 2026-07-16 — Causa raiz Traefik Soma
+
+- `gestao-interno-0` → `:80` (app em 3000) = 502 no easypanel.host
+- `Host(\pp.somaconecta.com.br/\)` barra no Host = 404
+- Fix: `scripts/fix-soma-traefik-routers-vps.sh` + Domínios 3000 sem `/`
+- Env typo: `somaconect.com.br` → `somaconecta.com.br`
+- Keywords: Host slash, backend :80, soma-promotora_gestao-interno
+## 2026-07-16 — Especialista infra: SIGTERM com PORT=3000
 
 - Traefik VPS OK (WABA 200). App Listening + SIGTERM = Swarm/Easypanel, nao Traefik morto.
 - Env PORT=3000 nao basta: **Domínios → proxy port** tem de ser 3000 (doc Easypanel).
@@ -111,5 +118,6 @@
 | Cores | `src/styles.css` â€” `#be1c6a` `#ecf759` `#2775e5` `#f5f5f5` |
 | Logo component | `src/components/logo.tsx` + `src/lib/theme/soma-theme.ts` |
 | Backup | `D:\Soma-reimplant-preserve-20260716-142637` |
+
 
 
