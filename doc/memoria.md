@@ -1,5 +1,12 @@
 # Memória Soma
 
+## 2026-07-16 — Entrypoint CRLF (sem Listening)
+
+- Após echo `Nitro 0.0.0.0:80` o Node não chegava a Listening (memória ~13 MB, 502).
+- Causa: CRLF no `docker-entrypoint.sh` → `exec` quebra no Linux.
+- Fix: `.gitattributes` eol=lf + `sed` no Dockerfile + `docker-start.mjs`.
+- Keywords: `CRLF`, `entrypoint`, `Listening`, `index.mjs`
+
 ## 2026-07-16 — PORT Easypanel = porta do Traefik (não forçar 3000)
 
 - Sintoma: Nitro sobe e logo `Server closed successfully` (SIGTERM) + 502/404.

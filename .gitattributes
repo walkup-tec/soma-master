@@ -1,0 +1,6 @@
+# Scripts de container precisam de LF — CRLF quebra `exec` no Linux (index.mjs\r)
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+docker-start.mjs text eol=lf
+docker-signal-log.mjs text eol=lf
+Dockerfile text eol=lf

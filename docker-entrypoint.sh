@@ -3,9 +3,8 @@ set -eu
 
 APP_DIR="/app"
 
-# Easypanel define PORT = porta do serviço/Traefik (neste projeto veio como 80).
-# Escutar nessa porta. NÃO remapear 80→3000 — isso gera 502 + SIGTERM (restart loop).
-# Doc Nitro: https://nitro.build/deploy/runtimes/node
+# PORT do Easypanel = porta do Traefik/domínio. Escutar exatamente essa porta.
+# Doc: https://nitro.build/deploy/runtimes/node
 PORT="${PORT:-3000}"
 HOST="${HOST:-0.0.0.0}"
 case "${HOST}" in
@@ -16,10 +15,12 @@ if [ -n "${SOMA_LISTEN_PORT:-}" ]; then
   PORT="${SOMA_LISTEN_PORT}"
 fi
 
-# Diagnóstico: se o orquestrador matar o processo, estes traps ajudam no log
-# (com exec, o Node herda; registramos via wrapper abaixo)
+if [ -z "${SESSION_SECRET:-}" ]; then
+  echo "ERRO: SESSION_SECRET vazio no ambiente Easypanel (obrigatório em produção)." >&2
+  sleep 5
+  exit 1
+fi
 
-# Garante .env.local para loadLocalEnvFile() do CRM
 {
   echo "SESSION_SECRET=${SESSION_SECRET:-}"
   echo "DATABASE_URL=${DATABASE_URL:-}"
@@ -39,8 +40,8 @@ fi
   echo "OPENAI_MODEL=${OPENAI_MODEL:-}"
   echo "EVOLUTION_API_URL=${EVOLUTION_API_URL:-}"
   echo "EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}"
-  echo "EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-}"
   echo "CHAT_WEBHOOK_SECRET=${CHAT_WEBHOOK_SECRET:-}"
+  echo "EVOLUTION_INSTANCE=${EVOLUTION_INSTANCE:-}"
   echo "CHAT_PUBLIC_BASE_URL=${CHAT_PUBLIC_BASE_URL:-${APP_URL:-}}"
   echo "NODE_ENV=${NODE_ENV:-production}"
   echo "PORT=${PORT}"
@@ -52,13 +53,17 @@ if [ ! -f "${APP_DIR}/.output/server/index.mjs" ]; then
   exit 1
 fi
 
+if [ ! -f "${APP_DIR}/docker-start.mjs" ]; then
+  echo "ERRO: docker-start.mjs ausente." >&2
+  exit 1
+fi
+
 cd "${APP_DIR}"
 export PORT
 export NITRO_PORT="${PORT}"
 export HOST
 export NITRO_HOST="${HOST}"
 
-echo "soma-entrypoint: Nitro ${HOST}:${PORT} (deve coincidir com Domínio HTTP no Easypanel)"
+echo "soma-entrypoint: Nitro ${HOST}:${PORT} — Domínio HTTP no Easypanel deve ser ${PORT}"
 
-# Wrapper: loga SIGTERM/SIGINT (causa do "Server closed successfully" do srvx)
-exec node --import ./docker-signal-log.mjs .output/server/index.mjs
+exec node docker-start.mjs
