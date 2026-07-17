@@ -11,6 +11,7 @@ import {
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SomaThemeRehydrate } from "@/components/theme/soma-theme-rehydrate";
 import { SOMA_THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme/soma-theme";
 import { SOMA_PROCESSING_BOOTSTRAP_SCRIPT } from "@/lib/ui/processing-overlay";
 
@@ -115,6 +116,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: SOMA_PROCESSING_BOOTSTRAP_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>
+        <SomaThemeRehydrate />
         {children}
         <Scripts />
       </body>

@@ -1,7 +1,14 @@
+import { useState } from "react";
+import { useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { Bot, GraduationCap, Link2, QrCode, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { ChatAiEducationScreen } from "@/components/chat/chat-ai-education-screen";
 import type { ChatAiExample, ChatAiKnowledgeItem, ChatAiSettings } from "@/lib/chat/chat.types";
 import type { EvolutionConnectionState, EvolutionQrPayload } from "@/lib/chat/evolution.adapter";
+import {
+  getEvolutionConnectionStatusFn,
+  refreshEvolutionQrFn,
+} from "@/lib/chat/chat.server";
 
 export type ChatbotPanelId = "evo" | "ia";
 
@@ -44,6 +51,80 @@ type Props = {
   flashOk?: string;
   flashErr?: string;
 };
+
+/** Status/QR via server fn — sem POST full reload (preserva tema escuro). */
+function EvoConnectionActions({
+  configured,
+  state,
+}: {
+  configured: boolean;
+  state: EvolutionConnectionState;
+}) {
+  const router = useRouter();
+  const refreshStatus = useServerFn(getEvolutionConnectionStatusFn);
+  const refreshQr = useServerFn(refreshEvolutionQrFn);
+  const [busy, setBusy] = useState<"status" | "qr" | null>(null);
+  const [localMsg, setLocalMsg] = useState<string | null>(null);
+  const [localErr, setLocalErr] = useState<string | null>(null);
+
+  async function run(kind: "status" | "qr") {
+    setBusy(kind);
+    setLocalMsg(null);
+    setLocalErr(null);
+    try {
+      if (kind === "status") {
+        const result = await refreshStatus();
+        if (!result.ok) setLocalErr(result.error ?? "Falha ao atualizar status.");
+        else setLocalMsg("Status atualizado.");
+      } else {
+        const result = await refreshQr();
+        if (!result.ok) setLocalErr(result.error ?? "Falha ao gerar QR.");
+        else if (result.state === "open") setLocalMsg("WhatsApp já conectado nesta Evolution.");
+        else setLocalMsg("QR gerado — escaneie no WhatsApp (expira ~60s).");
+      }
+      await router.invalidate();
+    } catch (error) {
+      setLocalErr(error instanceof Error ? error.message : "Erro inesperado.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {localMsg ? (
+        <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+          {localMsg}
+        </p>
+      ) : null}
+      {localErr ? (
+        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {localErr}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void run("status")}
+          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-50"
+        >
+          <RefreshCw className={`size-4 ${busy === "status" ? "animate-spin" : ""}`} aria-hidden />
+          {busy === "status" ? "Atualizando…" : "Atualizar status"}
+        </button>
+        <button
+          type="button"
+          disabled={!configured || state === "open" || busy !== null}
+          onClick={() => void run("qr")}
+          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <QrCode className="size-4" aria-hidden />
+          {busy === "qr" ? "Gerando…" : "Gerar / renovar QR Code"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Integração EVO — única tela de parametrização do Chatbot
@@ -157,37 +238,7 @@ export function ChatbotSettings({ evo, education, flashOk, flashErr }: Props) {
             </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            <form
-              method="post"
-              action="/api/settings/chatbot/evolution"
-              data-processing-label="Atualizando status da conexão…"
-            >
-              <input type="hidden" name="kind" value="status" />
-              <button
-                type="submit"
-                className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm hover:bg-muted"
-              >
-                <RefreshCw className="size-4" aria-hidden />
-                Atualizar status
-              </button>
-            </form>
-            <form
-              method="post"
-              action="/api/settings/chatbot/evolution"
-              data-processing-label="Gerando QR Code…"
-            >
-              <input type="hidden" name="kind" value="refresh" />
-              <button
-                type="submit"
-                disabled={!configured || state === "open"}
-                className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <QrCode className="size-4" aria-hidden />
-                Gerar / renovar QR Code
-              </button>
-            </form>
-          </div>
+          <EvoConnectionActions configured={configured} state={state} />
 
           {qr.base64 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-6">

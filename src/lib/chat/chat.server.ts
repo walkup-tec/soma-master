@@ -21,7 +21,7 @@ import {
   upsertAiExample,
   upsertAiKnowledge,
 } from "@/lib/chat/chat.repository";
-import { takeEvolutionQrFlash } from "@/lib/chat/evolution-qr-flash";
+import { clearEvolutionQrFlash, putEvolutionQrFlash, takeEvolutionQrFlash } from "@/lib/chat/evolution-qr-flash";
 import {
   evolutionConnectQr,
   evolutionConnectionState,
@@ -423,7 +423,7 @@ export const deleteChatAiExampleFn = createServerFn({ method: "POST" })
   });
 
 export const getEvolutionConnectionStatusFn = createServerFn({ method: "GET" }).handler(async () => {
-  await requireChatBotSettingsUser();
+  const user = await requireChatBotSettingsUser();
   const config = getEvolutionPublicConfig();
   if (!config.configured) {
     return {
@@ -433,9 +433,16 @@ export const getEvolutionConnectionStatusFn = createServerFn({ method: "GET" }).
       error: "Evolution API não configurada no servidor (.env.local).",
     };
   }
-  // Garante instância soma-* (não toca nas demais do Easypanel)
-  await ensureSomaEvolutionInstance();
+  const settings = await getChatAiSettings();
+  await ensureSomaEvolutionInstance({
+    webhookPublicBaseUrl: settings.webhookPublicBaseUrl,
+  });
   const status = await evolutionConnectionState();
+  putEvolutionQrFlash(user.userId, {
+    state: status.state,
+    qr: status.state === "open" ? {} : (takeEvolutionQrFlash(user.userId)?.qr ?? {}),
+    error: status.error,
+  });
   return {
     config,
     state: status.state,
@@ -445,9 +452,10 @@ export const getEvolutionConnectionStatusFn = createServerFn({ method: "GET" }).
 });
 
 export const refreshEvolutionQrFn = createServerFn({ method: "POST" }).handler(async () => {
-  await requireChatBotSettingsUser();
+  const user = await requireChatBotSettingsUser();
   const config = getEvolutionPublicConfig();
   if (!config.configured) {
+    clearEvolutionQrFlash(user.userId);
     return {
       config,
       state: "unknown" as const,
@@ -456,8 +464,16 @@ export const refreshEvolutionQrFn = createServerFn({ method: "POST" }).handler(a
       error: "Evolution API não configurada no servidor (.env.local).",
     };
   }
-  const ensured = await ensureSomaEvolutionInstance();
+  const settings = await getChatAiSettings();
+  const ensured = await ensureSomaEvolutionInstance({
+    webhookPublicBaseUrl: settings.webhookPublicBaseUrl,
+  });
   if (!ensured.ok) {
+    putEvolutionQrFlash(user.userId, {
+      state: "unknown",
+      qr: {},
+      error: ensured.error,
+    });
     return {
       config,
       state: "unknown" as const,
@@ -468,6 +484,7 @@ export const refreshEvolutionQrFn = createServerFn({ method: "POST" }).handler(a
   }
   const connected = await evolutionConnectionState();
   if (connected.ok && connected.state === "open") {
+    clearEvolutionQrFlash(user.userId);
     return {
       config,
       state: "open" as const,
@@ -477,6 +494,11 @@ export const refreshEvolutionQrFn = createServerFn({ method: "POST" }).handler(a
     };
   }
   const connect = await evolutionConnectQr();
+  putEvolutionQrFlash(user.userId, {
+    state: connect.state,
+    qr: connect.qr ?? {},
+    error: connect.error,
+  });
   return {
     config,
     state: connect.state,

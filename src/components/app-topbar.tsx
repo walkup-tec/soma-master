@@ -8,11 +8,7 @@ import { useEffect, useState } from "react";
 import type { SessionData } from "@/lib/auth/session-config";
 import { sessionCanAccessMenu } from "@/lib/auth/menu-access";
 import { logoutFn } from "@/lib/auth/auth.server";
-import {
-  readDomSomaTheme,
-  readStoredSomaTheme,
-  persistSomaTheme,
-} from "@/lib/theme/soma-theme";
+import { readDomSomaTheme, readStoredSomaTheme } from "@/lib/theme/soma-theme";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,12 +103,8 @@ export function AppTopbar({ user }: { user: SessionData }) {
           data-theme-toggle
           aria-label={dark ? "Ativar modo claro" : "Ativar modo escuro"}
           title={dark ? "Ativar modo claro" : "Ativar modo escuro"}
-          onClick={() => {
-            const next = dark ? "light" : "dark";
-            persistSomaTheme(next);
-            setDark(next === "dark");
-          }}
         >
+          {/* Toggle só no bootstrap (capture) — evita clique duplo React+script */}
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
         <DropdownMenu>
