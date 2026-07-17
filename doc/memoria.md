@@ -1,3 +1,9 @@
+## 2026-07-17 18:30 — Exclusão parceiro mozart.hotmart@gmail.com
+- Removido do Postgres (usuário + perfil + permissões/bancos/eventos): MMS MARKETING E SISTEMAS DIGITAIS LTDA.
+- Script utilitário: `scripts/delete-partner-by-email.ts`.
+- LOG: `doc/LOG-2026-07-17__183000__excluir-parceiro-mozart-hotmart.md`.
+- Keywords: excluir parceiro, mozart.hotmart.
+
 ## 2026-07-17 18:35 — Push / Comunicados (portado da WABA)
 - Menu **Gestão → Push** + sininho no topbar; destinos: usuários, parceiros, comunidade WhatsApp, e-mail.
 - Comunidade Soma: `https://chat.whatsapp.com/HOArsOldAKREFg23isS3ZT` (não usar link DRAX/WABA); instância `soma-crm`.
