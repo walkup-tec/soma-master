@@ -35,8 +35,9 @@ import {
 } from "@/lib/chat/evolution.adapter";
 import { isOpenAiConfigured } from "@/lib/chat/openai.adapter";
 import { createClientAttendance } from "@/lib/clients/client-attendance.repository";
-import { updateClientStatus } from "@/lib/clients/clients.repository";
+import { createManualClient, updateClientStatus } from "@/lib/clients/clients.repository";
 import { isValidAttendanceStatus } from "@/lib/clients/client-status";
+import type { ClientFieldId } from "@/lib/config/client-fields";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
 
 async function requireChatUser(): Promise<SessionData> {
@@ -250,6 +251,60 @@ export const linkChatClientFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireChatUser();
     await linkConversationClient(data.conversationId, data.clientId);
+    return getConversation(data.conversationId);
+  });
+
+/** Cria cliente no CRM (produto + campos) e vincula à conversa WhatsApp. */
+export const createAndLinkChatClientFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as {
+      conversationId?: string;
+      productId?: string;
+      statusId?: string;
+      data?: Partial<Record<ClientFieldId, string>>;
+    };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const productId = String(body.productId ?? "").trim();
+    const statusId = String(body.statusId ?? "novo").trim() || "novo";
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    if (!productId) throw new Error("Selecione o produto.");
+    if (!body.data || typeof body.data !== "object") throw new Error("Preencha os dados do cliente.");
+    return { conversationId, productId, statusId, data: body.data };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const conversation = await getConversation(data.conversationId);
+    if (!conversation) throw new Error("Conversa não encontrada.");
+    if (conversation.clientId) {
+      throw new Error("Esta conversa já está vinculada a um cliente.");
+    }
+
+    const settings = await loadSystemSettingsFromDisk();
+    if (!isValidAttendanceStatus(data.statusId, settings)) {
+      throw new Error("Status do atendimento inválido.");
+    }
+
+    const client = await createManualClient({
+      productId: data.productId,
+      data: data.data,
+      distribution: { type: "users", userIds: [user.userId] },
+    });
+
+    if (data.statusId !== "novo" && data.statusId !== client.status) {
+      await updateClientStatus(client.id, user.userId, user.role === "master", data.statusId);
+    }
+
+    await linkConversationClient(data.conversationId, client.id);
+
+    const label =
+      settings.attendanceStatuses.find((s) => s.id === data.statusId)?.label ?? data.statusId;
+    await createClientAttendance({
+      clientId: client.id,
+      userId: user.userId,
+      userName: user.name || user.email || "Atendente",
+      note: `[WhatsApp] Cliente vinculado · status: ${label}`,
+    });
+
     return getConversation(data.conversationId);
   });
 

@@ -12,18 +12,11 @@ import {
   StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ChatContactPanel } from "@/components/chat/chat-contact-panel";
 import { StatusBadge } from "@/components/clients/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ChatAiSettings, ChatConversation, ChatMessage } from "@/lib/chat/chat.types";
@@ -34,10 +27,9 @@ import {
   listChatConversationsFn,
   sendChatMessageFn,
   setChatAiGlobalEnabledFn,
-  setChatClientStatusFn,
   setChatConversationAiFn,
 } from "@/lib/chat/chat.server";
-import type { AttendanceStatusConfig } from "@/lib/config/settings-types";
+import type { AttendanceStatusConfig, BankConfig, ProductConfig } from "@/lib/config/settings-types";
 
 type Bootstrap = {
   conversations: ChatConversation[];
@@ -58,9 +50,13 @@ type ComposerMode = "reply" | "note";
 export function ChatInboxScreen({
   bootstrap,
   attendanceStatuses,
+  products,
+  banks,
 }: {
   bootstrap: Bootstrap;
   attendanceStatuses: AttendanceStatusConfig[];
+  products: ProductConfig[];
+  banks: BankConfig[];
 }) {
   const listConversations = useServerFn(listChatConversationsFn);
   const getThread = useServerFn(getChatThreadFn);
@@ -69,7 +65,6 @@ export function ChatInboxScreen({
   const setConvAi = useServerFn(setChatConversationAiFn);
   const setAiGlobal = useServerFn(setChatAiGlobalEnabledFn);
   const addNote = useServerFn(addChatAttendanceNoteFn);
-  const setStatus = useServerFn(setChatClientStatusFn);
 
   const [conversations, setConversations] = useState(bootstrap.conversations);
   const [selectedId, setSelectedId] = useState<string | null>(bootstrap.conversations[0]?.id ?? null);
@@ -566,7 +561,7 @@ export function ChatInboxScreen({
 
       {/* Cartão do contato — Chatwoot region 4 / BotConversa */}
       {selectedId && active ? (
-        <aside className="hidden w-[260px] flex-col border-l border-border xl:flex">
+        <aside className="hidden w-[300px] flex-col overflow-y-auto border-l border-border xl:flex">
           <div className="border-b border-border px-4 py-3">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Contato
@@ -576,54 +571,17 @@ export function ChatInboxScreen({
             </h3>
             <p className="text-xs text-muted-foreground">{active.phone}</p>
           </div>
-          <div className="space-y-4 p-4 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Atendente</p>
-              <p className="font-medium">{active.assignedUserName ?? "Não atribuído"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">IA nesta conversa</p>
-              <p className="font-medium">{active.aiEnabled ? "Ligada" : "Pausada"}</p>
-            </div>
-            {active.clientId ? (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Status CRM</Label>
-                <Select
-                  value={active.clientStatusId ?? undefined}
-                  onValueChange={async (statusId) => {
-                    try {
-                      const next = await setStatus({
-                        data: { conversationId: selectedId, statusId },
-                      });
-                      setActive(next);
-                      await refreshList();
-                      toast.success("Status atualizado");
-                    } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Falha no status");
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-full cursor-pointer">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {attendanceStatuses.map((status) => (
-                      <SelectItem key={status.id} value={status.id}>
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button asChild size="sm" variant="link" className="h-auto cursor-pointer px-0">
-                  <Link to="/app/clientes">Abrir clientes</Link>
-                </Button>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Cliente ainda não vinculado. Continue o atendimento pelo WhatsApp; o vínculo pode ser
-                feito depois no CRM.
-              </p>
-            )}
+          <div className="p-4">
+            <ChatContactPanel
+              conversation={active}
+              attendanceStatuses={attendanceStatuses}
+              products={products}
+              banks={banks}
+              onUpdated={(next) => {
+                setActive(next);
+                void refreshList();
+              }}
+            />
           </div>
         </aside>
       ) : null}
