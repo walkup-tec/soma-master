@@ -1,6 +1,7 @@
 ## 2026-07-17 14:00 — Gatilho de deploy de todo estado pendente
 - `main` e `origin/main` estavam em `6987dda`; demais modificações aparentes eram somente LF/CRLF (`NO_CONTENT_DIFF`).
-- Produção respondia HTTP 200, porém com assets diferentes do build local; novo commit/push disparou o Easypanel.
+- Commit/push de deploy `540fedf`; produção continuou HTTP 200 com asset antigo `/assets/index-CBqzy7be.js` nas 20 tentativas por ~5 min.
+- Código está integralmente no remoto; troca em produção não confirmada porque o Easypanel/Maker não iniciou ou não concluiu o build automático.
 - GitHub CLI local sem autenticação; validar conclusão e SHA pelo título do deploy no Maker.
 - LOG: `doc/LOG-2026-07-17__140000__deploy-tudo-pendente-producao.md`.
 - Keywords: deploy pendente, trigger Easypanel, Maker, LF CRLF.

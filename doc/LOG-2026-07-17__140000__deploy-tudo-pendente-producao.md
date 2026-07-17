@@ -24,6 +24,9 @@ Solicitação para deixar pronto para deploy tudo que ainda não havia chegado �
 
 - Build imediatamente anterior: `npm run build` concluído com sucesso.
 - Produção acessível antes do novo gatilho: HTTP 200.
+- Commit de deploy enviado: `540fedf` (`[6987dda] deploy: publica todo estado pendente em producao`).
+- Monitoramento por 20 tentativas durante aproximadamente 5 minutos: produção permaneceu HTTP 200, mas continuou servindo `/assets/index-CBqzy7be.js`; a troca de assets não foi confirmada.
+- Causa do bloqueio de confirmação: processamento automático do Easypanel/Maker não iniciou ou ainda não concluiu; não há diferença de código local/remoto.
 
 ## Segurança
 
@@ -32,7 +35,8 @@ Solicitação para deixar pronto para deploy tudo que ainda não havia chegado �
 
 ## Pendências para retomada
 
-- Confirmar no Maker/Easypanel o título do deploy iniciado pelo novo commit e o status concluído.
+- Confirmar no Maker/Easypanel o deploy com título `[6987dda] deploy: publica todo estado pendente em producao`.
+- Se não estiver em execução, acionar Redeploy no Maker e validar a troca de assets.
 
 ## Palavras-chave
 
