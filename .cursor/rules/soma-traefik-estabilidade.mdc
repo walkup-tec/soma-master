@@ -27,7 +27,13 @@ Se o `:443` cair, é a camada WABA que recupera. **Não** criar 443-watchdog/boo
 5. **Anti-thrash:** poucos timers e espaçados. `heal-soma` ~45s + watch de eventos; `soma-traefik-guard` a cada 3min. Não empilhar timers curtos concorrentes.
 6. **Nunca** instalar heals de `:30180` (login WABA) / `:30210` (paginadevendas) para o Soma.
 
-## Install no VPS (uma vez, root)
+## Automático a cada deploy (sem passo manual no VPS)
+
+`.github/workflows/heal-soma-on-deploy.yml` (espelho do WABA): push em `main` → SSH root no VPS → `install` (idempotente: recria watch+timer) + `burst`. Depois do 1º run, o VPS se cura sozinho em todo redeploy (watch por `docker events` + timer).
+
+**Único pré-requisito (uma vez, no GitHub, não no VPS):** secret `VPS_SSH_PRIVATE_KEY` no repo `soma-master` (mesma chave root do WABA). Opcional `VPS_HOST` (default `72.60.51.127`).
+
+## Install manual no VPS (fallback / emergência)
 
 ```bash
 for s in heal-soma-gestao-vps.sh soma-traefik-guard-vps.sh; do

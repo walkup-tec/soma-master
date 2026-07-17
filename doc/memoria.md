@@ -1,4 +1,11 @@
-﻿## 2026-07-17 09:30 — Regra IA geral/individual + takeover manual
+﻿## 2026-07-17 09:35 — Heal Soma automático pós-deploy (Actions)
+- Novo `.github/workflows/heal-soma-on-deploy.yml` (espelho WABA): push main → SSH VPS → `install` (idempotente) + burst da suíte (heal + guard).
+- Elimina passo manual: após 1º run, VPS se cura sozinho em todo redeploy (watch docker events + timer). Actions não é dependência contínua.
+- Pré-req único (no GitHub, não no VPS): secret `VPS_SSH_PRIVATE_KEY` no repo soma-master (mesma chave root do WABA); opcional `VPS_HOST`.
+- LOG: `doc/LOG-2026-07-17__093500__heal-soma-on-deploy-workflow.md`.
+- Keywords: github actions, heal-soma-on-deploy, VPS_SSH_PRIVATE_KEY, pós-deploy.
+
+## 2026-07-17 09:30 — Regra IA geral/individual + takeover manual
 - Geral ON/OFF aplica em massa; depois cada chat pode sobrescrever mesmo com geral OFF.
 - Envio manual sempre pausa só a conversa atual; abrir conversa apenas atribui o atendente e preserva IA.
 - Conversa nova herda último estado geral; webhook revalida IA antes de publicar para evitar corrida com takeover.

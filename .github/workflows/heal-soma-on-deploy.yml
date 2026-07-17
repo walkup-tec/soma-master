@@ -1,0 +1,85 @@
+# Estabiliza Soma automaticamente após cada push em main (= redeploy Easypanel).
+# Sem passo manual no VPS: SSH → install (watch+timer, idempotente) → burst.
+#
+# Uma vez instalado, o VPS se cura sozinho em TODO redeploy futuro (watch por
+# docker events + timer). Este workflow só garante que a suíte está fresca e
+# aplica um burst imediato na janela do deploy.
+#
+# Base comprovada: WABA .github/workflows/heal-waba-login-on-deploy.yml
+#
+# Secret obrigatório (GitHub → Settings → Secrets and variables → Actions):
+#   VPS_SSH_PRIVATE_KEY  — chave SSH root do srv1261237
+#   VPS_HOST             — opcional; default 72.60.51.127
+
+name: Heal Soma (pós-deploy)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  repository_dispatch:
+    types: [easypanel-redeployed, heal-soma]
+
+concurrency:
+  group: heal-soma
+  cancel-in-progress: false
+
+jobs:
+  heal-soma:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validar secret SSH
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::VPS_SSH_PRIVATE_KEY ausente — configure o secret para o Soma se curar sozinho pós-deploy."
+            exit 1
+          fi
+
+      - name: Aguardar Easypanel iniciar o build/redeploy
+        run: sleep 45
+
+      - name: SSH — install (watch+timer) + burst da suíte Soma
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
+          username: root
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 13m
+          script: |
+            set -euo pipefail
+            REPO="https://raw.githubusercontent.com/walkup-tec/soma-master/main/scripts"
+
+            for s in heal-soma-gestao-vps.sh soma-traefik-guard-vps.sh; do
+              curl -fsSL "${REPO}/${s}" -o "/tmp/${s}"
+              sed -i 's/\r$//' "/tmp/${s}"
+              chmod +x "/tmp/${s}"
+              # install é idempotente: (re)cria watch + timer no VPS
+              "/tmp/${s}" install || true
+            done
+
+            # Burst imediato — cobre a janela do Swarm/Easypanel subir o container
+            /tmp/heal-soma-gestao-vps.sh burst || true
+            /tmp/soma-traefik-guard-vps.sh run || true
+
+            echo "--- status ---"
+            /tmp/heal-soma-gestao-vps.sh status || true
+
+            # Health final com retry (~4 min): o build do Easypanel pode demorar;
+            # não falha o job só porque o container ainda estava subindo.
+            code="000"
+            for i in $(seq 1 24); do
+              code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+                --resolve app.somaconecta.com.br:443:127.0.0.1 \
+                https://app.somaconecta.com.br/login || echo 000)"
+              echo "try ${i}/24 https_login=${code}"
+              if [ "$code" = "200" ]; then
+                break
+              fi
+              /tmp/heal-soma-gestao-vps.sh burst || true
+              sleep 10
+            done
+            echo "https_login_final=${code}"
+            test "$code" = "200"
