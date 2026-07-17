@@ -69,8 +69,22 @@ export function ProductsSettings({ settings, onChange }: Props) {
       try {
         const saved = await onChange({ ...settings, products: productsRef.current });
         if (saved?.products) {
-          setProducts(saved.products);
-          productsRef.current = saved.products;
+          if (colorEditingRef.current) {
+            // Mantém cor local enquanto o picker está aberto
+            const localById = new Map(productsRef.current.map((p) => [p.id, p]));
+            const merged = saved.products.map((p) => {
+              const local = localById.get(p.id);
+              if (local && p.id === selectedId) {
+                return { ...p, color: local.color, name: local.name, tag: local.tag };
+              }
+              return p;
+            });
+            setProducts(merged);
+            productsRef.current = merged;
+          } else {
+            setProducts(saved.products);
+            productsRef.current = saved.products;
+          }
           setSelectedId((current) => {
             if (current && saved.products.some((product) => product.id === current)) return current;
             return saved.products[0]?.id ?? "";
