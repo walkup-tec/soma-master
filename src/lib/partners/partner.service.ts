@@ -1,6 +1,10 @@
 import { hashPassword } from "@/lib/auth/password";
 import { ALL_MENU_ITEM_IDS, type MenuItemId } from "@/lib/config/menu-items";
 import { normalizeEmail } from "@/lib/auth/master-user";
+import { isValidBrazilUf } from "@/lib/geo/brazil-ufs";
+import { isCompleteCep } from "@/lib/masks/br-cep";
+import { isCompletePhoneBr } from "@/lib/masks/br-phone";
+import { isFilledValidEmail } from "@/lib/masks/email";
 import { PARTNER_BANKS } from "@/lib/partners/partner.constants";
 import {
   changePartnerStatus,
@@ -16,6 +20,7 @@ import type {
   PartnerEventRecord,
   PartnerListQuery,
   PartnerListResult,
+  PartnerPixKeyType,
   PartnerRecord,
   PartnerStatus,
   PartnerUpsertInput,
@@ -82,6 +87,29 @@ function normalizeMenuIds(menuIds: MenuItemId[]): MenuItemId[] {
   return [...new Set(menuIds)].filter((id): id is MenuItemId => VALID_MENU_IDS.has(id));
 }
 
+function normalizePixKey(type: PartnerPixKeyType, raw: string): string {
+  if (type === "cpf") return onlyDigits(raw).slice(0, 11);
+  if (type === "phone") return onlyDigits(raw).slice(0, 11);
+  if (type === "email") return normalizeEmail(raw);
+  return cleanText(raw, 180);
+}
+
+function assertValidPixKey(type: PartnerPixKeyType, pixKey: string): void {
+  if (type === "cpf") {
+    if (!isValidCpf(pixKey)) throw new Error("Informe uma chave PIX de CPF válida.");
+    return;
+  }
+  if (type === "phone") {
+    if (!isCompletePhoneBr(pixKey)) throw new Error("Informe uma chave PIX de telefone válida.");
+    return;
+  }
+  if (type === "email") {
+    if (!isFilledValidEmail(pixKey)) throw new Error("Informe uma chave PIX de e-mail válida.");
+    return;
+  }
+  if (pixKey.length < 8) throw new Error("Informe uma chave PIX aleatória válida.");
+}
+
 function validateGrantedMenus(actor: PartnerActor, menuIds: MenuItemId[]): void {
   if (actor.isMaster) return;
   const actorMenus = new Set(actor.menuIds);
@@ -105,18 +133,19 @@ function validateAndNormalizeInput(
   options: { creating: boolean },
 ): PartnerUpsertInput {
   if (!CATEGORY_VALUES.has(raw.category)) throw new Error("Selecione uma categoria válida.");
-  if (!PERSON_TYPE_VALUES.has(raw.personType))
+  if (!PERSON_TYPE_VALUES.has(raw.personType)) {
     throw new Error("Selecione Pessoa Física ou Jurídica.");
+  }
   if (!PIX_KEY_TYPE_VALUES.has(raw.pixKeyType)) throw new Error("Selecione o tipo de chave PIX.");
 
   const name = cleanText(raw.name, 160);
   const email = normalizeEmail(raw.email);
   const taxId = onlyDigits(raw.taxId);
   const rg = cleanText(raw.rg, 30);
-  const phone = onlyDigits(raw.phone);
-  const whatsapp = onlyDigits(raw.whatsapp);
-  const pixKey = cleanText(raw.pixKey, 180);
-  const cep = onlyDigits(raw.cep);
+  const phone = onlyDigits(raw.phone).slice(0, 11);
+  const whatsapp = onlyDigits(raw.whatsapp).slice(0, 11);
+  const pixKey = normalizePixKey(raw.pixKeyType, raw.pixKey);
+  const cep = onlyDigits(raw.cep).slice(0, 8);
   const street = cleanText(raw.street, 180);
   const neighborhood = cleanText(raw.neighborhood, 120);
   const city = cleanText(raw.city, 120);
@@ -127,17 +156,21 @@ function validateAndNormalizeInput(
   const bankIds = [...new Set(raw.bankIds)].filter((id) => VALID_BANK_IDS.has(id));
 
   if (name.length < 3) throw new Error("Informe o nome completo ou razão social.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Informe um e-mail válido.");
+  if (!isFilledValidEmail(email)) throw new Error("Informe um e-mail válido.");
   if (raw.personType === "pf" && !isValidCpf(taxId)) throw new Error("Informe um CPF válido.");
   if (raw.personType === "pj" && !isValidCnpj(taxId)) throw new Error("Informe um CNPJ válido.");
   if (raw.personType === "pf" && !rg) throw new Error("Informe o RG.");
-  if (phone.length < 10 || phone.length > 13) throw new Error("Informe um telefone válido.");
-  if (whatsapp.length < 10 || whatsapp.length > 13) throw new Error("Informe um WhatsApp válido.");
-  if (!pixKey) throw new Error("Informe a chave PIX.");
-  if (cep.length !== 8) throw new Error("Informe um CEP com 8 dígitos.");
-  if (!street || !neighborhood || !city || state.length !== 2 || !number) {
-    throw new Error("Preencha endereço, bairro, cidade, estado e número.");
-  }
+  if (!isCompletePhoneBr(phone)) throw new Error("Informe um telefone válido com DDD.");
+  if (!isCompletePhoneBr(whatsapp)) throw new Error("Informe um WhatsApp válido com DDD.");
+  assertValidPixKey(raw.pixKeyType, pixKey);
+  if (!isCompleteCep(cep)) throw new Error("Informe um CEP válido com 8 dígitos.");
+  if (!street) throw new Error("Informe o endereço.");
+  if (!number) throw new Error("Informe o número.");
+  if (!neighborhood) throw new Error("Informe o bairro.");
+  if (!city) throw new Error("Informe a cidade.");
+  if (!isValidBrazilUf(state)) throw new Error("Selecione um estado (UF) válido.");
+  if (bankIds.length === 0) throw new Error("Selecione ao menos um banco de atuação.");
+  if (menuIds.length === 0) throw new Error("Selecione ao menos um menu de acesso.");
   if (options.creating && (!raw.password || raw.password.length < 8)) {
     throw new Error("A senha deve ter ao menos 8 caracteres.");
   }

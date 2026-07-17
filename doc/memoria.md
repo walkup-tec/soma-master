@@ -1,3 +1,10 @@
+## 2026-07-17 15:15 — Máscaras e obrigatoriedade no formulário Parceiros
+- Máscaras em CPF/CNPJ, telefone, WhatsApp, CEP e chave PIX por tipo; UF via select.
+- E-mail obrigatório com validação de formato (`isFilledValidEmail`) e feedback visual.
+- Todos os campos configurados obrigatórios (exceto complemento e senha na edição); exige ao menos 1 banco e 1 menu.
+- Build/lint OK. LOG: `doc/LOG-2026-07-17__151500__parceiros-mascaras-validacao-obrigatorios.md`.
+- Keywords: máscara parceiros, e-mail válido, campos obrigatórios, PIX CEP CPF.
+
 ## 2026-07-17 14:55 — Área Parceiros implementada
 - Nova rota `/app/parceiros`: abas Ativos/Inativos/Bloqueados, busca, Produção, bancos, paginação, tabela e ações.
 - Cadastro PF/PJ completo com categoria, login, PIX, endereço/ViaCEP, bancos e menus individuais.

@@ -51,6 +51,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { maskCnpj } from "@/lib/masks/br-cnpj";
+import { maskCpf } from "@/lib/masks/br-cpf";
+import { maskPhoneBr } from "@/lib/masks/br-phone";
 import {
   PARTNER_BANKS,
   PARTNER_STATUSES,
@@ -72,19 +75,15 @@ import type {
 const PAGE_SIZE = 20;
 
 function formatDocument(value: string): string {
-  if (value.length === 11) {
-    return value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-  }
-  if (value.length === 14) {
-    return value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-  }
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 11) return maskCpf(digits);
+  if (digits.length === 14) return maskCnpj(digits);
   return value || "—";
 }
 
 function formatPhone(value: string): string {
-  if (value.length === 11) return value.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-  if (value.length === 10) return value.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-  return value || "—";
+  const digits = value.replace(/\D/g, "");
+  return digits ? maskPhoneBr(digits) : "—";
 }
 
 function statusBadge(status: PartnerStatus) {
