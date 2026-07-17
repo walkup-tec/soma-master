@@ -1,3 +1,9 @@
+## 2026-07-17 18:45 — Modal deploy: forçar paleta Soma + invalidar cache SW
+- Estilos versionados (`soma-brand-v3`) sobrescrevem CSS antigo; marca “Soma Promotora” no card.
+- Cores fixas: magenta `#be1c6a`, lima `#ecf759`, azul `#2775e5` — sem pink/roxo/ciano WABA.
+- Service worker cache `soma-deploy-shell-v3` + register `?v=3` para descartar shell HTML antiga.
+- Keywords: modal deploy, cache SW, paleta Soma.
+
 ## 2026-07-17 18:30 — Exclusão parceiro mozart.hotmart@gmail.com
 - Removido do Postgres (usuário + perfil + permissões/bancos/eventos): MMS MARKETING E SISTEMAS DIGITAIS LTDA.
 - Script utilitário: `scripts/delete-partner-by-email.ts`.

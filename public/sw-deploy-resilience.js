@@ -4,7 +4,7 @@
  * ("Cannot GET /api/errors/bad-gateway"), devolve a última shell HTML válida
  * para o overlay de deploy assumir na tela do sistema.
  */
-const CACHE_SHELL = "soma-deploy-shell-v1";
+const CACHE_SHELL = "soma-deploy-shell-v3";
 
 function isNavigationRequest(request) {
   if (request.mode === "navigate") return true;

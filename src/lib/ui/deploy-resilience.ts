@@ -34,17 +34,25 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   }
 
   function ensureStyles() {
-    if (document.getElementById("soma-deploy-overlay-style")) return;
+    var STYLE_ID = "soma-deploy-overlay-style";
+    var STYLE_VERSION = "soma-brand-v3";
+    var existing = document.getElementById(STYLE_ID);
+    if (existing && existing.getAttribute("data-version") === STYLE_VERSION) return;
+    if (existing) existing.remove();
     var style = document.createElement("style");
-    style.id = "soma-deploy-overlay-style";
+    style.id = STYLE_ID;
+    style.setAttribute("data-version", STYLE_VERSION);
+    // Paleta oficial Soma: magenta #be1c6a · lima #ecf759 · azul #2775e5 · neutros
+    // Sem pink Tailwind (#ec4899), roxo (#a855f7), ciano (#22d3ee) ou verde WABA.
     style.textContent =
-      "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,9,18,.92);backdrop-filter:blur(6px)}" +
+      "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,9,18,.94);backdrop-filter:blur(8px)}" +
       "#" + OVERLAY_ID + "[hidden]{display:none!important}" +
-      ".soma-deploy-card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(190,28,106,.45);background:#0e1828;color:#eef3fb;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.45);font-family:Manrope,ui-sans-serif,system-ui,sans-serif;transition:border-color .35s ease}" +
-      ".soma-deploy-card.is-stabilizing{border-color:rgba(236,247,89,.55)}" +
+      ".soma-deploy-card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(190,28,106,.5);background:#0e1828;color:#eef3fb;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.5);font-family:Manrope,ui-sans-serif,system-ui,sans-serif;transition:border-color .35s ease}" +
+      ".soma-deploy-card.is-stabilizing{border-color:rgba(236,247,89,.6)}" +
+      ".soma-deploy-brand{margin:0 0 14px;font-family:Sora,Manrope,ui-sans-serif,system-ui,sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#be1c6a}" +
       ".soma-deploy-visual{margin-bottom:18px}" +
-      ".soma-deploy-spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:2px solid rgba(39,117,229,.24);border-top-color:#be1c6a;animation:soma-deploy-orbit 1.2s linear infinite}" +
-      ".soma-deploy-progress-track{height:4px;border-radius:999px;background:rgba(245,245,245,.16);overflow:hidden;margin:0 auto;max-width:180px}" +
+      ".soma-deploy-spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:3px solid rgba(39,117,229,.22);border-top-color:#be1c6a;animation:soma-deploy-orbit 1.2s linear infinite}" +
+      ".soma-deploy-progress-track{height:4px;border-radius:999px;background:rgba(245,245,245,.14);overflow:hidden;margin:0 auto;max-width:180px}" +
       ".soma-deploy-progress-bar{height:100%;width:42%;border-radius:inherit;background:#be1c6a;animation:soma-deploy-progress-slide 1.35s ease-in-out infinite}" +
       ".soma-deploy-card.is-stabilizing .soma-deploy-progress-bar{width:100%;animation:soma-deploy-progress-fill .9s ease-out forwards;background:#ecf759}" +
       ".soma-deploy-card.is-complete .soma-deploy-spinner{border-top-color:#ecf759;animation:none}" +
@@ -60,7 +68,10 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
 
   function ensureOverlay() {
     var existing = document.getElementById(OVERLAY_ID);
-    if (existing) return existing;
+    if (existing) {
+      ensureStyles();
+      return existing;
+    }
     if (!document.body) return null;
     ensureStyles();
     var el = document.createElement("div");
@@ -68,6 +79,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     el.setAttribute("hidden", "");
     el.innerHTML =
       '<div class="soma-deploy-card" role="status" aria-live="polite" aria-busy="true">' +
+      '<p class="soma-deploy-brand">Soma Promotora</p>' +
       '<div class="soma-deploy-visual" aria-hidden="true">' +
       '<div class="soma-deploy-spinner"></div>' +
       '<div class="soma-deploy-progress-track"><div class="soma-deploy-progress-bar"></div></div>' +
@@ -212,7 +224,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("/sw-deploy-resilience.js?v=1", { scope: "/" }).catch(function () {});
+      navigator.serviceWorker.register("/sw-deploy-resilience.js?v=3", { scope: "/" }).catch(function () {});
     });
   }
 
