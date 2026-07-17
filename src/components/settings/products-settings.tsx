@@ -213,11 +213,6 @@ export function ProductsSettings({ settings, onChange }: Props) {
                       color={product.color}
                       className="max-w-full"
                     />
-                    <span
-                      className={`w-full break-words ${isSelected ? "font-medium" : "font-normal"}`}
-                    >
-                      {product.name || "Sem nome"}
-                    </span>
                     <span className="text-xs text-muted-foreground">
                       {product.requiredFieldIds.length} obrigatório(s) ·{" "}
                       {product.availableFieldIds.length} disponível(is)
