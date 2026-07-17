@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SOMA_THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme/soma-theme";
+import { SOMA_PROCESSING_BOOTSTRAP_SCRIPT } from "@/lib/ui/processing-overlay";
 
 function NotFoundComponent() {
   return (
@@ -108,9 +109,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <HeadContent />
-        {/* Tema: anti-FOUC + clique [data-theme-toggle] sem depender do React */}
+        {/* Tema ANTES do CSS — evita flash claro após POST/reload */}
         <script dangerouslySetInnerHTML={{ __html: SOMA_THEME_BOOTSTRAP_SCRIPT }} />
+        <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: SOMA_PROCESSING_BOOTSTRAP_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>
         {children}

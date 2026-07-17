@@ -1,4 +1,10 @@
-﻿## 2026-07-17 — Heal Traefik Soma permanente
+﻿## 2026-07-17 — Overlay Processando + tema pós-reload
+
+- Forms POST mostram overlay “Processando…” (bootstrap sem React).
+- Tema escuro reaplicado no head + pageshow (não volta ao claro após Atualizar status EVO).
+- Keywords: processing overlay, soma-theme, FOUC, Integração EVO
+
+## 2026-07-17 — Heal Traefik Soma permanente
 
 - Estudo: agente Traefik + REGISTRY (`BACKEND-OVERLAY-502`, `LOGIN-30180-PUBLISH`, thrash).
 - Causa Soma: Redeploy Easypanel reescreve overlay + Host com `/` + some `:30300`.

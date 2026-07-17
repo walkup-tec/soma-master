@@ -85,6 +85,7 @@ export function ChatAiEducationScreen({
         method="post"
         action="/api/settings/chatbot/education"
         className="space-y-4 rounded-xl border border-border/60 bg-card p-6 shadow-soft"
+        data-processing-label="Salvando configuração da IA…"
       >
         <input type="hidden" name="kind" value="save-settings" />
         {returnPath ? <input type="hidden" name="returnPath" value={returnPath} /> : null}

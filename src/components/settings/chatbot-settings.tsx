@@ -158,7 +158,11 @@ export function ChatbotSettings({ evo, education, flashOk, flashErr }: Props) {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <form method="post" action="/api/settings/chatbot/evolution">
+            <form
+              method="post"
+              action="/api/settings/chatbot/evolution"
+              data-processing-label="Atualizando status da conexão…"
+            >
               <input type="hidden" name="kind" value="status" />
               <button
                 type="submit"
@@ -168,7 +172,11 @@ export function ChatbotSettings({ evo, education, flashOk, flashErr }: Props) {
                 Atualizar status
               </button>
             </form>
-            <form method="post" action="/api/settings/chatbot/evolution">
+            <form
+              method="post"
+              action="/api/settings/chatbot/evolution"
+              data-processing-label="Gerando QR Code…"
+            >
               <input type="hidden" name="kind" value="refresh" />
               <button
                 type="submit"
@@ -227,7 +235,12 @@ export function ChatbotSettings({ evo, education, flashOk, flashErr }: Props) {
             </li>
           </ol>
 
-          <form method="post" action="/api/settings/chatbot/evolution" className="space-y-3">
+          <form
+            method="post"
+            action="/api/settings/chatbot/evolution"
+            className="space-y-3"
+            data-processing-label="Aplicando webhook na Evolution…"
+          >
             <input type="hidden" name="kind" value="webhook" />
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">URL pública do CRM (só o domínio HTTPS)</span>
@@ -263,6 +276,7 @@ export function ChatbotSettings({ evo, education, flashOk, flashErr }: Props) {
               method="post"
               action="/api/settings/chatbot/evolution"
               className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+              data-processing-label="Enviando teste para o Inbox…"
             >
               <input type="hidden" name="kind" value="test-inbound" />
               <input

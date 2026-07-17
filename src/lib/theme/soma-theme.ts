@@ -49,7 +49,10 @@ export const SOMA_THEME_BOOTSTRAP_SCRIPT = `(function(){
     h.dataset.theme=dark?'dark':'light';
     try{localStorage.setItem(KEY,dark?'dark':'light')}catch(e){}
   }
-  try{apply(localStorage.getItem(KEY)==='dark')}catch(e){}
+  function syncFromStorage(){
+    try{apply(localStorage.getItem(KEY)==='dark')}catch(e){}
+  }
+  syncFromStorage();
   document.addEventListener('click',function(ev){
     var t=ev.target&&ev.target.closest&&ev.target.closest('[data-theme-toggle]');
     if(!t)return;
@@ -60,4 +63,7 @@ export const SOMA_THEME_BOOTSTRAP_SCRIPT = `(function(){
     t.setAttribute('aria-label',dark?'Ativar modo claro':'Ativar modo escuro');
     t.setAttribute('title',dark?'Ativar modo claro':'Ativar modo escuro');
   },true);
+  // Após POST/reload ou bfcache — reaplicar tema guardado
+  window.addEventListener('pageshow',syncFromStorage);
+  document.addEventListener('DOMContentLoaded',syncFromStorage);
 })();`;
