@@ -279,7 +279,7 @@ function Dashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{primaryLabel(client)}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {client.telefone ?? productName(client.productId)}
+                      {client.telefone ?? productMeta(client.productId).label}
                     </p>
                   </div>
                   <StatusBadge
