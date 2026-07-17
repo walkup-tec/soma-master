@@ -119,8 +119,11 @@ export async function handleEvolutionWebhook(request: Request): Promise<Response
     return Response.json({ ok: false, error: "invalid json" }, { status: 400 });
   }
 
-  const event = String((payload as { event?: string })?.event ?? "").toLowerCase();
-  if (event && !event.includes("messages.upsert") && !event.includes("message")) {
+  const event = String((payload as { event?: string })?.event ?? "")
+    .toLowerCase()
+    .replace(/_/g, ".");
+  // Evolution: messages.upsert / MESSAGES_UPSERT
+  if (event && !event.includes("message")) {
     return Response.json({ ok: true, ignored: true, event });
   }
 

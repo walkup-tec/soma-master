@@ -170,13 +170,18 @@ function extractQr(raw: unknown): EvolutionQrPayload {
   };
 }
 
-/** Monta URL do webhook a partir de uma base pública (sem path). */
+const WEBHOOK_PATH = "/api/chat/whatsapp-webhook";
+
+/** Monta URL do webhook a partir de uma base pública (só o domínio HTTPS). */
 export function resolveWebhookUrlFromBase(baseRaw: string | null | undefined): string | null {
-  const base = (baseRaw ?? "").trim().replace(/\/+$/, "");
+  let base = (baseRaw ?? "").trim().replace(/\/+$/, "");
   if (!base) return null;
   // Evolution no VPS não alcança localhost — só URL pública
   if (/localhost|127\.0\.0\.1/i.test(base)) return null;
-  return `${base}/api/chat/whatsapp-webhook`;
+  // Se colaram a URL completa do webhook, não duplicar o path
+  base = base.replace(/\/api\/chat\/whatsapp-webhook\/?$/i, "");
+  if (!base) return null;
+  return `${base}${WEBHOOK_PATH}`;
 }
 
 function resolveWebhookUrl(publicBaseOverride?: string | null): string | null {
