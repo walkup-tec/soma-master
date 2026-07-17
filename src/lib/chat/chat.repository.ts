@@ -57,6 +57,7 @@ type ConvRow = {
   updated_at: Date;
   client_name?: string | null;
   client_status?: string | null;
+  client_product_ids?: string[] | null;
 };
 
 function mapConv(row: ConvRow): ChatConversation {
@@ -75,6 +76,7 @@ function mapConv(row: ConvRow): ChatConversation {
     updatedAt: row.updated_at.toISOString(),
     clientName: row.client_name ?? null,
     clientStatusId: row.client_status ?? null,
+    clientProductIds: row.client_product_ids ?? [],
   };
 }
 
@@ -99,7 +101,15 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
         c.ai_enabled, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
         cl.data->>'nome' as client_name,
-        cl.status as client_status
+        cl.status as client_status,
+        case when cl.id is null then array[]::text[] else (
+          select coalesce(array_agg(distinct product_id), array[cl.product_id])
+          from (
+            select cl.product_id as product_id
+            union
+            select cp.product_id from crm.client_products cp where cp.client_id = cl.id
+          ) products
+        ) end as client_product_ids
       from crm.chat_conversations c
       left join crm.clients cl on cl.id = c.client_id
       order by c.last_message_at desc nulls last, c.updated_at desc
@@ -255,7 +265,12 @@ export async function listMessages(conversationId: string, limit = 200): Promise
       conversationId: row.conversation_id,
       direction: row.direction as ChatMessage["direction"],
       body: row.body,
-      messageType: row.message_type === "image" ? "image" : "text",
+      messageType:
+        row.message_type === "image"
+          ? "image"
+          : row.message_type === "document"
+            ? "document"
+            : "text",
       mediaId: row.media_id,
       mediaMimeType: row.media_mime_type,
       mediaFileName: row.media_file_name,
@@ -297,9 +312,16 @@ export async function appendMessage(input: {
 }): Promise<ChatMessage> {
   const body = input.body.trim();
   const messageType = input.messageType ?? "text";
-  if (!body && messageType !== "image") throw new Error("Mensagem vazia.");
-  if (messageType === "image" && !input.mediaId) throw new Error("Imagem ausente.");
-  const preview = messageType === "image" ? `📷 ${body || "Imagem"}` : body;
+  if (!body && messageType === "text") throw new Error("Mensagem vazia.");
+  if ((messageType === "image" || messageType === "document") && !input.mediaId) {
+    throw new Error("Mídia ausente.");
+  }
+  const preview =
+    messageType === "image"
+      ? `📷 ${body || "Imagem"}`
+      : messageType === "document"
+        ? `📄 ${input.mediaFileName || body || "Documento PDF"}`
+        : body;
 
   const message: ChatMessage = {
     id: `msg-${crypto.randomUUID().slice(0, 10)}`,

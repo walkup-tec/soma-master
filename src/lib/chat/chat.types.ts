@@ -2,7 +2,7 @@
 
 export type ChatSenderType = "contact" | "agent" | "ai" | "system";
 export type ChatMessageDirection = "inbound" | "outbound";
-export type ChatMessageType = "text" | "image";
+export type ChatMessageType = "text" | "image" | "document";
 
 export type ChatConversation = {
   id: string;
@@ -23,6 +23,8 @@ export type ChatConversation = {
   clientStatusId?: string | null;
   clientStatusLabel?: string | null;
   clientStatusColor?: string | null;
+  /** Produto principal + produtos extras vinculados ao mesmo cliente. */
+  clientProductIds?: string[];
 };
 
 export type ChatMessage = {

@@ -30,7 +30,7 @@ export const Route = createFileRoute("/api/chat/media/$mediaId")({
             },
           });
         } catch {
-          return new Response("Imagem não encontrada.", { status: 404 });
+          return new Response("Mídia não encontrada.", { status: 404 });
         }
       },
     },

@@ -38,6 +38,18 @@ async function ensureAttendanceStatusColorColumn(sql: Sql): Promise<void> {
   }
 }
 
+async function ensureClientAttachmentSourceColumn(sql: Sql): Promise<void> {
+  await sql`
+    alter table crm.client_attachments
+    add column if not exists source_chat_media_id text null
+  `;
+  await sql`
+    create unique index if not exists uq_client_attachments_chat_media
+    on crm.client_attachments (client_id, source_chat_media_id)
+    where source_chat_media_id is not null
+  `;
+}
+
 /** Provisiona schema auxiliar uma vez por processo — evita DDL em toda ação. */
 export async function ensureClientListIndexes(sql: Sql): Promise<void> {
   if (ensured) return;
@@ -55,6 +67,7 @@ export async function ensureClientListIndexes(sql: Sql): Promise<void> {
   if (ready) {
     await ensureClientProductsTable(sql);
     await ensureAttendanceStatusColorColumn(sql);
+    await ensureClientAttachmentSourceColumn(sql);
     await ensureChatSchema(sql);
     ensured = true;
     return;
@@ -101,6 +114,7 @@ export async function ensureClientListIndexes(sql: Sql): Promise<void> {
     create index if not exists idx_client_attachments_client_created
     on crm.client_attachments (client_id, created_at desc)
   `;
+  await ensureClientAttachmentSourceColumn(sql);
   await sql`
     create table if not exists crm.client_schedules (
       id text primary key,

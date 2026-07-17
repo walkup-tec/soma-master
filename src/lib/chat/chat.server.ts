@@ -40,6 +40,7 @@ import {
   finalizeChatImageUpload,
   getChatImageUploadMeta,
   initChatImageUpload,
+  readChatMediaBuffer,
   readChatImageAsDataUrl,
 } from "@/lib/chat/chat-media.repository";
 import {
@@ -48,7 +49,13 @@ import {
 } from "@/lib/chat/chat-media.constants";
 import { isOpenAiConfigured } from "@/lib/chat/openai.adapter";
 import { createClientAttendance } from "@/lib/clients/client-attendance.repository";
-import { createManualClient, updateClientStatus } from "@/lib/clients/clients.repository";
+import { createClientAttachmentFromChatMedia } from "@/lib/clients/client-attachment.repository";
+import {
+  addProductToClient,
+  createManualClient,
+  getClientByIdForUser,
+  updateClientStatus,
+} from "@/lib/clients/clients.repository";
 import { isValidAttendanceStatus } from "@/lib/clients/client-status";
 import type { ClientFieldId } from "@/lib/config/client-fields";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
@@ -112,6 +119,46 @@ export const getChatThreadFn = createServerFn({ method: "POST" })
     await markConversationRead(data.conversationId);
     const messages = await listMessages(data.conversationId);
     return { conversation, messages };
+  });
+
+export const attachChatMediaToClientFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { conversationId?: string; mediaId?: string };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const mediaId = String(body.mediaId ?? "").trim();
+    if (!conversationId || !mediaId) throw new Error("Conversa e mídia são obrigatórias.");
+    return { conversationId, mediaId };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const conversation = await getConversation(data.conversationId);
+    if (!conversation) throw new Error("Conversa não encontrada.");
+    if (!conversation.clientId) {
+      throw new Error("Vincule esta conversa a um cliente antes de anexar.");
+    }
+    const client = await getClientByIdForUser(
+      conversation.clientId,
+      user.userId,
+      user.role === "master",
+    );
+    if (!client) throw new Error("Cliente não encontrado ou sem permissão.");
+
+    const { meta, buffer } = await readChatMediaBuffer(data.mediaId);
+    if (meta.conversationId !== conversation.id) throw new Error("Mídia não pertence a esta conversa.");
+    const allowed =
+      /^image\/(jpeg|png|webp)$/i.test(meta.mimeType) ||
+      meta.mimeType.toLowerCase() === "application/pdf";
+    if (!allowed) throw new Error("Somente imagens e documentos PDF podem ser anexados.");
+
+    return createClientAttachmentFromChatMedia({
+      clientId: conversation.clientId,
+      sourceChatMediaId: meta.mediaId,
+      fileName: meta.fileName,
+      mimeType: meta.mimeType,
+      content: buffer,
+      userId: user.userId,
+      userName: user.name || user.email || "Atendente",
+    });
   });
 
 export const joinChatConversationFn = createServerFn({ method: "POST" })
@@ -190,7 +237,11 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
 
     // Evolution é a parte lenta — timeout curto; UI já mostra otimista no cliente
     const send = await evolutionSendText({ phone: conversation.phone, text: data.text });
-    return { message, conversation, evolution: send };
+    return {
+      message,
+      conversation,
+      evolution: { ok: send.ok, error: send.error },
+    };
   });
 
 export const initChatImageUploadFn = createServerFn({ method: "POST" })
@@ -287,18 +338,64 @@ export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
       senderUserId: user.userId,
       senderName: user.name || user.email || "Atendente",
     });
-    // Persiste primeiro; a Evolution é externa e pode responder timeout após entregar.
-    const { dataUrl } = await readChatImageAsDataUrl(meta.mediaId);
-    const send = await evolutionSendImage({
+    // Envio Evolution em background: a UI recebe a mensagem persistida na hora
+    // e uma eventual falha vira mensagem de sistema no thread (aparece no poll).
+    void sendChatImageViaEvolutionInBackground({
+      mediaId: meta.mediaId,
+      conversationId: conversation.id,
       phone: conversation.phone,
-      dataUrl,
       mimeType: meta.mimeType,
       fileName: meta.fileName,
       caption: data.caption,
     });
     const updatedConversation = await getConversation(conversation.id);
-    return { message, conversation: updatedConversation, evolution: send };
+    return {
+      message,
+      conversation: updatedConversation,
+      evolution: { ok: true, error: undefined as string | undefined },
+    };
   });
+
+async function sendChatImageViaEvolutionInBackground(input: {
+  mediaId: string;
+  conversationId: string;
+  phone: string;
+  mimeType: string;
+  fileName: string;
+  caption: string;
+}): Promise<void> {
+  try {
+    const { dataUrl } = await readChatImageAsDataUrl(input.mediaId);
+    const send = await evolutionSendImage({
+      phone: input.phone,
+      dataUrl,
+      mimeType: input.mimeType,
+      fileName: input.fileName,
+      caption: input.caption,
+    });
+    if (!send.ok) {
+      await appendMessage({
+        conversationId: input.conversationId,
+        direction: "outbound",
+        body: `⚠️ A imagem foi salva no CRM, mas não foi entregue no WhatsApp: ${send.error ?? "erro desconhecido"}. Envie novamente.`,
+        senderType: "system",
+        senderName: "Sistema",
+      });
+    }
+  } catch (error) {
+    console.error(
+      `[chat] Falha no envio da imagem ${input.mediaId} via Evolution:`,
+      error instanceof Error ? error.message : error,
+    );
+    await appendMessage({
+      conversationId: input.conversationId,
+      direction: "outbound",
+      body: "⚠️ A imagem foi salva no CRM, mas não foi entregue no WhatsApp. Envie novamente.",
+      senderType: "system",
+      senderName: "Sistema",
+    }).catch(() => undefined);
+  }
+}
 
 export const addChatAttendanceNoteFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
@@ -367,6 +464,43 @@ export const setChatClientStatusFn = createServerFn({ method: "POST" })
       note: `[WhatsApp] Status alterado para: ${label}`,
     });
 
+    return getConversation(data.conversationId);
+  });
+
+export const addChatClientProductFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { conversationId?: string; productId?: string };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const productId = String(body.productId ?? "").trim();
+    if (!conversationId || !productId) {
+      throw new Error("Conversa e produto são obrigatórios.");
+    }
+    return { conversationId, productId };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const conversation = await getConversation(data.conversationId);
+    if (!conversation?.clientId) throw new Error("Conversa sem cliente vinculado.");
+
+    const settings = await loadSystemSettingsFromDisk();
+    const product = settings.products.find((item) => item.id === data.productId);
+    if (!product) throw new Error("Produto não encontrado.");
+    if (conversation.clientProductIds?.includes(product.id)) {
+      throw new Error("Este cliente já possui o produto.");
+    }
+
+    await addProductToClient(
+      conversation.clientId,
+      user.userId,
+      user.role === "master",
+      product.id,
+    );
+    await createClientAttendance({
+      clientId: conversation.clientId,
+      userId: user.userId,
+      userName: user.name || user.email || "Atendente",
+      note: `[WhatsApp] Produto adicionado: ${product.name}`,
+    });
     return getConversation(data.conversationId);
   });
 

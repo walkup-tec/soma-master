@@ -3,9 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import {
   BotOff,
+  Check,
+  ExternalLink,
+  FileText,
   ImagePlus,
   Loader2,
   MessageCircle,
+  Paperclip,
   Search,
   Send,
   Sparkles,
@@ -24,6 +28,7 @@ import type { ChatAiSettings, ChatConversation, ChatMessage } from "@/lib/chat/c
 import {
   addChatAttendanceNoteFn,
   appendChatImageChunkFn,
+  attachChatMediaToClientFn,
   finalizeAndSendChatImageFn,
   getChatThreadFn,
   initChatImageUploadFn,
@@ -38,7 +43,7 @@ import {
   CHAT_IMAGE_CHUNK_BYTES,
   CHAT_IMAGE_MAX_BYTES,
 } from "@/lib/chat/chat-media.constants";
-import { readFileInChunks } from "@/lib/clients/upload-file-chunks";
+import { readFileInChunksParallel } from "@/lib/clients/upload-file-chunks";
 import type { AttendanceStatusConfig, BankConfig, ProductConfig } from "@/lib/config/settings-types";
 
 type Bootstrap = {
@@ -75,6 +80,7 @@ export function ChatInboxScreen({
   const initImageUpload = useServerFn(initChatImageUploadFn);
   const appendImageChunk = useServerFn(appendChatImageChunkFn);
   const finalizeAndSendImage = useServerFn(finalizeAndSendChatImageFn);
+  const attachChatMediaToClient = useServerFn(attachChatMediaToClientFn);
   const setConvAi = useServerFn(setChatConversationAiFn);
   const setAiGlobal = useServerFn(setChatAiGlobalEnabledFn);
   const addNote = useServerFn(addChatAttendanceNoteFn);
@@ -87,6 +93,8 @@ export function ChatInboxScreen({
   const [note, setNote] = useState("");
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
+  const [attachingMediaId, setAttachingMediaId] = useState<string | null>(null);
+  const [attachedMediaIds, setAttachedMediaIds] = useState<Set<string>>(() => new Set());
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -145,6 +153,28 @@ export function ChatInboxScreen({
   async function refreshList() {
     const next = await listConversations();
     setConversations(next);
+  }
+
+  async function handleAttachMedia(message: ChatMessage) {
+    if (!selectedId || !message.mediaId) return;
+    if (!active?.clientId) {
+      toast.message("Vincule o cliente primeiro", {
+        description: "Depois você poderá salvar esta mídia no cadastro.",
+      });
+      return;
+    }
+    setAttachingMediaId(message.mediaId);
+    try {
+      const result = await attachChatMediaToClient({
+        data: { conversationId: selectedId, mediaId: message.mediaId },
+      });
+      setAttachedMediaIds((current) => new Set(current).add(message.mediaId!));
+      toast.success(result.created ? "Anexado ao cadastro do cliente" : "Esta mídia já está anexada");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao anexar mídia");
+    } finally {
+      setAttachingMediaId(null);
+    }
   }
 
   async function openConversation(id: string) {
@@ -249,7 +279,8 @@ export function ChatInboxScreen({
           totalChunks,
         },
       });
-      await readFileInChunks(file, CHAT_IMAGE_CHUNK_BYTES, async (chunkIndex, _total, base64) => {
+      // 4 partes em paralelo: reduz o tempo total de upload sem saturar a conexão
+      await readFileInChunksParallel(file, CHAT_IMAGE_CHUNK_BYTES, 4, async (chunkIndex, _total, base64) => {
         await appendImageChunk({
           data: { mediaId: upload.mediaId, chunkIndex, chunkBase64: base64 },
         });
@@ -622,6 +653,16 @@ export function ChatInboxScreen({
                   {messages.map((msg) => {
                     const mine = msg.direction === "outbound" && msg.senderType !== "system";
                     const isSystem = msg.senderType === "system";
+                    const mediaUrl = msg.mediaId
+                      ? `/api/chat/media/${encodeURIComponent(msg.mediaId)}`
+                      : null;
+                    const isReceivedMedia =
+                      msg.direction === "inbound" &&
+                      Boolean(msg.mediaId) &&
+                      (msg.messageType === "image" || msg.messageType === "document");
+                    const isAttached = Boolean(
+                      msg.mediaId && attachedMediaIds.has(msg.mediaId),
+                    );
                     return (
                       <div
                         key={msg.id}
@@ -653,24 +694,69 @@ export function ChatInboxScreen({
                           {msg.messageType === "image" &&
                           (msg.mediaPreviewUrl || msg.mediaId) ? (
                             <img
-                              src={
-                                msg.mediaPreviewUrl ??
-                                `/api/chat/media/${encodeURIComponent(msg.mediaId!)}`
-                              }
+                              src={msg.mediaPreviewUrl ?? mediaUrl!}
                               alt={msg.body || msg.mediaFileName || "Imagem do WhatsApp"}
                               className="max-h-80 w-auto max-w-full rounded-xl object-contain"
                               loading="lazy"
                             />
                           ) : null}
+                          {msg.messageType === "document" && msg.mediaId ? (
+                            <div className="flex min-w-52 items-center gap-2 rounded-xl border border-border bg-background/70 p-3 text-foreground">
+                              <FileText className="size-8 shrink-0 text-red-500" aria-hidden="true" />
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-medium">
+                                  {msg.mediaFileName || "Documento PDF"}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">Documento PDF</p>
+                              </div>
+                            </div>
+                          ) : null}
                           {msg.body ? (
                             <p
                               className={cn(
                                 "whitespace-pre-wrap",
-                                msg.messageType === "image" && "mt-1.5",
+                                msg.messageType !== "text" && "mt-1.5",
                               )}
                             >
                               {msg.body}
                             </p>
+                          ) : null}
+                          {isReceivedMedia && mediaUrl ? (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2">
+                              <a
+                                href={mediaUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-accent"
+                              >
+                                <ExternalLink className="size-3" aria-hidden="true" />
+                                Abrir
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => void handleAttachMedia(msg)}
+                                disabled={attachingMediaId === msg.mediaId || isAttached}
+                                title={
+                                  active?.clientId
+                                    ? "Salvar no cadastro do cliente"
+                                    : "Vincule a conversa a um cliente primeiro"
+                                }
+                                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {attachingMediaId === msg.mediaId ? (
+                                  <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                                ) : isAttached ? (
+                                  <Check className="size-3 text-emerald-600" aria-hidden="true" />
+                                ) : (
+                                  <Paperclip className="size-3" aria-hidden="true" />
+                                )}
+                                {isAttached
+                                  ? "Anexado"
+                                  : msg.messageType === "image"
+                                    ? "Anexar imagem"
+                                    : "Anexar PDF"}
+                              </button>
+                            </div>
                           ) : null}
                         </div>
                       </div>

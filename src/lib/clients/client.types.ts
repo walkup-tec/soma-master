@@ -15,6 +15,8 @@ export type ClientImportDisplay = {
 export type ClientRecord = {
   id: string;
   productId: string;
+  /** Produto principal + produtos extras (fallback local). */
+  productIds?: string[];
   importBatchId: string;
   data: Partial<Record<ClientFieldId, string>>;
   assignedUserIds: string[];
@@ -204,5 +206,7 @@ export type ClientAttachmentRecord = {
   fileName: string;
   fileSize: number;
   mimeType: string | null;
+  /** Origem usada para impedir que a mesma mídia do chat seja anexada duas vezes. */
+  sourceChatMediaId?: string | null;
   createdAt: string;
 };

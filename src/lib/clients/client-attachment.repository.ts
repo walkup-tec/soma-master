@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import type { ClientAttachmentRecord } from "@/lib/clients/client.types";
 import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
+import { ensureClientListIndexes } from "@/lib/db/ensure-client-indexes";
 
 const ATTACHMENTS_DIR = join(process.cwd(), "data", "client-attachments");
 const ATTACHMENTS_INDEX_FILE = join(process.cwd(), "data", "client-attachments-index.json");
@@ -31,6 +32,7 @@ type AttachmentRow = {
   file_size: string;
   mime_type: string | null;
   storage_path: string;
+  source_chat_media_id?: string | null;
   created_at: Date;
 };
 
@@ -59,6 +61,7 @@ function mapAttachmentRow(row: AttachmentRow): ClientAttachmentRecord {
     fileName: row.file_name,
     fileSize: Number(row.file_size),
     mimeType: row.mime_type,
+    sourceChatMediaId: row.source_chat_media_id ?? null,
     createdAt: row.created_at.toISOString(),
   };
 }
@@ -84,9 +87,11 @@ async function syncAttachmentToPostgres(
 ): Promise<void> {
   if (!isDatabaseEnabled()) return;
   const sql = await getSql();
+  await ensureClientListIndexes(sql);
   await sql`
     insert into crm.client_attachments (
-      id, client_id, user_id, user_name, file_name, file_size, mime_type, storage_path, created_at
+      id, client_id, user_id, user_name, file_name, file_size, mime_type, storage_path,
+      source_chat_media_id, created_at
     ) values (
       ${record.id},
       ${record.clientId},
@@ -96,9 +101,10 @@ async function syncAttachmentToPostgres(
       ${record.fileSize},
       ${record.mimeType},
       ${storagePath},
+      ${record.sourceChatMediaId ?? null},
       ${record.createdAt}
     )
-    on conflict (id) do nothing
+    on conflict do nothing
   `;
 }
 
@@ -147,6 +153,102 @@ export async function initClientAttachmentUpload(input: {
 
   await writeFile(metaPath(attachmentId), JSON.stringify(meta, null, 2), "utf8");
   return meta;
+}
+
+export async function createClientAttachmentFromChatMedia(input: {
+  clientId: string;
+  sourceChatMediaId: string;
+  fileName: string;
+  mimeType: string;
+  content: Buffer;
+  userId: string;
+  userName: string;
+}): Promise<{ attachment: ClientAttachmentRecord; created: boolean }> {
+  if (!input.clientId.trim() || !input.sourceChatMediaId.trim()) {
+    throw new Error("Cliente ou mídia inválidos.");
+  }
+  if (input.content.length === 0) throw new Error("A mídia recebida está vazia.");
+
+  if (isDatabaseEnabled()) {
+    const sql = await getSql();
+    await ensureClientListIndexes(sql);
+    const existing = await sql<AttachmentRow[]>`
+      select id, client_id, user_id, user_name, file_name, file_size, mime_type,
+             storage_path, source_chat_media_id, created_at
+      from crm.client_attachments
+      where client_id = ${input.clientId}
+        and source_chat_media_id = ${input.sourceChatMediaId}
+      limit 1
+    `;
+    if (existing[0]) return { attachment: mapAttachmentRow(existing[0]), created: false };
+  } else {
+    const existing = (await readAttachmentsIndex()).find(
+      (record) =>
+        record.clientId === input.clientId &&
+        record.sourceChatMediaId === input.sourceChatMediaId,
+    );
+    if (existing) return { attachment: existing, created: false };
+  }
+
+  const attachmentId = `attfile-${crypto.randomUUID().slice(0, 12)}`;
+  const fileName = input.fileName.trim().slice(0, 160) || "midia-whatsapp";
+  const createdAt = new Date().toISOString();
+  const record: ClientAttachmentRecord = {
+    id: attachmentId,
+    clientId: input.clientId,
+    userId: input.userId,
+    userName: input.userName,
+    fileName,
+    fileSize: input.content.length,
+    mimeType: input.mimeType,
+    sourceChatMediaId: input.sourceChatMediaId,
+    createdAt,
+  };
+
+  await mkdir(attachmentDir(attachmentId), { recursive: true });
+  await writeFile(storedFilePath(attachmentId), input.content);
+  await writeFile(
+    metaPath(attachmentId),
+    JSON.stringify(
+      {
+        attachmentId,
+        clientId: input.clientId,
+        fileName,
+        fileSize: input.content.length,
+        mimeType: input.mimeType,
+        totalChunks: 1,
+        receivedChunks: 1,
+        userId: input.userId,
+        userName: input.userName,
+        createdAt,
+      } satisfies ClientAttachmentUploadMeta,
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  if (isDatabaseEnabled()) {
+    await syncAttachmentToPostgres(record, storedFilePath(attachmentId));
+    const sql = await getSql();
+    const stored = await sql<AttachmentRow[]>`
+      select id, client_id, user_id, user_name, file_name, file_size, mime_type,
+             storage_path, source_chat_media_id, created_at
+      from crm.client_attachments
+      where client_id = ${input.clientId}
+        and source_chat_media_id = ${input.sourceChatMediaId}
+      limit 1
+    `;
+    if (stored[0] && stored[0].id !== attachmentId) {
+      await rm(attachmentDir(attachmentId), { recursive: true, force: true });
+      return { attachment: mapAttachmentRow(stored[0]), created: false };
+    }
+  } else {
+    const existing = await readAttachmentsIndex();
+    await writeAttachmentsIndex([record, ...existing]);
+  }
+
+  return { attachment: record, created: true };
 }
 
 export async function getClientAttachmentUploadMeta(

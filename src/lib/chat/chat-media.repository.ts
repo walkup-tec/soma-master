@@ -11,6 +11,10 @@ import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
 
 const CHAT_MEDIA_DIR = join(process.cwd(), "data", "chat-media");
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_INBOUND_MEDIA_MIME_TYPES = new Set([
+  ...ALLOWED_IMAGE_MIME_TYPES,
+  "application/pdf",
+]);
 
 export type ChatImageUploadMeta = {
   mediaId: string;
@@ -91,6 +95,21 @@ function validateImage(fileSize: number, mimeType: string): void {
   }
 }
 
+function normalizeMimeType(mimeType: string): string {
+  return mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+function validateInboundMedia(fileSize: number, mimeType: string): string {
+  const normalizedMimeType = normalizeMimeType(mimeType);
+  if (!ALLOWED_INBOUND_MEDIA_MIME_TYPES.has(normalizedMimeType)) {
+    throw new Error("Formato recebido não permitido. Use JPG, PNG, WEBP ou PDF.");
+  }
+  if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > CHAT_IMAGE_MAX_BYTES) {
+    throw new Error("A mídia recebida deve ter no máximo 10 MB.");
+  }
+  return normalizedMimeType;
+}
+
 export async function initChatImageUpload(input: {
   conversationId: string;
   fileName: string;
@@ -155,6 +174,15 @@ export async function getChatImageUploadMeta(mediaId: string): Promise<ChatImage
   }
 }
 
+async function countReceivedChunks(mediaId: string): Promise<number> {
+  const received = new Set<number>();
+  for (const name of await readdir(mediaDir(mediaId))) {
+    const match = name.match(/^chunk-(\d+)\.bin$/);
+    if (match) received.add(Number(match[1]));
+  }
+  return received.size;
+}
+
 export async function appendChatImageChunk(
   mediaId: string,
   chunkIndex: number,
@@ -172,18 +200,17 @@ export async function appendChatImageChunk(
   }
   await writeFile(chunkPath(mediaId, chunkIndex), buffer);
 
-  const received = new Set<number>();
-  for (const name of await readdir(mediaDir(mediaId))) {
-    const match = name.match(/^chunk-(\d+)\.bin$/);
-    if (match) received.add(Number(match[1]));
-  }
-  meta.receivedChunks = received.size;
-  await writeFile(metaPath(mediaId), JSON.stringify(meta, null, 2), "utf8");
+  const received = await countReceivedChunks(mediaId);
+  meta.receivedChunks = received;
+  // meta.json não é reescrito aqui: os chunks sobem em paralelo e escritas
+  // concorrentes poderiam corromper o arquivo. O finalize reconta do disco.
   if (isDatabaseEnabled()) {
     const sql = await getChatSql();
+    // greatest() evita regressão quando chunks são enviados em paralelo e os
+    // updates chegam fora de ordem (cada contagem é um snapshot do diretório).
     await sql`
       update crm.chat_media
-      set received_chunks = ${meta.receivedChunks}
+      set received_chunks = greatest(received_chunks, ${meta.receivedChunks})
       where id = ${mediaId}
     `;
   }
@@ -193,9 +220,13 @@ export async function appendChatImageChunk(
 export async function finalizeChatImageUpload(mediaId: string): Promise<ChatImageUploadMeta> {
   const meta = await getChatImageUploadMeta(mediaId);
   if (!meta) throw new Error("Upload da imagem não encontrado.");
-  if (meta.receivedChunks !== meta.totalChunks) {
-    throw new Error(`Upload incompleto (${meta.receivedChunks}/${meta.totalChunks} partes).`);
+  // Recontagem direta do disco: com upload paralelo, o contador do banco pode
+  // estar defasado em relação aos chunks já gravados.
+  const receivedOnDisk = await countReceivedChunks(mediaId);
+  if (receivedOnDisk !== meta.totalChunks) {
+    throw new Error(`Upload incompleto (${receivedOnDisk}/${meta.totalChunks} partes).`);
   }
+  meta.receivedChunks = receivedOnDisk;
 
   const target = storedFilePath(mediaId);
   const output = await open(target, "w");
@@ -219,18 +250,35 @@ export async function finalizeChatImageUpload(mediaId: string): Promise<ChatImag
     throw new Error("Imagem incompleta após o upload. Tente novamente.");
   }
   if (isDatabaseEnabled()) {
-    const content = await readFile(target);
-    const sql = await getChatSql();
-    await sql`
-      update crm.chat_media
-      set content = ${content}, received_chunks = ${meta.totalChunks}
-      where id = ${mediaId}
-    `;
+    // O binário (até 10 MB) sobe para o Postgres em background: o arquivo local
+    // já é a fonte imediata para envio/preview e o banco é só durabilidade.
+    void persistChatImageContentToDatabase(mediaId, target, meta.totalChunks);
   }
   return meta;
 }
 
-export async function saveInboundChatImage(input: {
+async function persistChatImageContentToDatabase(
+  mediaId: string,
+  filePath: string,
+  totalChunks: number,
+): Promise<void> {
+  try {
+    const content = await readFile(filePath);
+    const sql = await getChatSql();
+    await sql`
+      update crm.chat_media
+      set content = ${content}, received_chunks = ${totalChunks}
+      where id = ${mediaId}
+    `;
+  } catch (error) {
+    console.error(
+      `[chat-media] Falha ao persistir imagem ${mediaId} no banco (arquivo local mantido):`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+export async function saveInboundChatMedia(input: {
   base64: string;
   mimeType: string;
   fileName?: string | null;
@@ -238,16 +286,18 @@ export async function saveInboundChatImage(input: {
 }): Promise<ChatImageUploadMeta> {
   const normalizedBase64 = input.base64.replace(/^data:[^;]+;base64,/i, "");
   const buffer = Buffer.from(normalizedBase64, "base64");
-  validateImage(buffer.length, input.mimeType);
+  const mimeType = validateInboundMedia(buffer.length, input.mimeType);
   const mediaId = `chatimg-${crypto.randomUUID().slice(0, 12)}`;
   await mkdir(mediaDir(mediaId), { recursive: true });
   await writeFile(storedFilePath(mediaId), buffer);
   const meta: ChatImageUploadMeta = {
     mediaId,
     conversationId: input.conversationId,
-    fileName: (input.fileName ?? "imagem-recebida").slice(0, 160),
+    fileName: (
+      input.fileName ?? (mimeType === "application/pdf" ? "documento-recebido.pdf" : "imagem-recebida")
+    ).slice(0, 160),
     fileSize: buffer.length,
-    mimeType: input.mimeType,
+    mimeType,
     totalChunks: 1,
     receivedChunks: 1,
     userId: "whatsapp-contact",
@@ -271,12 +321,40 @@ export async function saveInboundChatImage(input: {
   return meta;
 }
 
+export async function readChatMediaBuffer(mediaId: string): Promise<{
+  meta: ChatImageUploadMeta;
+  buffer: Buffer;
+}> {
+  const meta = await getChatImageUploadMeta(mediaId);
+  if (!meta) throw new Error("Mídia não encontrada.");
+  try {
+    return { meta, buffer: await readFile(storedFilePath(mediaId)) };
+  } catch {
+    // arquivo local ausente — segue para o banco
+  }
+  if (isDatabaseEnabled()) {
+    const sql = await getChatSql();
+    const rows = await sql<{ content: Buffer | null }[]>`
+      select content from crm.chat_media where id = ${mediaId} limit 1
+    `;
+    if (rows[0]?.content) return { meta, buffer: rows[0].content };
+  }
+  throw new Error("Conteúdo da mídia não encontrado.");
+}
+
 export async function readChatImageAsDataUrl(mediaId: string): Promise<{
   meta: ChatImageUploadMeta;
   dataUrl: string;
 }> {
   const meta = await getChatImageUploadMeta(mediaId);
   if (!meta) throw new Error("Imagem não encontrada.");
+  // Disco local primeiro (rápido); banco só como fallback pós-redeploy.
+  try {
+    const file = await readFile(storedFilePath(mediaId));
+    return { meta, dataUrl: `data:${meta.mimeType};base64,${file.toString("base64")}` };
+  } catch {
+    // arquivo local ausente — segue para o banco
+  }
   if (isDatabaseEnabled()) {
     const sql = await getChatSql();
     const rows = await sql<{ content: Buffer | null }[]>`
@@ -289,13 +367,19 @@ export async function readChatImageAsDataUrl(mediaId: string): Promise<{
       };
     }
   }
-  const file = await readFile(storedFilePath(mediaId));
-  return { meta, dataUrl: `data:${meta.mimeType};base64,${file.toString("base64")}` };
+  throw new Error("Conteúdo da imagem não encontrado.");
 }
 
 export async function openChatImageReadStream(mediaId: string) {
   const meta = await getChatImageUploadMeta(mediaId);
   if (!meta) throw new Error("Imagem não encontrada.");
+  // Disco local primeiro (rápido); banco só como fallback pós-redeploy.
+  try {
+    await stat(storedFilePath(mediaId));
+    return { meta, stream: createReadStream(storedFilePath(mediaId)) };
+  } catch {
+    // arquivo local ausente — segue para o banco
+  }
   if (isDatabaseEnabled()) {
     const sql = await getChatSql();
     const rows = await sql<{ content: Buffer | null }[]>`
@@ -305,7 +389,7 @@ export async function openChatImageReadStream(mediaId: string) {
       return { meta, stream: Readable.from([rows[0].content]) };
     }
   }
-  return { meta, stream: createReadStream(storedFilePath(mediaId)) };
+  throw new Error("Conteúdo da imagem não encontrado.");
 }
 
 export function chatImageStreamToWeb(stream: Readable): ReadableStream<Uint8Array> {

@@ -19,6 +19,40 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * Envia as partes do arquivo em paralelo (com limite de concorrência).
+ * As partes são independentes no servidor, então a ordem de chegada não importa.
+ */
+export async function readFileInChunksParallel(
+  file: File,
+  chunkSize: number,
+  concurrency: number,
+  onChunk: (chunkIndex: number, totalChunks: number, base64: string) => Promise<void>,
+): Promise<void> {
+  const totalChunks = Math.ceil(file.size / chunkSize);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < totalChunks) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const start = index * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const base64 = await blobToBase64(file.slice(start, end));
+      if (!base64) {
+        throw new Error(`Parte ${index + 1} do arquivo ficou vazia durante o envio.`);
+      }
+      await onChunk(index, totalChunks, base64);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(concurrency, totalChunks)) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+}
+
 export async function readFileInChunks(
   file: File,
   chunkSize: number,

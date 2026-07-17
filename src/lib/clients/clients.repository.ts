@@ -176,7 +176,7 @@ function mapClientListItem(record: ClientRecord): ClientListItem {
     ...EMPTY_ACTIVITY_FLAGS,
     id: record.id,
     productId: record.productId,
-    productIds: [record.productId],
+    productIds: record.productIds?.length ? record.productIds : [record.productId],
     status: record.status,
     nome: record.data.nome ?? null,
     cpf: record.data.cpf ?? null,
@@ -1463,4 +1463,49 @@ export async function updateClientStatus(
   );
   await writeClientsToDisk(next);
   return { ...client, status: trimmed };
+}
+
+/** Vincula um produto extra sem duplicar o cadastro do cliente. */
+export async function addProductToClient(
+  clientId: string,
+  userId: string,
+  isMaster: boolean,
+  productId: string,
+): Promise<string[]> {
+  const normalizedProductId = productId.trim();
+  if (!normalizedProductId) throw new Error("Selecione um produto.");
+
+  const client = await getClientByIdForUser(clientId, userId, isMaster);
+  if (!client) throw new Error("Cliente não encontrado.");
+
+  if (isDatabaseEnabled()) {
+    const sql = await getSql();
+    const product = await sql<{ id: string }[]>`
+      select id from crm.products where id = ${normalizedProductId} limit 1
+    `;
+    if (!product[0]) throw new Error("Produto não encontrado.");
+
+    // Preserva também o produto principal na relação multi-produto.
+    await sql`
+      insert into crm.client_products (client_id, product_id)
+      values
+        (${clientId}, ${client.productId}),
+        (${clientId}, ${normalizedProductId})
+      on conflict do nothing
+    `;
+    const rows = await sql<{ product_id: string }[]>`
+      select product_id
+      from crm.client_products
+      where client_id = ${clientId}
+      order by created_at, product_id
+    `;
+    return rows.map((row) => row.product_id);
+  }
+
+  const clients = await readClientsFromDisk();
+  const current = [...new Set([client.productId, ...(client.productIds ?? []), normalizedProductId])];
+  await writeClientsToDisk(
+    clients.map((item) => (item.id === clientId ? { ...item, productIds: current } : item)),
+  );
+  return current;
 }

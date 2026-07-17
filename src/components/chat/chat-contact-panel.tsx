@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { IdCard, Link2, Loader2 } from "lucide-react";
+import { IdCard, Link2, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ClientAttendanceDialog } from "@/components/clients/client-attendance-dialog";
 import { ClientFieldInput } from "@/components/clients/client-field-input";
+import { StatusBadge } from "@/components/clients/status-badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -14,7 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ChatConversation } from "@/lib/chat/chat.types";
-import { createAndLinkChatClientFn, setChatClientStatusFn } from "@/lib/chat/chat.server";
+import {
+  addChatClientProductFn,
+  createAndLinkChatClientFn,
+  setChatClientStatusFn,
+} from "@/lib/chat/chat.server";
 import type { ClientFieldId } from "@/lib/config/client-fields";
 import { productFieldsForImport } from "@/lib/clients/product-fields";
 import type { AttendanceStatusConfig, BankConfig, ProductConfig } from "@/lib/config/settings-types";
@@ -52,6 +57,7 @@ export function ChatContactPanel({
 }: Props) {
   const createAndLink = useServerFn(createAndLinkChatClientFn);
   const setStatus = useServerFn(setChatClientStatusFn);
+  const addClientProduct = useServerFn(addChatClientProductFn);
 
   const [productId, setProductId] = useState("");
   const [fields, setFields] = useState<Partial<Record<ClientFieldId, string>>>({});
@@ -60,6 +66,8 @@ export function ChatContactPanel({
   );
   const [saving, setSaving] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [additionalProductId, setAdditionalProductId] = useState("");
+  const [addingProduct, setAddingProduct] = useState(false);
 
   const product = useMemo(
     () => products.find((item) => item.id === productId) ?? null,
@@ -69,6 +77,17 @@ export function ChatContactPanel({
   const requiredFields = useMemo(
     () => (product ? productFieldsForImport(product).required : []),
     [product],
+  );
+
+  const linkedProducts = useMemo(
+    () =>
+      products.filter((item) => (conversation.clientProductIds ?? []).includes(item.id)),
+    [conversation.clientProductIds, products],
+  );
+  const availableProducts = useMemo(
+    () =>
+      products.filter((item) => !(conversation.clientProductIds ?? []).includes(item.id)),
+    [conversation.clientProductIds, products],
   );
 
   useEffect(() => {
@@ -133,6 +152,84 @@ export function ChatContactPanel({
         <div>
           <p className="text-xs text-muted-foreground">IA nesta conversa</p>
           <p className="font-medium">{conversation.aiEnabled ? "Ligada" : "Pausada"}</p>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Produtos do cliente</Label>
+          {linkedProducts.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {linkedProducts.map((item) => (
+                <StatusBadge key={item.id} label={item.name} color={item.color} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Produto principal não identificado.</p>
+          )}
+
+          {availableProducts.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={additionalProductId || undefined}
+                onValueChange={setAdditionalProductId}
+              >
+                <SelectTrigger className="h-8 min-w-0 flex-1 cursor-pointer">
+                  <SelectValue placeholder="Adicionar produto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProducts.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="inline-block size-2 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                          aria-hidden
+                        />
+                        {item.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="size-8 shrink-0 cursor-pointer"
+                aria-label="Adicionar produto ao cliente"
+                disabled={!additionalProductId || addingProduct}
+                onClick={() => {
+                  void (async () => {
+                    if (!additionalProductId) return;
+                    setAddingProduct(true);
+                    try {
+                      const next = await addClientProduct({
+                        data: {
+                          conversationId: conversation.id,
+                          productId: additionalProductId,
+                        },
+                      });
+                      if (next) onUpdated(next);
+                      setAdditionalProductId("");
+                      toast.success("Produto adicionado ao cliente");
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : "Falha ao adicionar produto",
+                      );
+                    } finally {
+                      setAddingProduct(false);
+                    }
+                  })();
+                }}
+              >
+                {addingProduct ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Plus className="size-4" />
+                )}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Todos os produtos já estão vinculados.</p>
+          )}
         </div>
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Status do atendimento</Label>

@@ -365,7 +365,7 @@ export function ClientAttendanceDialog({
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label htmlFor="attendance-status">Status de atendimento</Label>
                     <Select
                       value={statusValue}
@@ -387,7 +387,7 @@ export function ClientAttendanceDialog({
 
                   <Separator />
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label htmlFor="attendance-note">Registrar atendimento</Label>
                     <Textarea
                       id="attendance-note"

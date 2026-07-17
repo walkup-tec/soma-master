@@ -1,4 +1,30 @@
-﻿## 2026-07-17 10:20 — Imagens no Chat WhatsApp (envio + recebimento)
+﻿## 2026-07-17 11:03 — Chat: anexar mídia ao cliente, PDF e Abrir
+- Webhook Evolution agora reconhece `documentMessage` PDF; domínio ganhou `messageType: document`.
+- Imagem/PDF recebido mostra `Abrir` e `Anexar imagem/PDF`; toast discreto e estado `Anexado`.
+- Anexo é copiado no servidor para `client-attachments`, com validação conversa-cliente/usuário e dedupe por `source_chat_media_id`.
+- JPG/PNG/WEBP/PDF até 10 MB; rota de mídia autenticada permanece inline.
+- Build client+SSR OK. LOG: `doc/LOG-2026-07-17__110300__chat-anexar-midia-pdf-abrir.md`.
+- Keywords: documentMessage, PDF chat, anexar mídia cliente, source_chat_media_id, abrir mídia.
+
+## 2026-07-17 11:05 — Envio de imagem no chat estava lento
+- Causa: chunks em série + bytea 10 MB bloqueante no Postgres + releitura do banco + Evolution síncrona (30s).
+- Fix: `readFileInChunksParallel` (concorrência 4); bytea persiste em background; `readChatImageAsDataUrl`/`openChatImageReadStream` leem disco local primeiro; Evolution em background com mensagem de sistema no thread em caso de falha.
+- Build OK. LOG: `doc/LOG-2026-07-17__110500__chat-envio-imagem-lento-otimizacao.md`.
+- Keywords: imagem lenta, upload paralelo, sendMedia background, local-first.
+
+## 2026-07-17 10:45 — Múltiplos produtos no cliente pelo chat
+- Painel de conversa vinculada mostra tags dos produtos e select `Adicionar produto` (só disponíveis).
+- `addChatClientProductFn` → `addProductToClient`: autorização por usuário/master, valida produto, `crm.client_products` sem duplicata e histórico WhatsApp.
+- Conversa enriquecida com `clientProductIds` (principal + extras).
+- Corrigido retorno Evolution das server functions: UI recebe só `{ok,error}`, sem `raw: unknown`.
+- LOG: `doc/LOG-2026-07-17__104500__chat-cliente-multiplos-produtos.md`.
+- Keywords: cliente multi-produto, client_products, addChatClientProductFn.
+
+## 2026-07-17 10:30 — Margem label/campo no atendimento
+- Modal cliente: grupos `Status de atendimento` e `Registrar atendimento` agora usam `space-y-3` (título menos colado ao input).
+- LOG: `doc/LOG-2026-07-17__103000__margem-label-input-atendimento.md`.
+
+## 2026-07-17 10:20 — Imagens no Chat WhatsApp (envio + recebimento)
 - Evolution v2: `sendMedia` (base64) + webhook `MESSAGES_UPSERT base64=true`; fallback `getBase64FromMediaMessage`.
 - UI: JPG/PNG/WEBP até 10 MB, preview, legenda, upload chunks 1 MiB, balão com imagem.
 - Persistência: `crm.chat_media` (bytea separado) + metadados em `chat_messages`; cache `/app/data/chat-media`; rota autenticada `/api/chat/media/:id`.
