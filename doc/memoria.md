@@ -354,6 +354,12 @@
 - LOG: `doc/LOG-2026-07-17__153300__parceiros-secoes-alias-senha-corban.md`.
 - Keywords: partner sections, menu permissions, corban, CN, senha 4 dígitos, partnerCategoryAlias.
 
+## 2026-07-17 17:25 — Fix CNPJ 403 (User-Agent) + fallback Minha Receita
+- Causa: BrasilAPI responde 403 ao UA padrão do Node fetch; server function sempre falhava.
+- Fix: UA explícito `SomaCRM/1.0` + alternância BrasilAPI ↔ minhareceita.org (4 tentativas, backoff).
+- LOG: `doc/LOG-2026-07-17__172500__fix-cnpj-403-user-agent-fallback.md`.
+- Keywords: CNPJ 403, user-agent node, minhareceita fallback.
+
 ## 2026-07-17 17:05 — Overlay "Atualizando o sistema" pós-deploy
 - Modelo WABA portado: bootstrap `deploy-resilience.ts` no `__root.tsx` + SW `public/sw-deploy-resilience.js`.
 - `/api/health` devolve `serverBootId`; watcher 8s, poll 2s, 3 sondas estáveis ou drift de bootId ⇒ reload.

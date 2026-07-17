@@ -58,19 +58,36 @@ function normalizedStreet(data: BrazilApiCnpjResponse): string {
   return `${streetType} ${street}`.trim();
 }
 
-/** Adapter da BrasilAPI: valida, limita tempo, repete falhas transitórias e normaliza o contrato. */
+/**
+ * BrasilAPI e Minha Receita bloqueiam o User-Agent padrão do Node (403 na
+ * borda Cloudflare/Vercel). Identificamos o cliente explicitamente.
+ */
+const CNPJ_LOOKUP_HEADERS = {
+  accept: "application/json",
+  "user-agent": "Mozilla/5.0 (compatible; SomaCRM/1.0; +https://app.somaconecta.com.br)",
+};
+
+/** Provedores em ordem: BrasilAPI (proxy da Minha Receita) e Minha Receita direto. */
+const CNPJ_LOOKUP_PROVIDERS = [
+  (cnpj: string) => `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`,
+  (cnpj: string) => `https://minhareceita.org/${cnpj}`,
+];
+
+/** Adapter de CNPJ: valida, limita tempo, alterna provedores e normaliza o contrato. */
 export async function lookupBrazilApiCnpj(rawCnpj: string): Promise<BrazilApiCompany> {
   const cnpj = rawCnpj.replace(/\D/g, "");
   if (cnpj.length !== 14) throw new Error("Informe um CNPJ com 14 dígitos.");
 
   let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < CNPJ_LOOKUP_PROVIDERS.length * 2; attempt += 1) {
+    const buildUrl = CNPJ_LOOKUP_PROVIDERS[attempt % CNPJ_LOOKUP_PROVIDERS.length]!;
+    const isLastAttempt = attempt === CNPJ_LOOKUP_PROVIDERS.length * 2 - 1;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6_000);
     try {
-      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
+      const response = await fetch(buildUrl(cnpj), {
         method: "GET",
-        headers: { accept: "application/json" },
+        headers: CNPJ_LOOKUP_HEADERS,
         signal: controller.signal,
       });
 
@@ -80,15 +97,13 @@ export async function lookupBrazilApiCnpj(rawCnpj: string): Promise<BrazilApiCom
       if (response.status === 404) {
         throw new PermanentCnpjLookupError("CNPJ não encontrado na Receita Federal.");
       }
-      if (response.status === 429 || response.status >= 500) {
-        if (attempt === 0) {
+      if (!response.ok) {
+        // 403/429/5xx: falha do provedor — tenta o próximo da lista.
+        if (!isLastAttempt) {
           await wait(retryDelayMs(response));
           continue;
         }
         throw new Error("A consulta de CNPJ está temporariamente indisponível.");
-      }
-      if (!response.ok) {
-        throw new PermanentCnpjLookupError("Não foi possível consultar o CNPJ.");
       }
 
       const data = (await response.json()) as BrazilApiCnpjResponse;
@@ -119,7 +134,7 @@ export async function lookupBrazilApiCnpj(rawCnpj: string): Promise<BrazilApiCom
     } catch (error) {
       if (error instanceof PermanentCnpjLookupError) throw error;
       lastError = error;
-      if (attempt === 0) {
+      if (!isLastAttempt) {
         await wait(retryDelayMs());
         continue;
       }
