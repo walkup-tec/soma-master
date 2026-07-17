@@ -6,18 +6,20 @@
  *   evitando ativação local ou por oscilação isolada de rede.
  * - Segue sondando a cada 2s; com 3 sondas estáveis (ou drift de serverBootId,
  *   que indica que o novo deploy subiu), fecha o modal e recarrega a tela.
- * - Registra o service worker que preserva a shell do app em navegações
- *   durante o redeploy, evitando a tela JSON "Cannot GET /api/errors/bad-gateway".
+ * - Registra o service worker (v4) que preserva a shell HTML e, se não houver
+ *   cache, devolve um fallback embutido com o modal — evitando a tela JSON
+ *   "Cannot GET /api/errors/bad-gateway" no refresh pós-deploy.
  * Roda sem React — igual ao bootstrap do tema — para não depender da hidratação.
  */
 export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   var POLL_MS = 2000;
-  var WATCH_MS = 8000;
+  var WATCH_MS = 3000;
   var STABLE_PROBES_REQUIRED = 3;
   var FAILURE_PROBES_REQUIRED = 2;
   var COMPLETE_RELOAD_DELAY_MS = 600;
   var LONG_WAIT_MS = 120000;
   var OVERLAY_ID = "soma-deploy-overlay";
+  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=4";
 
   var pollTimer = null;
   var watchTimer = null;
@@ -31,6 +33,18 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   function isProductionHost() {
     var host = String(window.location.hostname || "").toLowerCase();
     return host === "app.somaconecta.com.br";
+  }
+
+  function looksLikeGatewayPayload(data, status) {
+    if (status >= 502 && status <= 504) return true;
+    if (!data || typeof data !== "object") return false;
+    var message = "";
+    try {
+      message = JSON.stringify(data);
+    } catch (_) {
+      message = "";
+    }
+    return /bad-gateway|Cannot GET|Not Found/i.test(message);
   }
 
   function ensureStyles() {
@@ -131,11 +145,13 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
       } catch (_) {
         data = null;
       }
-      if (response.status >= 502 && response.status <= 504) return { stable: false };
-      if (!response.ok || !data || data.ok !== true) return { stable: false };
-      return { stable: true, bootId: String(data.serverBootId || "") };
+      if (looksLikeGatewayPayload(data, response.status) || (response.status >= 502 && response.status <= 504)) {
+        return { stable: false, gateway: true };
+      }
+      if (!response.ok || !data || data.ok !== true) return { stable: false, gateway: false };
+      return { stable: true, gateway: false, bootId: String(data.serverBootId || "") };
     } catch (_) {
-      return { stable: false };
+      return { stable: false, gateway: true };
     }
   }
 
@@ -198,6 +214,11 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     if (!isProductionHost() || recoveryActive) return;
     var probe = await probeHealth();
     if (!probe.stable) {
+      // JSON Traefik / 502: overlay na hora (não esperar 2 falhas).
+      if (probe.gateway) {
+        startRecovery();
+        return;
+      }
       confirmProductionDeployFailure();
       return;
     }
@@ -224,14 +245,17 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("/sw-deploy-resilience.js?v=3", { scope: "/" }).catch(function () {});
+      navigator.serviceWorker.register(SW_REGISTER_URL, { scope: "/" }).catch(function () {});
     });
   }
 
   document.addEventListener("DOMContentLoaded", function () {
     void probeHealth().then(function (probe) {
       if (probe.stable && probe.bootId) baselineBootId = probe.bootId;
-      if (!probe.stable) confirmProductionDeployFailure();
+      if (!probe.stable) {
+        if (probe.gateway) startRecovery();
+        else confirmProductionDeployFailure();
+      }
     });
     watchTimer = window.setInterval(function () {
       void watchInBackground();

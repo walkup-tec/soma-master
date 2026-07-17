@@ -1,5 +1,6 @@
 import {
   assertSomaOwnedInstance,
+  buildEvolutionMediaVariants,
   evolutionSendImage,
   evolutionSendText,
   getEvolutionPublicConfig,
@@ -13,6 +14,8 @@ import {
 import { readPushMediaBase64 } from "@/lib/push/push-media.service";
 import { readPushConfig, writePushConfig } from "@/lib/push/push.repository";
 import type { SomaPushConfig, SomaPushImageAttachment } from "@/lib/push/push.types";
+
+const PUSH_COMMUNITY_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function parseGroupsPayload(raw: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
@@ -211,6 +214,116 @@ async function sendCommunityTextOnce(
   return { ok: true, detail: "Texto enviado à comunidade WhatsApp.", groupJid };
 }
 
+/** URLs que a Evolution consegue baixar (interna Docker → pública), espelho WABA. */
+function listPushMediaUrlsForEvo(imageId: string): string[] {
+  const id = String(imageId || "").trim();
+  if (!id) return [];
+  const path = `/api/push/media/${encodeURIComponent(id)}`;
+  const urls: string[] = [];
+
+  const explicit = String(
+    process.env.SOMA_PUSH_MEDIA_INTERNAL_BASE_URL || process.env.SOMA_INTERNAL_BASE_URL || "",
+  )
+    .trim()
+    .replace(/\/+$/, "");
+  if (explicit) urls.push(`${explicit}${path}`);
+
+  const hostPort = String(process.env.SOMA_HOST_PUBLISHED_PORT || "30300").trim();
+  if (/^\d+$/.test(hostPort)) {
+    urls.push(`http://172.17.0.1:${hostPort}${path}`);
+  }
+
+  const publicBase = String(process.env.APP_URL || process.env.CHAT_PUBLIC_BASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (publicBase && !/localhost|127\.0\.0\.1/i.test(publicBase)) {
+    urls.push(`${publicBase}${path}`);
+  }
+
+  return Array.from(new Set(urls.filter(Boolean)));
+}
+
+function canSendPushCommunityMediaAsBase64(
+  image: SomaPushImageAttachment,
+  mediaData: { base64: string; mimeType: string },
+): boolean {
+  const sizeBytes =
+    Number(image.sizeBytes) || Math.max(0, Math.ceil(mediaData.base64.length * 0.75));
+  if (sizeBytes > PUSH_COMMUNITY_MAX_IMAGE_BYTES) return false;
+  return mediaData.base64.length > 0 && mediaData.base64.length <= 1_400_000;
+}
+
+async function sendCommunityImageWithFallbacks(input: {
+  instanceName: string;
+  groupJid: string;
+  message: string;
+  image: SomaPushImageAttachment;
+}): Promise<{ ok: boolean; detail: string; groupJid: string }> {
+  const { instanceName, groupJid, message, image } = input;
+  const media = readPushMediaBase64(image.id);
+  if (!media) {
+    return { ok: false, detail: "Imagem do push não encontrada no servidor.", groupJid };
+  }
+
+  const fileName = image.fileName || "comunicado.jpg";
+  const candidates: string[] = [];
+
+  if (canSendPushCommunityMediaAsBase64(image, media)) {
+    candidates.push(...buildEvolutionMediaVariants(media.base64, media.mimeType));
+  }
+  candidates.push(...listPushMediaUrlsForEvo(image.id));
+
+  if (!candidates.length) {
+    return {
+      ok: false,
+      detail: "Sem base64 nem URL pública para enviar a imagem à comunidade.",
+      groupJid,
+    };
+  }
+
+  let sendImage = await evolutionSendImage({
+    phone: groupJid,
+    mediaCandidates: candidates,
+    mimeType: media.mimeType,
+    fileName,
+    caption: message,
+    instanceName,
+  });
+
+  if (!sendImage.ok && /HTTP 400/i.test(sendImage.error || "")) {
+    const rediscovered = await resolveAnnouncementGroupJid(instanceName, {
+      forceRediscover: true,
+    });
+    if (rediscovered && rediscovered !== groupJid) {
+      sendImage = await evolutionSendImage({
+        phone: rediscovered,
+        mediaCandidates: candidates,
+        mimeType: media.mimeType,
+        fileName,
+        caption: message,
+        instanceName,
+      });
+      if (sendImage.ok) {
+        return { ok: true, detail: "Imagem enviada à comunidade WhatsApp.", groupJid: rediscovered };
+      }
+      return {
+        ok: false,
+        detail: sendImage.error || "Falha ao enviar imagem para a comunidade.",
+        groupJid: rediscovered,
+      };
+    }
+  }
+
+  if (!sendImage.ok) {
+    return {
+      ok: false,
+      detail: sendImage.error || "Falha ao enviar imagem para a comunidade.",
+      groupJid,
+    };
+  }
+  return { ok: true, detail: "Imagem enviada à comunidade WhatsApp.", groupJid };
+}
+
 /** Envia texto/imagem para o grupo de anúncios da comunidade (JID @g.us). */
 export async function sendPushToWhatsAppCommunity(
   title: string,
@@ -227,47 +340,34 @@ export async function sendPushToWhatsAppCommunity(
   assertSomaOwnedInstance(instanceName);
 
   try {
-    let groupJid = await resolveAnnouncementGroupJid(instanceName);
+    const groupJid = await resolveAnnouncementGroupJid(instanceName);
     const message = buildCommunityText(title, text);
 
     if (image?.id) {
-      const media = readPushMediaBase64(image.id);
-      if (!media) {
-        return { ok: false, detail: "Imagem do push não encontrada no servidor.", groupJid };
-      }
-      const dataUrl = `data:${media.mimeType};base64,${media.base64}`;
-      let sendImage = await evolutionSendImage({
-        phone: groupJid,
-        dataUrl,
-        mimeType: media.mimeType,
-        fileName: image.fileName || "comunicado.jpg",
-        caption: message,
+      const imageResult = await sendCommunityImageWithFallbacks({
         instanceName,
+        groupJid,
+        message,
+        image,
       });
-      if (!sendImage.ok && /HTTP 400/i.test(sendImage.error || "")) {
-        const rediscovered = await resolveAnnouncementGroupJid(instanceName, {
-          forceRediscover: true,
-        });
-        if (rediscovered && rediscovered !== groupJid) {
-          groupJid = rediscovered;
-          sendImage = await evolutionSendImage({
-            phone: groupJid,
-            dataUrl,
-            mimeType: media.mimeType,
-            fileName: image.fileName || "comunicado.jpg",
-            caption: message,
-            instanceName,
-          });
+      if (imageResult.ok) return imageResult;
+
+      // Fallback WABA: se a imagem falhar, ainda entrega o texto na comunidade.
+      if (message) {
+        const textFallback = await sendCommunityTextOnce(
+          instanceName,
+          imageResult.groupJid || groupJid,
+          message,
+        );
+        if (textFallback.ok) {
+          return {
+            ok: true,
+            detail: `Imagem falhou (${imageResult.detail}); texto enviado à comunidade.`,
+            groupJid: textFallback.groupJid,
+          };
         }
       }
-      if (!sendImage.ok) {
-        return {
-          ok: false,
-          detail: sendImage.error || "Falha ao enviar imagem para a comunidade.",
-          groupJid,
-        };
-      }
-      return { ok: true, detail: "Imagem enviada à comunidade WhatsApp.", groupJid };
+      return imageResult;
     }
 
     if (!message) {
@@ -282,7 +382,6 @@ export async function sendPushToWhatsAppCommunity(
       if (rediscovered && rediscovered !== groupJid) {
         result = await sendCommunityTextOnce(instanceName, rediscovered, message);
       } else if (rediscovered) {
-        // Mesmo JID: limpa cache inválido e tenta descoberta pura de novo
         writePushConfig({
           ...readPushConfig(),
           communityAnnouncementGroupJid: "",

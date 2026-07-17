@@ -1,3 +1,19 @@
+## 2026-07-17 20:35 — Push comunidade: Owned media (base64 puro)
+- Erro Evolution 400 `Owned media must be a url or base64`: data URI rejeitada pelo validador.
+- Espelho WABA: base64 puro → data URI → URL interna/pública; fallback texto se imagem falhar.
+- LOG: `doc/LOG-2026-07-17__203500__fix-push-owned-media-base64.md`.
+
+## 2026-07-17 20:30 — Produtos: lista produto×banco na Etapa 1
+- Abaixo do nome: tabela Nome | Banco | Parceiros (1 linha por banco; check se parceiros).
+- Concluir → volta Etapa 1 com o produto listado.
+- LOG: `doc/LOG-2026-07-17__203000__produtos-lista-banco-parceiros-etapa1.md`.
+
+## 2026-07-17 20:08 — Modal deploy: SW fallback ante JSON bad-gateway
+- Causa: refresh durante 502 sem shell em cache → JSON Traefik `Cannot GET /api/errors/bad-gateway`.
+- SW v4: precache + HTML embutido com modal; cliente watch 3s + overlay imediato em gateway.
+- LOG: `doc/LOG-2026-07-17__200800__fix-sw-fallback-modal-bad-gateway.md`.
+- Keywords: bad-gateway, sw v4, fallback HTML, modal deploy.
+
 ## 2026-07-17 20:05 — Fix Push comunidade Evolution HTTP 400
 - Detalhe do erro Evolution no histórico; retry de payload/JID em 400.
 - LOG: `doc/LOG-2026-07-17__200500__fix-push-comunidade-evolution-400.md`.

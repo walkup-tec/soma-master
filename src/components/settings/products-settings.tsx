@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -28,8 +28,49 @@ import {
   resolveProductTagLabel,
 } from "@/lib/config/settings-defaults";
 import { DEFAULT_STATUS_COLOR, normalizeStatusColor } from "@/lib/config/status-colors";
-import type { ProductConfig, SystemSettings } from "@/lib/config/settings-types";
+import type { BankConfig, ProductConfig, SystemSettings } from "@/lib/config/settings-types";
 import { cn } from "@/lib/utils";
+
+type ProductBankListRow = {
+  key: string;
+  productId: string;
+  productName: string;
+  bankName: string;
+  availableForPartners: boolean;
+};
+
+/** Uma linha por produto×banco (mesmo produto em 2 bancos = 2 linhas). */
+function buildProductBankListRows(
+  products: ProductConfig[],
+  banks: BankConfig[],
+): ProductBankListRow[] {
+  const bankNameById = new Map(banks.map((bank) => [bank.id, bank.name.trim() || "Banco"]));
+  const rows: ProductBankListRow[] = [];
+  for (const product of products) {
+    const productName = product.name.trim() || resolveProductTagLabel(product) || "Sem nome";
+    const bankIds = [...new Set(product.bankIds ?? [])];
+    if (bankIds.length === 0) {
+      rows.push({
+        key: `${product.id}::none`,
+        productId: product.id,
+        productName,
+        bankName: "—",
+        availableForPartners: Boolean(product.availableForPartners),
+      });
+      continue;
+    }
+    for (const bankId of bankIds) {
+      rows.push({
+        key: `${product.id}::${bankId}`,
+        productId: product.id,
+        productName,
+        bankName: bankNameById.get(bankId) ?? "Banco removido",
+        availableForPartners: Boolean(product.availableForPartners),
+      });
+    }
+  }
+  return rows;
+}
 
 type Props = {
   settings: SystemSettings;
@@ -134,6 +175,10 @@ export function ProductsSettings({ settings, onChange }: Props) {
   const selected = products.find((product) => product.id === selectedId) ?? products[0];
   const currentStep = WIZARD_STEPS[stepIndex] ?? WIZARD_STEPS[0];
   const banks = settings.banks ?? [];
+  const productBankRows = useMemo(
+    () => buildProductBankListRows(products, banks),
+    [products, banks],
+  );
 
   const persistProducts = (
     nextProducts: ProductConfig[],
@@ -306,6 +351,19 @@ export function ProductsSettings({ settings, onChange }: Props) {
     setStepIndex((current) => Math.max(current - 1, 0));
   };
 
+  const finishWizard = async () => {
+    if (!selectedId) return;
+    const nextProducts = productsRef.current.map((product) =>
+      product.id === selectedId ? normalizeProductFields(product) : product,
+    );
+    try {
+      await persistProducts(nextProducts, { successMessage: "Produto salvo." });
+      setStepIndex(0);
+    } catch {
+      // toast already shown
+    }
+  };
+
   const deleteDialogCount = pendingDeleteIds?.length ?? 0;
   const fieldStep = fieldsForWizardStep(currentStep.id);
 
@@ -423,53 +481,113 @@ export function ProductsSettings({ settings, onChange }: Props) {
             </div>
 
             {currentStep.id === "identity" ? (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Label htmlFor="product-name">Nome do produto</Label>
-                  <Input
-                    id="product-name"
-                    value={selected.name}
-                    onChange={(e) => {
-                      const nextProducts = products.map((product) =>
-                        product.id === selected.id
-                          ? { ...product, name: e.target.value, tag: e.target.value }
-                          : product,
-                      );
-                      setProducts(nextProducts);
-                      productsRef.current = nextProducts;
-                    }}
-                    onBlur={() => persistSelectedQuiet()}
-                    placeholder="Ex.: Empréstimo CLT, FGTS, Cartão consignado"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="product-color">Cor da tag</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      id="product-color"
-                      type="color"
-                      value={normalizeStatusColor(selected.color, DEFAULT_STATUS_COLOR)}
-                      onFocus={() => {
-                        colorEditingRef.current = true;
+              <div className="space-y-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Label htmlFor="product-name">Nome do produto</Label>
+                    <Input
+                      id="product-name"
+                      value={selected.name}
+                      onChange={(e) => {
+                        const nextProducts = products.map((product) =>
+                          product.id === selected.id
+                            ? { ...product, name: e.target.value, tag: e.target.value }
+                            : product,
+                        );
+                        setProducts(nextProducts);
+                        productsRef.current = nextProducts;
                       }}
-                      onInput={(event) => {
-                        colorEditingRef.current = true;
-                        patchSelectedLocal({ color: event.currentTarget.value });
-                      }}
-                      onChange={(event) => {
-                        colorEditingRef.current = true;
-                        patchSelectedLocal({ color: event.currentTarget.value });
-                      }}
-                      onBlur={() => {
-                        colorEditingRef.current = false;
-                        persistSelectedQuiet();
-                      }}
-                      className="h-9 w-9 shrink-0 cursor-pointer appearance-none border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-0"
-                      aria-label="Cor da tag do produto"
-                      title="Cor da tag"
+                      onBlur={() => persistSelectedQuiet()}
+                      placeholder="Ex.: Empréstimo CLT, FGTS, Cartão consignado"
                     />
-                    <StatusBadge label={resolveProductTagLabel(selected)} color={selected.color} />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="product-color">Cor da tag</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="product-color"
+                        type="color"
+                        value={normalizeStatusColor(selected.color, DEFAULT_STATUS_COLOR)}
+                        onFocus={() => {
+                          colorEditingRef.current = true;
+                        }}
+                        onInput={(event) => {
+                          colorEditingRef.current = true;
+                          patchSelectedLocal({ color: event.currentTarget.value });
+                        }}
+                        onChange={(event) => {
+                          colorEditingRef.current = true;
+                          patchSelectedLocal({ color: event.currentTarget.value });
+                        }}
+                        onBlur={() => {
+                          colorEditingRef.current = false;
+                          persistSelectedQuiet();
+                        }}
+                        className="h-9 w-9 shrink-0 cursor-pointer appearance-none border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-0"
+                        aria-label="Cor da tag do produto"
+                        title="Cor da tag"
+                      />
+                      <StatusBadge label={resolveProductTagLabel(selected)} color={selected.color} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Produtos cadastrados</p>
+                  <p className="text-xs text-muted-foreground">
+                    Cada banco vinculado aparece em uma linha. Clique na linha para editar o produto.
+                  </p>
+                  {productBankRows.length === 0 ? (
+                    <p className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                      Nenhum produto cadastrado ainda.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-border/60">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                          <tr>
+                            <th className="px-4 py-3 font-medium">Nome do produto</th>
+                            <th className="px-4 py-3 font-medium">Banco</th>
+                            <th className="px-4 py-3 font-medium text-center">Parceiros</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productBankRows.map((row) => {
+                            const isActive = row.productId === selected.id;
+                            return (
+                              <tr
+                                key={row.key}
+                                className={cn(
+                                  "border-t border-border/60 cursor-pointer transition-colors hover:bg-muted/40",
+                                  isActive && "bg-primary/10",
+                                )}
+                                onClick={() => {
+                                  setSelectedId(row.productId);
+                                  setStepIndex(0);
+                                }}
+                              >
+                                <td className="px-4 py-3 font-medium">{row.productName}</td>
+                                <td className="px-4 py-3 text-muted-foreground">{row.bankName}</td>
+                                <td className="px-4 py-3 text-center">
+                                  {row.availableForPartners ? (
+                                    <span
+                                      className="inline-flex size-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
+                                      title="Disponível para parceiros"
+                                      aria-label="Disponível para parceiros"
+                                    >
+                                      <Check className="size-3.5" strokeWidth={3} />
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : null}
@@ -612,14 +730,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
                   Próximo <ChevronRight className="size-4" />
                 </Button>
               ) : (
-                <Button
-                  type="button"
-                  onClick={() => {
-                    persistSelectedQuiet();
-                    toast.success("Produto atualizado.");
-                  }}
-                  disabled={saving}
-                >
+                <Button type="button" onClick={() => void finishWizard()} disabled={saving}>
                   Concluir
                 </Button>
               )}

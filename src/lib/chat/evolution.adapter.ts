@@ -470,11 +470,43 @@ export async function evolutionSendText(input: {
 
 /**
  * Envia imagem pela Evolution v2.
- * Doc oficial: POST /message/sendMedia/{instance}; `media` aceita URL ou data URL base64.
+ * Doc oficial: POST /message/sendMedia/{instance}; `media` aceita URL ou base64.
+ *
+ * Importante (mesmo fix do WABA): o validador da Evolution (`class-validator`)
+ * usa `isBase64` / `isURL`. Data URI (`data:image/...;base64,...`) falha nos dois
+ * e retorna HTTP 400 "Owned media must be a url or base64". Por isso tentamos
+ * **base64 puro primeiro**, depois data URI, e por fim URLs (se passadas).
+ * Ref: doc/LOG-2026-06-30__push-comunidade-imagem-tls-base64-fix.md (WABA).
  */
+export function buildEvolutionMediaVariants(
+  mediaOrDataUrl: string,
+  mimeType = "image/jpeg",
+): string[] {
+  const trimmed = String(mediaOrDataUrl || "").replace(/\s+/g, "");
+  if (!trimmed) return [];
+  if (/^https?:\/\//i.test(trimmed)) return [trimmed];
+  const raw = trimmed.replace(/^data:[^;]+;base64,/i, "");
+  if (!raw) return [];
+  const mime = String(mimeType || "image/jpeg").trim() || "image/jpeg";
+  return Array.from(new Set([raw, `data:${mime};base64,${raw}`]));
+}
+
+function isEvolutionMediaFormatError(error?: string): boolean {
+  const text = String(error || "").toLowerCase();
+  return (
+    text.includes("owned media") ||
+    text.includes("must be a url or base64") ||
+    text.includes("base64") ||
+    text.includes("media")
+  );
+}
+
 export async function evolutionSendImage(input: {
   phone: string;
-  dataUrl: string;
+  /** Data URI ou base64 puro (variantes são montadas automaticamente). */
+  dataUrl?: string;
+  /** Lista explícita de candidatos (URL e/ou base64), na ordem de tentativa. */
+  mediaCandidates?: string[];
   mimeType: string;
   fileName: string;
   caption?: string;
@@ -483,7 +515,7 @@ export async function evolutionSendImage(input: {
   if (!isEvolutionConfigured()) {
     return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE)." };
   }
-  if (!/^image\/(jpeg|png|webp)$/i.test(input.mimeType)) {
+  if (!/^image\/(jpeg|png|webp|gif)$/i.test(input.mimeType)) {
     return { ok: false, error: "Formato de imagem não permitido." };
   }
 
@@ -494,21 +526,46 @@ export async function evolutionSendImage(input: {
   const number = rawTarget.includes("@g.us")
     ? rawTarget
     : rawTarget.replace(/\D+/g, "");
-  const result = await evolutionFetch(`/message/sendMedia/${encodeURIComponent(instance)}`, {
-    method: "POST",
-    body: JSON.stringify({
-      number,
-      mediatype: "image",
-      mimetype: input.mimeType,
-      caption: input.caption?.trim() ?? "",
-      media: input.dataUrl,
-      fileName: input.fileName,
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  return result.ok
-    ? { ok: true, raw: result.raw }
-    : { ok: false, raw: result.raw, error: result.error };
+  const fileName = String(input.fileName || "image.jpg").trim() || "image.jpg";
+  const caption = input.caption?.trim() ?? "";
+
+  const candidates =
+    input.mediaCandidates && input.mediaCandidates.length > 0
+      ? input.mediaCandidates.filter(Boolean)
+      : buildEvolutionMediaVariants(String(input.dataUrl || ""), input.mimeType);
+
+  if (!candidates.length) {
+    return { ok: false, error: "Mídia vazia: informe URL ou base64." };
+  }
+
+  let lastError = "Falha ao enviar imagem.";
+  let lastRaw: unknown = null;
+
+  for (const media of candidates) {
+    const result = await evolutionFetch(`/message/sendMedia/${encodeURIComponent(instance)}`, {
+      method: "POST",
+      body: JSON.stringify({
+        number,
+        mediatype: "image",
+        mimetype: input.mimeType,
+        caption,
+        media,
+        fileName,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (result.ok) return { ok: true, raw: result.raw };
+    lastError = result.error || lastError;
+    lastRaw = result.raw;
+    // Formato inválido → tenta próxima variante (raw ↔ data URI ↔ URL).
+    if (result.status === 400 && isEvolutionMediaFormatError(result.error)) {
+      continue;
+    }
+    // Outros 400 (ex.: JID) não se resolvem trocando o formato da mídia.
+    if (result.status === 400) break;
+  }
+
+  return { ok: false, raw: lastRaw, error: lastError };
 }
 
 /**
