@@ -183,3 +183,14 @@
 ## 2026-07-17 08:20 — Produto cor/tag
 - `ProductConfig.tag` + `color`; resolveProductTagLabel. Keywords: produto tag badge.
 
+## 2026-07-17 08:53 — IA da conversa + regra global off
+- Toggle da conversa igual ao global (Sparkles verde/contorno). Global off ⇒ `disableAiForAllConversations()` desliga IA de todas as conversas (server + front).
+- LOG: `doc/LOG-2026-07-17__085300__ia-conversa-icon-regra-global-off.md`.
+- Keywords: Sparkles conversa, disableAiForAllConversations, IA global off.
+
+## 2026-07-17 08:49 — Toggle global de IA
+- Inbox usa somente `Sparkles`: verde quando ligado; transparente com contorno neutro quando desligado.
+- LOG: `doc/LOG-2026-07-17__084900__fix-toggle-ia-global-icon.md`.
+- Pendente: commit/push somente quando solicitado.
+- Keywords: IA global, Sparkles, toggle IA, Inbox WhatsApp.
+

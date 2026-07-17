@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import {
-  Bot,
   BotOff,
   Loader2,
   MessageCircle,
@@ -216,6 +215,11 @@ export function ChatInboxScreen({
     try {
       const saved = await setAiGlobal({ data: { enabled: next } });
       setAiGlobalEnabled(saved.aiGlobalEnabled);
+      if (!saved.aiGlobalEnabled) {
+        // Regra: global off ⇒ todas as conversas ficam com IA pausada
+        setConversations((prev) => prev.map((c) => ({ ...c, aiEnabled: false })));
+        setActive((prev) => (prev ? { ...prev, aiEnabled: false } : prev));
+      }
       toast.success(
         saved.aiGlobalEnabled
           ? "IA ligada em todos os atendimentos"
@@ -261,11 +265,21 @@ export function ChatInboxScreen({
             </div>
             <Button
               type="button"
-              size="sm"
-              variant={aiGlobalEnabled ? "default" : "outline"}
-              className="cursor-pointer shrink-0 gap-1.5"
+              size="icon"
+              variant="outline"
+              className={cn(
+                "size-9 shrink-0 cursor-pointer transition-colors",
+                aiGlobalEnabled
+                  ? "border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white"
+                  : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
               disabled={togglingAiGlobal}
               aria-pressed={aiGlobalEnabled}
+              aria-label={
+                aiGlobalEnabled
+                  ? "Desligar IA em todos os atendimentos"
+                  : "Ligar IA em todos os atendimentos"
+              }
               title={
                 aiGlobalEnabled
                   ? "Desligar IA em todos os atendimentos"
@@ -275,12 +289,9 @@ export function ChatInboxScreen({
             >
               {togglingAiGlobal ? (
                 <Loader2 className="size-4 animate-spin" />
-              ) : aiGlobalEnabled ? (
-                <Bot className="size-4" />
               ) : (
-                <BotOff className="size-4" />
+                <Sparkles className="size-4" />
               )}
-              IA
             </Button>
           </div>
           <div
@@ -413,9 +424,20 @@ export function ChatInboxScreen({
                 <p className="text-xs text-muted-foreground">{active?.phone}</p>
               </div>
               <Button
-                size="sm"
-                variant={active?.aiEnabled ? "secondary" : "outline"}
-                className="cursor-pointer"
+                type="button"
+                size="icon"
+                variant="outline"
+                className={cn(
+                  "size-9 shrink-0 cursor-pointer transition-colors",
+                  active?.aiEnabled
+                    ? "border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white"
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                aria-pressed={Boolean(active?.aiEnabled)}
+                aria-label={
+                  active?.aiEnabled ? "Pausar IA nesta conversa" : "Ativar IA nesta conversa"
+                }
+                title={active?.aiEnabled ? "Pausar IA nesta conversa" : "Ativar IA nesta conversa"}
                 onClick={async () => {
                   try {
                     const next = await setConvAi({
@@ -430,12 +452,7 @@ export function ChatInboxScreen({
                   }
                 }}
               >
-                {active?.aiEnabled ? (
-                  <Sparkles className="size-4" />
-                ) : (
-                  <Sparkles className="size-4 opacity-60" />
-                )}
-                IA {active?.aiEnabled ? "on" : "off"}
+                <Sparkles className="size-4" />
               </Button>
             </header>
 

@@ -425,6 +425,27 @@ export async function setConversationAiEnabled(input: {
   );
 }
 
+/** Desliga a IA de todas as conversas (regra: IA global off ⇒ IA individual off). */
+export async function disableAiForAllConversations(): Promise<void> {
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) => sql`
+        update crm.chat_conversations
+        set ai_enabled = false, updated_at = now()
+        where ai_enabled = true
+      `,
+    );
+    return;
+  }
+  const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  await writeJsonFile(
+    CONV_FILE,
+    convs.map((c) =>
+      c.aiEnabled ? { ...c, aiEnabled: false, updatedAt: new Date().toISOString() } : c,
+    ),
+  );
+}
+
 export async function getChatAiSettings(): Promise<ChatAiSettings> {
   if (isDatabaseEnabled()) {
     return withChatDb(async (sql) => {

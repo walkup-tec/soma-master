@@ -6,6 +6,7 @@ import {
   appendMessage,
   deleteAiExample,
   deleteAiKnowledge,
+  disableAiForAllConversations,
   getChatAiSettings,
   getConversation,
   joinConversationAsAgent,
@@ -134,7 +135,12 @@ export const setChatAiGlobalEnabledFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     await requireChatUser();
-    return saveChatAiSettings({ aiGlobalEnabled: data.enabled });
+    const saved = await saveChatAiSettings({ aiGlobalEnabled: data.enabled });
+    // Regra: IA global desligada ⇒ desliga também a IA de cada conversa
+    if (!data.enabled) {
+      await disableAiForAllConversations();
+    }
+    return saved;
   });
 
 export const sendChatMessageFn = createServerFn({ method: "POST" })
