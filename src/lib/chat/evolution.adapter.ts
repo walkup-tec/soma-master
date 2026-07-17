@@ -123,7 +123,7 @@ async function evolutionFetch(path: string, init?: RequestInit): Promise<{
         ok: false,
         status: response.status,
         raw,
-        error: `Evolution HTTP ${response.status}`,
+        error: formatEvolutionHttpError(response.status, raw),
       };
     }
     return { ok: true, status: response.status, raw };
@@ -134,6 +134,44 @@ async function evolutionFetch(path: string, init?: RequestInit): Promise<{
       raw: null,
       error: error instanceof Error ? error.message : "Falha na Evolution API",
     };
+  }
+}
+
+function formatEvolutionHttpError(status: number, raw: unknown): string {
+  const detail = extractEvolutionErrorDetail(raw);
+  return detail ? `Evolution HTTP ${status}: ${detail}` : `Evolution HTTP ${status}`;
+}
+
+function extractEvolutionErrorDetail(raw: unknown): string {
+  if (raw == null) return "";
+  if (typeof raw === "string") return raw.slice(0, 280);
+  if (typeof raw !== "object") return String(raw).slice(0, 280);
+  const record = raw as Record<string, unknown>;
+  const response = record.response;
+  if (typeof response === "string") return response.slice(0, 280);
+  if (response && typeof response === "object") {
+    const nested = response as Record<string, unknown>;
+    if (typeof nested.message === "string") return nested.message.slice(0, 280);
+    if (Array.isArray(nested.message)) {
+      return nested.message
+        .flat(Infinity)
+        .map((item) => String(item))
+        .join("; ")
+        .slice(0, 280);
+    }
+  }
+  if (typeof record.message === "string") return record.message.slice(0, 280);
+  if (Array.isArray(record.message)) {
+    return record.message
+      .flat(Infinity)
+      .map((item) => String(item))
+      .join("; ")
+      .slice(0, 280);
+  }
+  try {
+    return JSON.stringify(raw).slice(0, 280);
+  } catch {
+    return "";
   }
 }
 
@@ -395,21 +433,39 @@ export async function evolutionSendText(input: {
   const number = rawTarget.includes("@g.us")
     ? rawTarget
     : rawTarget.replace(/\D+/g, "");
-
-  // 12s — chat humano não pode travar 45s; falha rápida + toast no CRM
-  const result = await evolutionFetch(`/message/sendText/${encodeURIComponent(instance)}`, {
-    method: "POST",
-    body: JSON.stringify({
-      number,
-      text: input.text,
-    }),
-    signal: AbortSignal.timeout(12_000),
-  });
-
-  if (!result.ok) {
-    return { ok: false, raw: result.raw, error: result.error };
+  const text = String(input.text || "").trim();
+  if (!number || !text) {
+    return { ok: false, error: "Destino ou texto vazio para envio Evolution." };
   }
-  return { ok: true, raw: result.raw };
+
+  const bodies: Array<Record<string, unknown>> = [
+    { number, text },
+    // Algumas builds antigas da Evolution ainda exigem o envelope v1.
+    { number, textMessage: { text } },
+  ];
+
+  let lastError = "Falha ao enviar texto na Evolution.";
+  let lastRaw: unknown = null;
+  for (const body of bodies) {
+    const result = await evolutionFetch(`/message/sendText/${encodeURIComponent(instance)}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (result.ok) return { ok: true, raw: result.raw };
+    lastError = result.error || lastError;
+    lastRaw = result.raw;
+    const detail = `${result.error || ""} ${JSON.stringify(result.raw ?? "")}`.toLowerCase();
+    // Só tenta o payload alternativo quando o 400 aponta formato de texto.
+    if (
+      result.status !== 400 ||
+      (!detail.includes("text") && !detail.includes("textmessage") && !detail.includes("property"))
+    ) {
+      break;
+    }
+  }
+
+  return { ok: false, raw: lastRaw, error: lastError };
 }
 
 /**

@@ -29,6 +29,7 @@ import { Route as ApiSettingsChatbotEvolutionRouteImport } from './routes/api/se
 import { Route as ApiSettingsChatbotEducationRouteImport } from './routes/api/settings/chatbot/education'
 import { Route as ApiPushMediaMediaIdRouteImport } from './routes/api/push/media.$mediaId'
 import { Route as ApiChatMediaMediaIdRouteImport } from './routes/api/chat/media.$mediaId'
+import { Route as ApiBanksGuidesStorageIdRouteImport } from './routes/api/banks/guides.$storageId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -132,6 +133,11 @@ const ApiChatMediaMediaIdRoute = ApiChatMediaMediaIdRouteImport.update({
   path: '/api/chat/media/$mediaId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBanksGuidesStorageIdRoute = ApiBanksGuidesStorageIdRouteImport.update({
+  id: '/api/banks/guides/$storageId',
+  path: '/api/banks/guides/$storageId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/banks/guides/$storageId'
     | '/api/chat/media/$mediaId'
     | '/api/push/media/$mediaId'
     | '/api/settings/chatbot/education'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/banks/guides/$storageId'
     | '/api/chat/media/$mediaId'
     | '/api/push/media/$mediaId'
     | '/api/settings/chatbot/education'
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/banks/guides/$storageId'
     | '/api/chat/media/$mediaId'
     | '/api/push/media/$mediaId'
     | '/api/settings/chatbot/education'
@@ -272,6 +284,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiBanksGuidesStorageIdRoute: typeof ApiBanksGuidesStorageIdRoute
   ApiChatMediaMediaIdRoute: typeof ApiChatMediaMediaIdRoute
   ApiPushMediaMediaIdRoute: typeof ApiPushMediaMediaIdRoute
   ApiSettingsChatbotEducationRoute: typeof ApiSettingsChatbotEducationRoute
@@ -420,6 +433,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatMediaMediaIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/banks/guides/$storageId': {
+      id: '/api/banks/guides/$storageId'
+      path: '/api/banks/guides/$storageId'
+      fullPath: '/api/banks/guides/$storageId'
+      preLoaderRoute: typeof ApiBanksGuidesStorageIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -479,6 +499,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiBanksGuidesStorageIdRoute: ApiBanksGuidesStorageIdRoute,
   ApiChatMediaMediaIdRoute: ApiChatMediaMediaIdRoute,
   ApiPushMediaMediaIdRoute: ApiPushMediaMediaIdRoute,
   ApiSettingsChatbotEducationRoute: ApiSettingsChatbotEducationRoute,

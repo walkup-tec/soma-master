@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -12,6 +12,10 @@ function ensureDir(): void {
 function sanitizeFileName(value: string): string {
   const base = basename(String(value || "roteiro.pdf").trim()) || "roteiro.pdf";
   return base.replace(/[^\w.\-()+\s]/g, "_").slice(0, 120);
+}
+
+function isSafeStorageId(id: string): boolean {
+  return /^[0-9a-f-]{36}$/i.test(String(id || "").trim());
 }
 
 export function saveBankOperationalGuidePdf(input: {
@@ -29,7 +33,23 @@ export function saveBankOperationalGuidePdf(input: {
   ensureDir();
   const storageId = randomUUID();
   const rawName = String(input.fileName || "roteiro.pdf");
-  const fileName = sanitizeFileName(rawName.toLowerCase().endsWith(".pdf") ? rawName : `${rawName}.pdf`);
+  const fileName = sanitizeFileName(
+    rawName.toLowerCase().endsWith(".pdf") ? rawName : `${rawName}.pdf`,
+  );
   writeFileSync(join(BANK_GUIDES_DIR, `${storageId}-${fileName}`), input.buffer);
   return { storageId, fileName };
+}
+
+export function resolveBankGuideFile(
+  storageId: string,
+): { absolutePath: string; fileName: string } | null {
+  const id = String(storageId || "").trim();
+  if (!isSafeStorageId(id)) return null;
+  ensureDir();
+  const entries = readdirSync(BANK_GUIDES_DIR).filter((name) => name.startsWith(`${id}-`));
+  const match = entries[0];
+  if (!match) return null;
+  const absolutePath = join(BANK_GUIDES_DIR, match);
+  if (!existsSync(absolutePath)) return null;
+  return { absolutePath, fileName: match.slice(id.length + 1) };
 }

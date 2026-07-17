@@ -142,28 +142,34 @@ async function evolutionResolveJidFromInvite(
   }
 }
 
-async function resolveAnnouncementGroupJid(instanceName: string): Promise<string> {
-  const envJid = resolvePushCommunityAnnouncementJidEnv();
-  if (envJid) return envJid;
+async function discoverAnnouncementGroupJid(instanceName: string): Promise<string> {
+  try {
+    const groups = await evolutionFetchGroups(instanceName);
+    const fromGroups = pickAnnouncementGroupJid(groups);
+    if (fromGroups) return fromGroups;
+  } catch {
+    /* tenta invite abaixo */
+  }
 
   const config = readPushConfig();
-  if (config.communityAnnouncementGroupJid.includes("@g.us")) {
+  const inviteLink = config.communityInviteLink || resolvePushCommunityInviteLink();
+  const fromInvite = await evolutionResolveJidFromInvite(instanceName, inviteLink);
+  return fromInvite;
+}
+
+async function resolveAnnouncementGroupJid(
+  instanceName: string,
+  options?: { forceRediscover?: boolean },
+): Promise<string> {
+  const envJid = resolvePushCommunityAnnouncementJidEnv();
+  if (envJid && !options?.forceRediscover) return envJid;
+
+  const config = readPushConfig();
+  if (!options?.forceRediscover && config.communityAnnouncementGroupJid.includes("@g.us")) {
     return config.communityAnnouncementGroupJid;
   }
 
-  const inviteLink = config.communityInviteLink || resolvePushCommunityInviteLink();
-  const fromInvite = await evolutionResolveJidFromInvite(instanceName, inviteLink);
-  if (fromInvite) {
-    writePushConfig({
-      ...config,
-      communityEvoInstance: instanceName,
-      communityAnnouncementGroupJid: fromInvite,
-    });
-    return fromInvite;
-  }
-
-  const groups = await evolutionFetchGroups(instanceName);
-  const jid = pickAnnouncementGroupJid(groups);
+  const jid = await discoverAnnouncementGroupJid(instanceName);
   if (!jid) {
     throw new Error(
       "Grupo de Anúncios da comunidade não encontrado. Defina SOMA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel (JID …@g.us).",
@@ -185,6 +191,26 @@ function buildCommunityText(title: string, body: string): string {
   return cleanBody;
 }
 
+async function sendCommunityTextOnce(
+  instanceName: string,
+  groupJid: string,
+  message: string,
+): Promise<{ ok: boolean; detail: string; groupJid: string }> {
+  const sendText = await evolutionSendText({
+    phone: groupJid,
+    text: message,
+    instanceName,
+  });
+  if (!sendText.ok) {
+    return {
+      ok: false,
+      detail: sendText.error || "Falha ao enviar texto para a comunidade.",
+      groupJid,
+    };
+  }
+  return { ok: true, detail: "Texto enviado à comunidade WhatsApp.", groupJid };
+}
+
 /** Envia texto/imagem para o grupo de anúncios da comunidade (JID @g.us). */
 export async function sendPushToWhatsAppCommunity(
   title: string,
@@ -201,7 +227,7 @@ export async function sendPushToWhatsAppCommunity(
   assertSomaOwnedInstance(instanceName);
 
   try {
-    const groupJid = await resolveAnnouncementGroupJid(instanceName);
+    let groupJid = await resolveAnnouncementGroupJid(instanceName);
     const message = buildCommunityText(title, text);
 
     if (image?.id) {
@@ -210,7 +236,7 @@ export async function sendPushToWhatsAppCommunity(
         return { ok: false, detail: "Imagem do push não encontrada no servidor.", groupJid };
       }
       const dataUrl = `data:${media.mimeType};base64,${media.base64}`;
-      const sendImage = await evolutionSendImage({
+      let sendImage = await evolutionSendImage({
         phone: groupJid,
         dataUrl,
         mimeType: media.mimeType,
@@ -218,6 +244,22 @@ export async function sendPushToWhatsAppCommunity(
         caption: message,
         instanceName,
       });
+      if (!sendImage.ok && /HTTP 400/i.test(sendImage.error || "")) {
+        const rediscovered = await resolveAnnouncementGroupJid(instanceName, {
+          forceRediscover: true,
+        });
+        if (rediscovered && rediscovered !== groupJid) {
+          groupJid = rediscovered;
+          sendImage = await evolutionSendImage({
+            phone: groupJid,
+            dataUrl,
+            mimeType: media.mimeType,
+            fileName: image.fileName || "comunicado.jpg",
+            caption: message,
+            instanceName,
+          });
+        }
+      }
       if (!sendImage.ok) {
         return {
           ok: false,
@@ -232,19 +274,26 @@ export async function sendPushToWhatsAppCommunity(
       return { ok: false, detail: "Informe título ou texto para a comunidade.", groupJid };
     }
 
-    const sendText = await evolutionSendText({
-      phone: groupJid,
-      text: message,
-      instanceName,
-    });
-    if (!sendText.ok) {
-      return {
-        ok: false,
-        detail: sendText.error || "Falha ao enviar texto para a comunidade.",
-        groupJid,
-      };
+    let result = await sendCommunityTextOnce(instanceName, groupJid, message);
+    if (!result.ok && /HTTP 400/i.test(result.detail)) {
+      const rediscovered = await resolveAnnouncementGroupJid(instanceName, {
+        forceRediscover: true,
+      });
+      if (rediscovered && rediscovered !== groupJid) {
+        result = await sendCommunityTextOnce(instanceName, rediscovered, message);
+      } else if (rediscovered) {
+        // Mesmo JID: limpa cache inválido e tenta descoberta pura de novo
+        writePushConfig({
+          ...readPushConfig(),
+          communityAnnouncementGroupJid: "",
+        });
+        const again = await resolveAnnouncementGroupJid(instanceName, { forceRediscover: true });
+        if (again && again !== groupJid) {
+          result = await sendCommunityTextOnce(instanceName, again, message);
+        }
+      }
     }
-    return { ok: true, detail: "Texto enviado à comunidade WhatsApp.", groupJid };
+    return result;
   } catch (error) {
     const detail =
       error instanceof Error && /aborted|timeout|TimeoutError/i.test(error.message)

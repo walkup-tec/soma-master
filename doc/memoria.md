@@ -1,3 +1,17 @@
+## 2026-07-17 20:05 — Fix Push comunidade Evolution HTTP 400
+- Detalhe do erro Evolution no histórico; retry de payload/JID em 400.
+- LOG: `doc/LOG-2026-07-17__200500__fix-push-comunidade-evolution-400.md`.
+
+## 2026-07-17 20:00 — Bancos: lista, modal detalhes e PDF
+- Lista (Nome, Produto, Acessos×4, Detalhes); form novo limpo em cards inline; download PDF no modal.
+- API `/api/banks/guides/$storageId`.
+- LOG: `doc/LOG-2026-07-17__200000__bancos-lista-modal-detalhes-pdf.md`.
+
+## 2026-07-17 19:45 — Auditoria: deploy Soma completo no Git
+- `origin/main` = `44e7ce6` (inclui `c1370af` + `d380330`). Nada funcional pendente de push.
+- Locais só com formatação. Env Push/SMTP conferir no Easypanel.
+- LOG: `doc/LOG-2026-07-17__194500__auditoria-deploy-soma.md`.
+
 ## 2026-07-17 19:35 — Bancos: senha visível, link e ícone copiar
 - Senhas Storm/Banco em texto visível; campos `stormLink` / `bankLink`.
 - Após salvar, ícone de copiar ao lado de usuário, senha e link.
