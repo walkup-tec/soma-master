@@ -35,22 +35,22 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     var style = document.createElement("style");
     style.id = "soma-deploy-overlay-style";
     style.textContent =
-      "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(3,7,18,.92);backdrop-filter:blur(6px)}" +
+      "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,9,18,.92);backdrop-filter:blur(6px)}" +
       "#" + OVERLAY_ID + "[hidden]{display:none!important}" +
-      ".soma-deploy-card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(236,72,153,.28);background:linear-gradient(165deg,#131b2e 0%,#0e1525 100%);color:#f8fafc;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.45);transition:border-color .35s ease,box-shadow .35s ease}" +
-      ".soma-deploy-card.is-stabilizing{border-color:rgba(46,228,160,.45);box-shadow:0 24px 48px rgba(0,0,0,.45),0 0 32px rgba(46,228,160,.12)}" +
+      ".soma-deploy-card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(190,28,106,.45);background:#0e1828;color:#eef3fb;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.45);font-family:Manrope,ui-sans-serif,system-ui,sans-serif;transition:border-color .35s ease}" +
+      ".soma-deploy-card.is-stabilizing{border-color:rgba(236,247,89,.55)}" +
       ".soma-deploy-visual{margin-bottom:18px}" +
-      ".soma-deploy-spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:2px solid rgba(236,72,153,.16);border-top-color:rgba(236,72,153,.9);animation:soma-deploy-orbit 1.2s linear infinite}" +
-      ".soma-deploy-progress-track{height:4px;border-radius:999px;background:rgba(148,163,184,.18);overflow:hidden;margin:0 auto;max-width:180px}" +
-      ".soma-deploy-progress-bar{height:100%;width:42%;border-radius:inherit;background:linear-gradient(90deg,#ec4899,#a855f7,#ec4899);background-size:200% 100%;animation:soma-deploy-progress-slide 1.35s ease-in-out infinite}" +
-      ".soma-deploy-card.is-stabilizing .soma-deploy-progress-bar{width:100%;animation:soma-deploy-progress-fill .9s ease-out forwards;background:linear-gradient(90deg,#2ee4a0,#22d3ee)}" +
-      ".soma-deploy-card.is-complete .soma-deploy-spinner{border-top-color:#2ee4a0;animation:none}" +
-      ".soma-deploy-title{margin:0 0 12px;font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#ec4899}" +
-      ".soma-deploy-card.is-stabilizing .soma-deploy-title{color:#2ee4a0}" +
-      ".soma-deploy-card p{margin:0 0 10px;color:#cbd5e1;line-height:1.55;font-size:.92rem}" +
-      ".soma-deploy-accent{margin-bottom:0!important;color:#22d3ee!important;font-size:.88rem}" +
+      ".soma-deploy-spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:2px solid rgba(39,117,229,.24);border-top-color:#be1c6a;animation:soma-deploy-orbit 1.2s linear infinite}" +
+      ".soma-deploy-progress-track{height:4px;border-radius:999px;background:rgba(245,245,245,.16);overflow:hidden;margin:0 auto;max-width:180px}" +
+      ".soma-deploy-progress-bar{height:100%;width:42%;border-radius:inherit;background:#be1c6a;animation:soma-deploy-progress-slide 1.35s ease-in-out infinite}" +
+      ".soma-deploy-card.is-stabilizing .soma-deploy-progress-bar{width:100%;animation:soma-deploy-progress-fill .9s ease-out forwards;background:#ecf759}" +
+      ".soma-deploy-card.is-complete .soma-deploy-spinner{border-top-color:#ecf759;animation:none}" +
+      ".soma-deploy-title{margin:0 0 12px;font-family:Sora,Manrope,ui-sans-serif,system-ui,sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#be1c6a}" +
+      ".soma-deploy-card.is-stabilizing .soma-deploy-title{color:#ecf759}" +
+      ".soma-deploy-card p{margin:0 0 10px;color:#eef3fb;line-height:1.55;font-size:.92rem}" +
+      ".soma-deploy-accent{margin-bottom:0!important;color:#ecf759!important;font-size:.88rem}" +
       "@keyframes soma-deploy-orbit{to{transform:rotate(360deg)}}" +
-      "@keyframes soma-deploy-progress-slide{0%{transform:translateX(-120%);background-position:0% 50%}100%{transform:translateX(280%);background-position:100% 50%}}" +
+      "@keyframes soma-deploy-progress-slide{0%{transform:translateX(-120%)}100%{transform:translateX(280%)}}" +
       "@keyframes soma-deploy-progress-fill{from{transform:translateX(-8%)}to{transform:translateX(0)}}";
     document.head.appendChild(style);
   }

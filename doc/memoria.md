@@ -1,3 +1,10 @@
+## 2026-07-17 18:12 — Modal de deploy alinhado à paleta SOMA
+- Removidas cores/efeitos herdados da DRAX: roxo, ciano, verde, glow e gradientes multicoloridos.
+- Modal usa somente magenta `#be1c6a`, lima `#ecf759`, azul `#2775e5` e neutros SOMA.
+- Tipografia Manrope no conteúdo e Sora no título; comportamento de recuperação não mudou.
+- Prettier, ESLint e build client+SSR OK. LOG: `doc/LOG-2026-07-17__181200__fix-modal-deploy-paleta-soma.md`.
+- Keywords: modal deploy, paleta SOMA, remover DRAX, atualizando sistema.
+
 ## 2026-07-17 17:45 — Boas-vindas e-mail + WhatsApp (usuário/parceiro)
 - Template Soma Promotora (Usuário=e-mail, Senha=senha ou código GE1234); HTML + WhatsApp (`*negrito*`).
 - `notifyWelcomeChannels` após `createUserFn` e `createPartnerFn`; canais em paralelo; falha não desfaz cadastro.
