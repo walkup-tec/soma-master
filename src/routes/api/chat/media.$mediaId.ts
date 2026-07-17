@@ -6,6 +6,7 @@ import {
   chatImageStreamToWeb,
   openChatImageReadStream,
 } from "@/lib/chat/chat-media.repository";
+import { ensureFileNameExtension } from "@/lib/files/file-name-extension";
 
 export const Route = createFileRoute("/api/chat/media/$mediaId")({
   server: {
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/api/chat/media/$mediaId")({
             status: 200,
             headers: {
               "content-type": meta.mimeType,
-              "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(meta.fileName)}`,
+              "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(ensureFileNameExtension(meta.fileName, meta.mimeType))}`,
               "cache-control": "private, max-age=3600",
               "x-content-type-options": "nosniff",
             },

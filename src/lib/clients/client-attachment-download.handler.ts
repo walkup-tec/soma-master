@@ -3,6 +3,7 @@ import {
   openClientAttachmentReadStream,
 } from "@/lib/clients/client-attachment.repository";
 import { consumeClientAttachmentDownloadToken } from "@/lib/clients/client-attachment-download";
+import { ensureFileNameExtension } from "@/lib/files/file-name-extension";
 
 export async function handleClientAttachmentDownload(request: Request): Promise<Response | null> {
   const url = new URL(request.url);
@@ -16,7 +17,9 @@ export async function handleClientAttachmentDownload(request: Request): Promise<
 
   try {
     const { record, stream } = await openClientAttachmentReadStream(attachmentId);
-    const encodedName = encodeURIComponent(record.fileName);
+    const encodedName = encodeURIComponent(
+      ensureFileNameExtension(record.fileName, record.mimeType),
+    );
     return new Response(attachmentStreamToWeb(stream), {
       status: 200,
       headers: {

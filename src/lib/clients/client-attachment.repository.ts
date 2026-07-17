@@ -4,6 +4,7 @@ import { mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/pro
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import type { ClientAttachmentRecord } from "@/lib/clients/client.types";
+import { ensureFileNameExtension } from "@/lib/files/file-name-extension";
 import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
 import { ensureClientListIndexes } from "@/lib/db/ensure-client-indexes";
 
@@ -191,7 +192,10 @@ export async function createClientAttachmentFromChatMedia(input: {
   }
 
   const attachmentId = `attfile-${crypto.randomUUID().slice(0, 12)}`;
-  const fileName = input.fileName.trim().slice(0, 160) || "midia-whatsapp";
+  const fileName = ensureFileNameExtension(
+    input.fileName.trim().slice(0, 150) || "midia-whatsapp",
+    input.mimeType,
+  );
   const createdAt = new Date().toISOString();
   const record: ClientAttachmentRecord = {
     id: attachmentId,

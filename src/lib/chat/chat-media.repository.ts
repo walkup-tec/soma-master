@@ -7,6 +7,7 @@ import {
   CHAT_IMAGE_MAX_BYTES,
 } from "@/lib/chat/chat-media.constants";
 import { ensureChatSchema } from "@/lib/chat/ensure-chat-schema";
+import { ensureFileNameExtension } from "@/lib/files/file-name-extension";
 import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
 
 const CHAT_MEDIA_DIR = join(process.cwd(), "data", "chat-media");
@@ -293,9 +294,13 @@ export async function saveInboundChatMedia(input: {
   const meta: ChatImageUploadMeta = {
     mediaId,
     conversationId: input.conversationId,
-    fileName: (
-      input.fileName ?? (mimeType === "application/pdf" ? "documento-recebido.pdf" : "imagem-recebida")
-    ).slice(0, 160),
+    fileName: ensureFileNameExtension(
+      (
+        input.fileName ??
+        (mimeType === "application/pdf" ? "documento-recebido" : "imagem-recebida")
+      ).slice(0, 150),
+      mimeType,
+    ),
     fileSize: buffer.length,
     mimeType,
     totalChunks: 1,

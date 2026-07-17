@@ -1,3 +1,9 @@
+## 2026-07-17 13:55 — Download de anexo WhatsApp sem extensão
+- Mídia inbound salvava `fileName` sem extensão (`imagem-recebida`) → download do modal saía em "formato estranho".
+- Novo `src/lib/files/file-name-extension.ts` (`ensureFileNameExtension`): aplica extensão pelo MIME no salvamento inbound, na cópia chat→anexo, no handler de download e na rota `/api/chat/media` (corrige inclusive anexos antigos ao servir).
+- Build OK. LOG: `doc/LOG-2026-07-17__135500__fix-download-anexo-whatsapp-sem-extensao.md`.
+- Keywords: download sem extensão, formato estranho, ensureFileNameExtension, content-disposition.
+
 ## 2026-07-17 13:44 — Observação do contato na barra lateral
 - `chat_conversations.contact_note` guarda nota interna da conversa, exibida somente no painel lateral.
 - Editor com limite 1.000, contador, Salvar, Ctrl/Cmd+Enter e feedback discreto; disponível com ou sem cliente CRM.
