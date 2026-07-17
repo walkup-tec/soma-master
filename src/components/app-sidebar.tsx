@@ -36,7 +36,7 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
       <SidebarHeader className="border-b border-sidebar-border/60 px-3 py-4">
         <Logo
           compact={collapsed}
-          surface="on-light"
+          surface="brand"
           className={collapsed ? "justify-center" : ""}
         />
       </SidebarHeader>

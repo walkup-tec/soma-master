@@ -7,11 +7,12 @@ import { readStoredSomaTheme, type SomaThemeMode } from "@/lib/theme/soma-theme"
 type LogoSize = "default" | "lg" | "xl" | "lg-login" | "xl-login";
 
 /**
- * - on-light → logo-claro (fundos claros)
- * - on-dark → logo-escuro (fundos escuros)
- * - auto → acompanha tema (sidebar / chrome do app)
+ * - brand → sempre logo colorida (logo-claro) — menu lateral
+ * - on-light → logo colorida (fundos claros)
+ * - on-dark → logo clara/branca (fundos escuros)
+ * - auto → acompanha tema claro/escuro
  */
-type LogoSurface = "auto" | "on-light" | "on-dark";
+type LogoSurface = "auto" | "brand" | "on-light" | "on-dark";
 
 const sizeClass: Record<LogoSize, string> = {
   default: "h-14 w-auto max-w-[min(100%,320px)]",
@@ -26,8 +27,8 @@ const sizeClass: Record<LogoSize, string> = {
  * Fonte canônica: D:\SOMA Promotora\Sistema SOMA\logo-claro.png | Logo-escuro.png
  */
 const PUBLIC_CANDIDATES = {
-  light: ["/brand/logo-claro.png?v=4", "/brand/logo-claro.webp", "/brand/logo-claro.svg"],
-  dark: ["/brand/logo-escuro.png?v=4", "/brand/logo-escuro.webp", "/brand/logo-escuro.svg"],
+  light: ["/brand/logo-claro.png?v=5", "/brand/logo-claro.webp", "/brand/logo-claro.svg"],
+  dark: ["/brand/logo-escuro.png?v=5", "/brand/logo-escuro.webp", "/brand/logo-escuro.svg"],
 } as const;
 
 function useThemeMode(): SomaThemeMode {
@@ -51,7 +52,8 @@ function useThemeMode(): SomaThemeMode {
 }
 
 function resolveSurface(surface: LogoSurface, theme: SomaThemeMode): "light" | "dark" {
-  if (surface === "on-light") return "light";
+  // brand e on-light = sempre colorida (logo-claro)
+  if (surface === "brand" || surface === "on-light") return "light";
   if (surface === "on-dark") return "dark";
   return theme === "dark" ? "dark" : "light";
 }
