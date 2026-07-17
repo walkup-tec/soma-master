@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MASTER_CATEGORY_ID } from "@/lib/auth/master-user";
 import { resolveCategoryHomeMenuId } from "@/lib/config/category-utils";
-import { MENU_GROUPS, MENU_ITEMS, type MenuItemId } from "@/lib/config/menu-items";
+import { MENU_GROUPS, MENU_ITEMS, MENU_SECTIONS, type MenuItemId } from "@/lib/config/menu-items";
 import type { SettingsSaveSection } from "@/lib/config/settings.repository";
 import { createEmptyCategory } from "@/lib/config/settings-defaults";
 import type { SystemSettings, UserCategory } from "@/lib/config/settings-types";
@@ -294,38 +294,58 @@ export function UserCategoriesSettings({ settings, onChange }: Props) {
                     Usuários cadastrados nesta categoria verão apenas estes módulos.
                   </p>
                 </div>
-                {MENU_GROUPS.map((group) => (
-                  <div key={group} className="space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{group}</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {MENU_ITEMS.filter((m) => m.group === group).map((menu) => {
-                        const checked = selected.menuIds.includes(menu.id);
-                        return (
-                          <label
-                            key={menu.id}
-                            className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2 text-sm"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              disabled={saving}
-                              onCheckedChange={(value) => {
-                                const menuIds = value
-                                  ? [...selected.menuIds, menu.id]
-                                  : selected.menuIds.filter((id) => id !== menu.id);
-                                const homeMenuId = resolveCategoryHomeMenuId(
-                                  menuIds,
-                                  selected.homeMenuId,
-                                );
-                                updateSelected({ menuIds, homeMenuId });
-                              }}
-                            />
-                            {menu.label}
-                          </label>
-                        );
-                      })}
+                {MENU_SECTIONS.map((section) => {
+                  const sectionMenus = MENU_ITEMS.filter((m) => m.section === section.id);
+                  return (
+                    <div key={section.id} className="space-y-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
+                        {section.label}
+                      </p>
+                      {sectionMenus.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Nenhum módulo nesta seção ainda.</p>
+                      ) : (
+                        MENU_GROUPS.map((group) => {
+                          const menus = sectionMenus.filter((m) => m.group === group);
+                          if (!menus.length) return null;
+                          return (
+                            <div key={`${section.id}-${group}`} className="space-y-2">
+                              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                {group}
+                              </p>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {menus.map((menu) => {
+                                  const checked = selected.menuIds.includes(menu.id);
+                                  return (
+                                    <label
+                                      key={menu.id}
+                                      className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2 text-sm"
+                                    >
+                                      <Checkbox
+                                        checked={checked}
+                                        disabled={saving}
+                                        onCheckedChange={(value) => {
+                                          const menuIds = value
+                                            ? [...selected.menuIds, menu.id]
+                                            : selected.menuIds.filter((id) => id !== menu.id);
+                                          const homeMenuId = resolveCategoryHomeMenuId(
+                                            menuIds,
+                                            selected.homeMenuId,
+                                          );
+                                          updateSelected({ menuIds, homeMenuId });
+                                        }}
+                                      />
+                                      {menu.label}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="space-y-2 max-w-md">
