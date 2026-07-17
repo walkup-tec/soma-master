@@ -49,6 +49,7 @@ type ConvRow = {
   client_id: string | null;
   assigned_user_id: string | null;
   assigned_user_name: string | null;
+  contact_note: string | null;
   ai_enabled: boolean;
   last_message_at: Date | null;
   last_message_preview: string | null;
@@ -68,6 +69,7 @@ function mapConv(row: ConvRow): ChatConversation {
     clientId: row.client_id,
     assignedUserId: row.assigned_user_id,
     assignedUserName: row.assigned_user_name,
+    contactNote: row.contact_note ?? null,
     aiEnabled: row.ai_enabled,
     lastMessageAt: row.last_message_at ? row.last_message_at.toISOString() : null,
     lastMessagePreview: row.last_message_preview,
@@ -98,6 +100,7 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
     const rows = await withChatDb((sql) => sql<ConvRow[]>`
       select
         c.id, c.phone, c.contact_name, c.client_id, c.assigned_user_id, c.assigned_user_name,
+        c.contact_note,
         c.ai_enabled, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
         cl.data->>'nome' as client_name,
@@ -120,13 +123,48 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
 
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
   return enrichConversations(
-    [...items].sort((a, b) => (b.lastMessageAt ?? b.updatedAt).localeCompare(a.lastMessageAt ?? a.updatedAt)).slice(0, limit),
+    [...items]
+      .map((item) => ({ ...item, contactNote: item.contactNote ?? null }))
+      .sort((a, b) =>
+        (b.lastMessageAt ?? b.updatedAt).localeCompare(a.lastMessageAt ?? a.updatedAt),
+      )
+      .slice(0, limit),
   );
 }
 
 export async function getConversation(id: string): Promise<ChatConversation | null> {
   const all = await listConversations(500);
   return all.find((c) => c.id === id) ?? null;
+}
+
+export async function updateConversationContactNote(
+  conversationId: string,
+  contactNote: string | null,
+): Promise<ChatConversation> {
+  const existing = await getConversation(conversationId);
+  if (!existing) throw new Error("Conversa não encontrada.");
+
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) => sql`
+        update crm.chat_conversations
+        set contact_note = ${contactNote}, updated_at = now()
+        where id = ${conversationId}
+      `,
+    );
+  } else {
+    const conversations = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+    const next = conversations.map((conversation) =>
+      conversation.id === conversationId
+        ? { ...conversation, contactNote, updatedAt: new Date().toISOString() }
+        : conversation,
+    );
+    await writeJsonFile(CONV_FILE, next);
+  }
+
+  const updated = await getConversation(conversationId);
+  if (!updated) throw new Error("Conversa não encontrada.");
+  return updated;
 }
 
 async function findClientIdByPhone(phone: string): Promise<{ clientId: string; name: string | null } | null> {
@@ -158,7 +196,7 @@ export async function getOrCreateConversationByPhone(input: {
   if (isDatabaseEnabled()) {
     return withChatDb(async (sql) => {
       const existing = await sql<ConvRow[]>`
-        select id, phone, contact_name, client_id, assigned_user_id, assigned_user_name,
+        select id, phone, contact_name, client_id, assigned_user_id, assigned_user_name, contact_note,
                ai_enabled, last_message_at, last_message_preview, unread_count, created_at, updated_at
         from crm.chat_conversations where phone = ${phone} limit 1
       `;
@@ -204,6 +242,7 @@ export async function getOrCreateConversationByPhone(input: {
         clientId: linked?.clientId ?? null,
         assignedUserId: null,
         assignedUserName: null,
+        contactNote: null,
         aiEnabled: initialAiEnabled,
         lastMessageAt: null,
         lastMessagePreview: null,
@@ -226,6 +265,7 @@ export async function getOrCreateConversationByPhone(input: {
     clientId: null,
     assignedUserId: null,
     assignedUserName: null,
+    contactNote: null,
     aiEnabled: initialAiEnabled,
     lastMessageAt: null,
     lastMessagePreview: null,

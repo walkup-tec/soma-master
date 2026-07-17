@@ -1,0 +1,1 @@
+export const CHAT_CONTACT_NOTE_MAX_LENGTH = 1000;

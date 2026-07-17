@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { IdCard, Link2, Loader2, Plus } from "lucide-react";
+import { IdCard, Link2, Loader2, NotebookPen, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { ClientAttendanceDialog } from "@/components/clients/client-attendance-dialog";
 import { ClientFieldInput } from "@/components/clients/client-field-input";
 import { StatusBadge } from "@/components/clients/status-badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -18,8 +19,10 @@ import type { ChatConversation } from "@/lib/chat/chat.types";
 import {
   addChatClientProductFn,
   createAndLinkChatClientFn,
+  saveChatContactNoteFn,
   setChatClientStatusFn,
 } from "@/lib/chat/chat.server";
+import { CHAT_CONTACT_NOTE_MAX_LENGTH } from "@/lib/chat/chat-contact-note.constants";
 import type { ClientFieldId } from "@/lib/config/client-fields";
 import { productFieldsForImport } from "@/lib/clients/product-fields";
 import type { AttendanceStatusConfig, BankConfig, ProductConfig } from "@/lib/config/settings-types";
@@ -45,6 +48,87 @@ function seedFieldsFromConversation(
   if (requiredIds.includes("telefone") && phone) seed.telefone = phone;
   if (requiredIds.includes("whatsapp") && phone) seed.whatsapp = phone;
   return seed;
+}
+
+function ContactNoteEditor({
+  conversation,
+  onUpdated,
+}: {
+  conversation: ChatConversation;
+  onUpdated: (next: ChatConversation) => void;
+}) {
+  const saveContactNote = useServerFn(saveChatContactNoteFn);
+  const [note, setNote] = useState(conversation.contactNote ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setNote(conversation.contactNote ?? "");
+  }, [conversation.id, conversation.contactNote]);
+
+  const savedNote = (conversation.contactNote ?? "").trim();
+  const normalizedNote = note.trim();
+  const changed = normalizedNote !== savedNote;
+
+  async function handleSave() {
+    if (!changed || saving) return;
+    setSaving(true);
+    try {
+      const next = await saveContactNote({
+        data: { conversationId: conversation.id, note },
+      });
+      onUpdated(next);
+      toast.success(normalizedNote ? "Observação salva" : "Observação removida");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar observação");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+      <div className="flex items-center gap-1.5">
+        <NotebookPen className="size-3.5 text-primary" aria-hidden="true" />
+        <Label htmlFor={`chat-contact-note-${conversation.id}`} className="text-xs font-medium">
+          Observação do contato
+        </Label>
+      </div>
+      <Textarea
+        id={`chat-contact-note-${conversation.id}`}
+        value={note}
+        maxLength={CHAT_CONTACT_NOTE_MAX_LENGTH}
+        placeholder="Ex.: prefere contato após as 14h…"
+        className="min-h-20 resize-y text-xs leading-relaxed"
+        onChange={(event) => setNote(event.target.value)}
+        onKeyDown={(event) => {
+          if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            event.preventDefault();
+            void handleSave();
+          }
+        }}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] text-muted-foreground">
+          {note.length}/{CHAT_CONTACT_NOTE_MAX_LENGTH}
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 cursor-pointer px-2.5 text-xs"
+          disabled={!changed || saving}
+          onClick={() => void handleSave()}
+        >
+          {saving ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Save className="size-3.5" aria-hidden="true" />
+          )}
+          Salvar
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function ChatContactPanel({
@@ -153,6 +237,7 @@ export function ChatContactPanel({
           <p className="text-xs text-muted-foreground">IA nesta conversa</p>
           <p className="font-medium">{conversation.aiEnabled ? "Ligada" : "Pausada"}</p>
         </div>
+        <ContactNoteEditor conversation={conversation} onUpdated={onUpdated} />
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Produtos do cliente</Label>
           {linkedProducts.length > 0 ? (
@@ -290,6 +375,7 @@ export function ChatContactPanel({
         <p className="text-xs text-muted-foreground">IA nesta conversa</p>
         <p className="font-medium">{conversation.aiEnabled ? "Ligada" : "Pausada"}</p>
       </div>
+      <ContactNoteEditor conversation={conversation} onUpdated={onUpdated} />
 
       <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
         <div>

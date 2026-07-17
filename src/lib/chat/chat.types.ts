@@ -11,6 +11,8 @@ export type ChatConversation = {
   clientId: string | null;
   assignedUserId: string | null;
   assignedUserName: string | null;
+  /** Nota interna da conversa, exibida somente na barra lateral do contato. */
+  contactNote: string | null;
   /** IA local da conversa — false quando atendente entra. */
   aiEnabled: boolean;
   lastMessageAt: string | null;

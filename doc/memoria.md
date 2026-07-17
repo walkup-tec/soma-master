@@ -1,3 +1,10 @@
+## 2026-07-17 13:44 — Observação do contato na barra lateral
+- `chat_conversations.contact_note` guarda nota interna da conversa, exibida somente no painel lateral.
+- Editor com limite 1.000, contador, Salvar, Ctrl/Cmd+Enter e feedback discreto; disponível com ou sem cliente CRM.
+- Fluxo separado em server function, service e repository; migration idempotente; build client+SSR OK.
+- LOG: `doc/LOG-2026-07-17__134400__chat-observacao-contato-barra-lateral.md`.
+- Keywords: observação contato, contact_note, nota interna conversa.
+
 ## 2026-07-17 13:38 — Card do chat reorganizado
 - Card agora mostra contato + ícone `Sparkles` para ativar/pausar IA, todos os produtos, divisor fino e status.
 - Removidos atendente atribuído e prévia da mensagem; espaçamento e foco por teclado refinados.

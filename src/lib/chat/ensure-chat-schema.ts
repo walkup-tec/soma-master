@@ -5,6 +5,10 @@ let ensured = false;
 /** Migrations leves — sempre rodam (IF NOT EXISTS), mesmo após o bootstrap completo. */
 async function ensureChatMigrations(sql: Sql): Promise<void> {
   await sql`
+    alter table crm.chat_conversations
+    add column if not exists contact_note text null
+  `;
+  await sql`
     alter table crm.chat_ai_settings
     add column if not exists webhook_public_base_url text null
   `;
@@ -62,6 +66,7 @@ export async function ensureChatSchema(sql: Sql): Promise<void> {
       client_id text null references crm.clients(id) on delete set null,
       assigned_user_id text null references crm.users(id) on delete set null,
       assigned_user_name text null,
+      contact_note text null,
       ai_enabled boolean not null default true,
       last_message_at timestamptz null,
       last_message_preview text null,

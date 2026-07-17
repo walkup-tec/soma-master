@@ -48,6 +48,10 @@ import {
   CHAT_IMAGE_MAX_BYTES,
 } from "@/lib/chat/chat-media.constants";
 import { isOpenAiConfigured } from "@/lib/chat/openai.adapter";
+import {
+  saveChatContactNote,
+} from "@/lib/chat/chat-contact-note.service";
+import { CHAT_CONTACT_NOTE_MAX_LENGTH } from "@/lib/chat/chat-contact-note.constants";
 import { createClientAttendance } from "@/lib/clients/client-attendance.repository";
 import { createClientAttachmentFromChatMedia } from "@/lib/clients/client-attachment.repository";
 import {
@@ -119,6 +123,24 @@ export const getChatThreadFn = createServerFn({ method: "POST" })
     await markConversationRead(data.conversationId);
     const messages = await listMessages(data.conversationId);
     return { conversation, messages };
+  });
+
+export const saveChatContactNoteFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { conversationId?: string; note?: string };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const note = String(body.note ?? "");
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    if (note.length > CHAT_CONTACT_NOTE_MAX_LENGTH) {
+      throw new Error(
+        `A observação deve ter no máximo ${CHAT_CONTACT_NOTE_MAX_LENGTH} caracteres.`,
+      );
+    }
+    return { conversationId, note };
+  })
+  .handler(async ({ data }) => {
+    await requireChatUser();
+    return saveChatContactNote(data);
   });
 
 export const attachChatMediaToClientFn = createServerFn({ method: "POST" })
