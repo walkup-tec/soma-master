@@ -20,6 +20,7 @@ import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes
 import { Route as AppClientesRouteImport } from './routes/app/clientes'
 import { Route as AppChatRouteImport } from './routes/app/chat'
 import { Route as AppAgendaRouteImport } from './routes/app/agenda'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AppClientesNovoRouteImport } from './routes/app/clientes.novo'
 import { Route as AppChatIaRouteImport } from './routes/app/chat.ia'
 import { Route as ApiSettingsChatbotEvolutionRouteImport } from './routes/api/settings/chatbot/evolution'
@@ -80,6 +81,11 @@ const AppAgendaRoute = AppAgendaRouteImport.update({
   path: '/agenda',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppClientesNovoRoute = AppClientesNovoRouteImport.update({
   id: '/novo',
   path: '/novo',
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
   '/app/agenda': typeof AppAgendaRoute
   '/app/chat': typeof AppChatRouteWithChildren
   '/app/clientes': typeof AppClientesRouteWithChildren
@@ -123,6 +130,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
   '/app/agenda': typeof AppAgendaRoute
   '/app/chat': typeof AppChatRouteWithChildren
   '/app/clientes': typeof AppClientesRouteWithChildren
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/api/health': typeof ApiHealthRoute
   '/app/agenda': typeof AppAgendaRoute
   '/app/chat': typeof AppChatRouteWithChildren
   '/app/clientes': typeof AppClientesRouteWithChildren
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/api/health'
     | '/app/agenda'
     | '/app/chat'
     | '/app/clientes'
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/api/health'
     | '/app/agenda'
     | '/app/chat'
     | '/app/clientes'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/login'
+    | '/api/health'
     | '/app/agenda'
     | '/app/chat'
     | '/app/clientes'
@@ -211,6 +223,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiSettingsChatbotEducationRoute: typeof ApiSettingsChatbotEducationRoute
   ApiSettingsChatbotEvolutionRoute: typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -294,6 +307,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgendaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/clientes/novo': {
       id: '/app/clientes/novo'
       path: '/novo'
@@ -376,6 +396,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiSettingsChatbotEducationRoute: ApiSettingsChatbotEducationRoute,
   ApiSettingsChatbotEvolutionRoute: ApiSettingsChatbotEvolutionRoute,
 }

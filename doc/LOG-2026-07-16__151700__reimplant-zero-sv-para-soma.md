@@ -34,8 +34,3 @@ Substituir junction por `node_modules` fÃ­sico prÃ³prio (quando sem locks):
 ## Keywords
 
 reimplant, sinal-verde, soma, logos, env, cores, junction temporaria
-
-## Update node_modules
-- Cópia física concluída (sem junction). Entry sem @fs CRM.
-- Servidor: http://127.0.0.1:3090/login 200
-

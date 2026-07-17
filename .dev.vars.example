@@ -6,7 +6,7 @@ SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
 DATABASE_URL=postgresql://postgres.SEU-PROJECT-REF:[SENHA]@....pooler.supabase.com:6543/postgres
 
-APP_URL=http://localhost:8080
+APP_URL=http://localhost:3090
 
 # --- E-mail transacional ---
 MAIL_MODE=smtp
@@ -16,3 +16,17 @@ SMTP_PORT=465
 SMTP_SECURE=true
 SMTP_USER=draxsistemas@gmail.com
 SMTP_PASS=
+
+# --- Chat WhatsApp + IA ---
+OPENAI_API_KEY=
+EVOLUTION_API_URL=
+EVOLUTION_API_KEY=
+EVOLUTION_INSTANCE=soma
+CHAT_WEBHOOK_SECRET=
+
+# --- Chat WhatsApp + IA ---
+OPENAI_API_KEY=
+EVOLUTION_API_URL=
+EVOLUTION_API_KEY=
+EVOLUTION_INSTANCE=soma
+CHAT_WEBHOOK_SECRET=

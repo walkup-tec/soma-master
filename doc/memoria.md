@@ -132,3 +132,54 @@
 | Backup | `D:\Soma-reimplant-preserve-20260716-142637` |
 
 
+
+## 2026-07-17 07:34 — AppTopbar tema + 404 bad-gateway
+- Fix tema: commit `110beb2` (nao iniciar dark=false). Overlay ja em commits anteriores.
+- Site 404 `/api/errors/bad-gateway` = Traefik/publish :30300 — heal burst + Redeploy.
+- Keywords: app-topbar, tema, heal-soma, bad-gateway
+
+
+## 2026-07-17 07:39 — Licoes Traefik WABA
+- Estabilidade WABA = anti-thrash (bootstrap+443+entrypoint), nao Traefik separado.
+- Soma segue heal 45s + hostgw `:30300`.
+
+
+## 2026-07-17 07:41 — Heal Soma VPS saudavel
+- `local/easy/app_login:200` publish:yes needs_heal:no; timer+watch ativos.
+
+
+## 2026-07-17 07:51 — Tema dark pos-status
+- Causa: React hydrate limpa class dark. Fix `a873ac3` + status SPA.
+
+
+## 2026-07-17 08:00 — Chat envio lento
+- Optimistic UI + join skip + EVO 12s. Redeploy para validar.
+
+
+## 2026-07-17 08:05 — Menu secoes
+- Parceiros (vazio) + Producao propria (menus atuais). Keywords: MENU_SECTIONS, sidebar.
+
+
+## 2026-07-17 08:08 — Inbox toggle IA global
+- Botao IA no header do Inbox liga/desliga `aiGlobalEnabled`. Keywords: setChatAiGlobalEnabledFn.
+
+
+## 2026-07-17 08:09 — Logo menu colorida
+- `surface=brand` no sidebar. Keywords: logo-claro, Logo brand.
+
+
+## 2026-07-17 08:11 — Icone IA conversa
+- Toggle IA no thread: Sparkles. Keywords: Sparkles, IA on/off chat.
+
+
+## 2026-07-17 08:13 — Sem botao Assumir
+- openConversation faz join automatico. Keywords: joinChat, Assumir removido.
+
+
+## 2026-07-17 08:18 — Vincular contato chat
+- ChatContactPanel + createAndLinkChatClientFn. Keywords: produto, requiredFieldIds, status atendimento.
+
+
+## 2026-07-17 08:20 — Produto cor/tag
+- `ProductConfig.tag` + `color`; resolveProductTagLabel. Keywords: produto tag badge.
+
