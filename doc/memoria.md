@@ -1,3 +1,10 @@
+## 2026-07-17 14:00 — Gatilho de deploy de todo estado pendente
+- `main` e `origin/main` estavam em `6987dda`; demais modificações aparentes eram somente LF/CRLF (`NO_CONTENT_DIFF`).
+- Produção respondia HTTP 200, porém com assets diferentes do build local; novo commit/push disparou o Easypanel.
+- GitHub CLI local sem autenticação; validar conclusão e SHA pelo título do deploy no Maker.
+- LOG: `doc/LOG-2026-07-17__140000__deploy-tudo-pendente-producao.md`.
+- Keywords: deploy pendente, trigger Easypanel, Maker, LF CRLF.
+
 ## 2026-07-17 13:55 — Download de anexo WhatsApp sem extensão
 - Mídia inbound salvava `fileName` sem extensão (`imagem-recebida`) → download do modal saía em "formato estranho".
 - Novo `src/lib/files/file-name-extension.ts` (`ensureFileNameExtension`): aplica extensão pelo MIME no salvamento inbound, na cópia chat→anexo, no handler de download e na rota `/api/chat/media` (corrige inclusive anexos antigos ao servir).
