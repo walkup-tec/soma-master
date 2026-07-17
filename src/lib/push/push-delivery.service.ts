@@ -92,12 +92,8 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function buildPushEmailHtml(
-  title: string,
-  message: string,
-): { subject: string; text: string; html: string } {
-  const subject =
-    String(title || "Comunicado Soma Promotora").trim() || "Comunicado Soma Promotora";
+function buildPushEmailHtml(title: string, message: string): { subject: string; text: string; html: string } {
+  const subject = String(title || "Comunicado Soma Promotora").trim() || "Comunicado Soma Promotora";
   const text = `${subject}\n\n${message}\n\n— Soma Promotora`;
   const html = `<!DOCTYPE html><html lang="pt-BR"><body style="font-family:Segoe UI,Arial,sans-serif;background:#f5f5f5;padding:24px;">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e4e4e4;overflow:hidden;">
@@ -114,33 +110,58 @@ async function deliverEmails(title: string, text: string, recipients: string[]) 
   let sent = 0;
   let skipped = 0;
   let failed = 0;
-  if (!recipients.length) return { sent, skipped, failed };
-  if (!isSmtpMailEnabled()) {
-    return { sent: 0, skipped: recipients.length, failed: 0 };
+  let detail = "";
+
+  if (!recipients.length) {
+    return {
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      detail: "Nenhum destinatário de e-mail encontrado (usuários/parceiros).",
+    };
   }
+
+  if (!isSmtpMailEnabled()) {
+    return {
+      sent: 0,
+      skipped: recipients.length,
+      failed: recipients.length,
+      detail: "SMTP desligado (MAIL_MODE diferente de smtp). E-mails não foram enviados.",
+    };
+  }
+
   const template = buildPushEmailHtml(title, text);
-  const outcomes = await Promise.all(
-    recipients.map(async (toEmail) => {
-      const normalized = normalizeEmail(toEmail);
-      if (!normalized.includes("@")) return "skip" as const;
-      try {
-        await sendSmtpMail({
-          to: normalized,
-          subject: template.subject,
-          text: template.text,
-          html: template.html,
-        });
-        return "sent" as const;
-      } catch (error) {
-        console.error(`[push] falha e-mail para ${normalized}:`, error);
-        return "failed" as const;
-      }
-    }),
-  );
-  sent = outcomes.filter((row) => row === "sent").length;
-  failed = outcomes.filter((row) => row === "failed").length;
-  skipped = outcomes.filter((row) => row === "skip").length;
-  return { sent, skipped, failed };
+  // Sequencial: Gmail costuma rejeitar rajada paralela.
+  for (const toEmail of recipients) {
+    const normalized = normalizeEmail(toEmail);
+    if (!normalized.includes("@")) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await sendSmtpMail({
+        to: normalized,
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+      });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      const message = error instanceof Error ? error.message : "Falha SMTP.";
+      console.error(`[push] falha e-mail para ${normalized}:`, message);
+      if (!detail) detail = message;
+    }
+  }
+
+  if (!detail) {
+    detail =
+      failed > 0
+        ? `${sent} enviado(s), ${failed} falha(s), ${skipped} ignorado(s).`
+        : `${sent} e-mail(s) enviado(s).`;
+  }
+
+  return { sent, skipped, failed, detail };
 }
 
 function validatePushInput(input: {
@@ -167,9 +188,7 @@ function validatePushInput(input: {
     );
   }
   if (input.image && !audiences.includes("community")) {
-    throw new Error(
-      "A imagem só pode ser enviada quando o destino Comunidade WhatsApp estiver marcado.",
-    );
+    throw new Error("A imagem só pode ser enviada quando o destino Comunidade WhatsApp estiver marcado.");
   }
   if (audiences.includes("community") && !String(input.title || "").trim()) {
     throw new Error("Informe o título para publicar na comunidade WhatsApp.");
@@ -356,7 +375,7 @@ async function deliverPreparedPushMessage(messageId: string, fingerprint: string
       parallelTasks.push(
         deliverEmails(current.title, current.reviewedText, recipients).then((email) => {
           deliveryResults.email = email;
-          if (email.failed > 0) hasFailure = true;
+          if (email.failed > 0 || email.sent === 0) hasFailure = true;
         }),
       );
     }
@@ -442,7 +461,9 @@ export async function sendPushMessage(input: {
   return { message: finalMessage, deduplicated: false };
 }
 
-export async function listPushAlertsForSession(session: SessionData): Promise<SomaPushAlertView[]> {
+export async function listPushAlertsForSession(
+  session: SessionData,
+): Promise<SomaPushAlertView[]> {
   const email = normalizeEmail(session.email);
   if (!email.includes("@")) return [];
 

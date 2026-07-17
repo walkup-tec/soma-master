@@ -81,10 +81,7 @@ export function getEvolutionPublicConfig(): {
   };
 }
 
-async function evolutionFetch(
-  path: string,
-  init?: RequestInit,
-): Promise<{
+async function evolutionFetch(path: string, init?: RequestInit): Promise<{
   ok: boolean;
   status: number;
   raw: unknown;
@@ -383,19 +380,21 @@ export async function evolutionConnectQr(): Promise<{
 export async function evolutionSendText(input: {
   phone: string;
   text: string;
+  /** Sobrescreve EVOLUTION_INSTANCE (ex.: envio à comunidade). */
+  instanceName?: string;
 }): Promise<{ ok: boolean; raw?: unknown; error?: string }> {
   if (!isEvolutionConfigured()) {
-    return {
-      ok: false,
-      error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE).",
-    };
+    return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE)." };
   }
 
-  const { instance } = evolutionEnv();
+  const { instance: defaultInstance } = evolutionEnv();
+  const instance = String(input.instanceName || defaultInstance).trim() || defaultInstance;
   assertSomaOwnedInstance(instance);
   const rawTarget = String(input.phone || "").trim();
   // Grupos/comunidade usam JID completo (ex.: 120363...@g.us); contatos usam só dígitos.
-  const number = rawTarget.includes("@g.us") ? rawTarget : rawTarget.replace(/\D+/g, "");
+  const number = rawTarget.includes("@g.us")
+    ? rawTarget
+    : rawTarget.replace(/\D+/g, "");
 
   // 12s — chat humano não pode travar 45s; falha rápida + toast no CRM
   const result = await evolutionFetch(`/message/sendText/${encodeURIComponent(instance)}`, {
@@ -423,21 +422,22 @@ export async function evolutionSendImage(input: {
   mimeType: string;
   fileName: string;
   caption?: string;
+  instanceName?: string;
 }): Promise<{ ok: boolean; raw?: unknown; error?: string }> {
   if (!isEvolutionConfigured()) {
-    return {
-      ok: false,
-      error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE).",
-    };
+    return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE)." };
   }
   if (!/^image\/(jpeg|png|webp)$/i.test(input.mimeType)) {
     return { ok: false, error: "Formato de imagem não permitido." };
   }
 
-  const { instance } = evolutionEnv();
+  const { instance: defaultInstance } = evolutionEnv();
+  const instance = String(input.instanceName || defaultInstance).trim() || defaultInstance;
   assertSomaOwnedInstance(instance);
   const rawTarget = String(input.phone || "").trim();
-  const number = rawTarget.includes("@g.us") ? rawTarget : rawTarget.replace(/\D+/g, "");
+  const number = rawTarget.includes("@g.us")
+    ? rawTarget
+    : rawTarget.replace(/\D+/g, "");
   const result = await evolutionFetch(`/message/sendMedia/${encodeURIComponent(instance)}`, {
     method: "POST",
     body: JSON.stringify({
@@ -476,10 +476,9 @@ export async function evolutionGetMediaBase64(messageKey: Record<string, unknown
     },
   );
   if (!result.ok) return { ok: false, error: result.error };
-  const raw = (result.raw && typeof result.raw === "object" ? result.raw : {}) as Record<
-    string,
-    unknown
-  >;
+  const raw = (result.raw && typeof result.raw === "object"
+    ? result.raw
+    : {}) as Record<string, unknown>;
   const base64 =
     (typeof raw.base64 === "string" && raw.base64) ||
     (typeof raw.media === "string" && raw.media) ||

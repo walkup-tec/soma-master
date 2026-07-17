@@ -94,9 +94,7 @@ function ConfiguracoesPage() {
         <TabsContent value="bancos">
           <BanksSettings
             settings={settings}
-            onChange={(next) => {
-              void setSettings(next, "banks");
-            }}
+            onChange={(next) => setSettings(next, "banks")}
           />
         </TabsContent>
 

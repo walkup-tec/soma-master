@@ -11,6 +11,7 @@ import type {
 import type { MenuItemId } from "@/lib/config/menu-items";
 import type postgres from "postgres";
 import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
+import { isPartnerLinkedUserCategoryId } from "@/lib/partners/partner.constants";
 
 const DATA_DIR = join(process.cwd(), "data");
 const SETTINGS_FILE = join(DATA_DIR, "system-settings.json");
@@ -23,6 +24,10 @@ export type SettingsSaveSection =
   | "all";
 
 let cachedSettings: SystemSettings | null = null;
+
+export function clearSystemSettingsCache(): void {
+  cachedSettings = null;
+}
 
 type Tx = postgres.TransactionSql<Record<string, never>>;
 
@@ -49,22 +54,107 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
     alter table crm.products
     add column if not exists color text not null default '#64748b'
   `;
+  await sql`
+    alter table crm.products
+    add column if not exists available_for_partners boolean not null default false
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists storm_access_enabled boolean not null default false
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists storm_username text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists storm_password text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists bank_access_enabled boolean not null default false
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists bank_username text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists bank_password text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists operational_guide_enabled boolean not null default false
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists operational_guide_display_name text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists operational_guide_file_name text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists operational_guide_storage_id text not null default ''
+  `;
+  await sql`
+    create table if not exists crm.product_banks (
+      product_id text not null references crm.products(id) on delete cascade,
+      bank_id text not null references crm.banks(id) on delete cascade,
+      primary key (product_id, bank_id)
+    )
+  `;
 
-  const [categories, menus, products, productFields, banks, attendanceStatuses] = await Promise.all([
+  const [categories, menus, products, productFields, productBanks, banks, attendanceStatuses] =
+    await Promise.all([
     sql<{ id: string; name: string; home_menu_id: string | null }[]>`
       select id, name, home_menu_id from crm.user_categories order by name
     `,
     sql<{ category_id: string; menu_id: string }[]>`
       select category_id, menu_id from crm.user_category_menus
     `,
-    sql<{ id: string; name: string; tag: string | null; color: string | null }[]>`
-      select id, name, tag, color from crm.products order by name
+    sql<
+      {
+        id: string;
+        name: string;
+        tag: string | null;
+        color: string | null;
+        available_for_partners: boolean | null;
+      }[]
+    >`
+      select id, name, tag, color, available_for_partners from crm.products order by name
     `,
     sql<{ product_id: string; field_id: string; required: boolean }[]>`
       select product_id, field_id, required from crm.product_fields
     `,
-    sql<{ id: string; name: string }[]>`
-      select id, name from crm.banks order by name
+    sql<{ product_id: string; bank_id: string }[]>`
+      select product_id, bank_id from crm.product_banks
+    `,
+    sql<
+      {
+        id: string;
+        name: string;
+        storm_access_enabled: boolean | null;
+        storm_username: string | null;
+        storm_password: string | null;
+        bank_access_enabled: boolean | null;
+        bank_username: string | null;
+        bank_password: string | null;
+        operational_guide_enabled: boolean | null;
+        operational_guide_display_name: string | null;
+        operational_guide_file_name: string | null;
+        operational_guide_storage_id: string | null;
+      }[]
+    >`
+      select
+        id, name,
+        storm_access_enabled, storm_username, storm_password,
+        bank_access_enabled, bank_username, bank_password,
+        operational_guide_enabled,
+        operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id
+      from crm.banks
+      order by name
     `,
     sql<
       { id: string; label: string; color: string | null; auto_return_days: number | null; sort_order: number }[]
@@ -90,13 +180,22 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
     fieldsByProduct.set(row.product_id, entry);
   }
 
+  const banksByProduct = new Map<string, string[]>();
+  for (const row of productBanks) {
+    const list = banksByProduct.get(row.product_id) ?? [];
+    list.push(row.bank_id);
+    banksByProduct.set(row.product_id, list);
+  }
+
   return normalizeSettings({
-    categories: categories.map((category) => ({
-      id: category.id,
-      name: category.name,
-      menuIds: menuMap.get(category.id) ?? [],
-      homeMenuId: (category.home_menu_id as MenuItemId | null) ?? "dashboard",
-    })),
+    categories: categories
+      .filter((category) => !isPartnerLinkedUserCategoryId(category.id))
+      .map((category) => ({
+        id: category.id,
+        name: category.name,
+        menuIds: menuMap.get(category.id) ?? [],
+        homeMenuId: (category.home_menu_id as MenuItemId | null) ?? "dashboard",
+      })),
     products: products.map((product) => {
       const fields = fieldsByProduct.get(product.id) ?? { required: [], optional: [] };
       return {
@@ -104,11 +203,33 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
         name: product.name,
         tag: product.tag ?? "",
         color: product.color ?? "#64748b",
+        bankIds: banksByProduct.get(product.id) ?? [],
+        availableForPartners: Boolean(product.available_for_partners),
         requiredFieldIds: fields.required,
         availableFieldIds: fields.optional,
       };
     }),
-    banks: banks.map((bank) => ({ id: bank.id, name: bank.name })),
+    banks: banks.map((bank) => {
+      const storageId = String(bank.operational_guide_storage_id ?? "").trim();
+      return {
+        id: bank.id,
+        name: bank.name,
+        stormAccessEnabled: Boolean(bank.storm_access_enabled),
+        stormUsername: bank.storm_username ?? "",
+        stormPassword: bank.storm_password ?? "",
+        bankAccessEnabled: Boolean(bank.bank_access_enabled),
+        bankUsername: bank.bank_username ?? "",
+        bankPassword: bank.bank_password ?? "",
+        operationalGuideEnabled: Boolean(bank.operational_guide_enabled),
+        operationalGuide: storageId
+          ? {
+              displayName: bank.operational_guide_display_name ?? "",
+              fileName: bank.operational_guide_file_name ?? "",
+              storageId,
+            }
+          : null,
+      };
+    }),
     attendanceStatuses:
       attendanceStatuses.length > 0
         ? attendanceStatuses.map((status) => ({
@@ -123,17 +244,26 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
 
 async function syncCategories(tx: Tx, categories: UserCategory[]): Promise<void> {
   if (categories.length === 0) {
-    await tx`delete from crm.user_category_menus`;
-    await tx`delete from crm.user_categories`;
+    // Não apaga partner-cat-* (FK técnica de parceiros).
+    await tx`
+      delete from crm.user_category_menus m
+      where m.category_id not like 'partner-cat-%'
+    `;
+    await tx`
+      delete from crm.user_categories c
+      where c.id not like 'partner-cat-%'
+    `;
     return;
   }
 
-  const payload = categories.map((category) => ({
-    id: category.id,
-    name: category.name,
-    menu_ids: category.menuIds,
-    home_menu_id: category.homeMenuId,
-  }));
+  const payload = categories
+    .filter((category) => !isPartnerLinkedUserCategoryId(category.id))
+    .map((category) => ({
+      id: category.id,
+      name: category.name,
+      menu_ids: category.menuIds,
+      home_menu_id: category.homeMenuId,
+    }));
 
   await tx`
     with input as (
@@ -147,12 +277,14 @@ async function syncCategories(tx: Tx, categories: UserCategory[]): Promise<void>
     ),
     del_menu_orphans as (
       delete from crm.user_category_menus m
-      where not exists (select 1 from input i where i.id = m.category_id)
+      where m.category_id not like 'partner-cat-%'
+        and not exists (select 1 from input i where i.id = m.category_id)
       returning 1
     ),
     del_cats as (
       delete from crm.user_categories c
-      where not exists (select 1 from input i where i.id = c.id)
+      where c.id not like 'partner-cat-%'
+        and not exists (select 1 from input i where i.id = c.id)
       returning 1
     ),
     upsert_cats as (
@@ -189,6 +321,7 @@ async function syncCategories(tx: Tx, categories: UserCategory[]): Promise<void>
 
 async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
   if (products.length === 0) {
+    await tx`delete from crm.product_banks`;
     await tx`delete from crm.product_fields`;
     await tx`delete from crm.products`;
     return;
@@ -199,7 +332,9 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
     name: product.name,
     tag: product.tag || "",
     color: product.color || "#64748b",
+    available_for_partners: Boolean(product.availableForPartners),
     required_field_ids: product.requiredFieldIds,
+    bank_ids: product.bankIds ?? [],
   }));
 
   await tx`
@@ -210,12 +345,19 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
         name text,
         tag text,
         color text,
-        required_field_ids jsonb
+        available_for_partners boolean,
+        required_field_ids jsonb,
+        bank_ids jsonb
       )
     ),
     del_field_orphans as (
       delete from crm.product_fields f
       where not exists (select 1 from input i where i.id = f.product_id)
+      returning 1
+    ),
+    del_bank_orphans as (
+      delete from crm.product_banks b
+      where not exists (select 1 from input i where i.id = b.product_id)
       returning 1
     ),
     del_products as (
@@ -224,12 +366,13 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       returning 1
     ),
     upsert_products as (
-      insert into crm.products (id, name, tag, color, updated_at)
-      select id, name, tag, color, now() from input
+      insert into crm.products (id, name, tag, color, available_for_partners, updated_at)
+      select id, name, tag, color, available_for_partners, now() from input
       on conflict (id) do update set
         name = excluded.name,
         tag = excluded.tag,
         color = excluded.color,
+        available_for_partners = excluded.available_for_partners,
         updated_at = now()
       returning id
     ),
@@ -237,6 +380,12 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       delete from crm.product_fields f
       using input i
       where f.product_id = i.id
+      returning 1
+    ),
+    del_banks as (
+      delete from crm.product_banks b
+      using input i
+      where b.product_id = i.id
       returning 1
     )
     select 1
@@ -250,24 +399,70 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       name text,
       tag text,
       color text,
-      required_field_ids jsonb
+      available_for_partners boolean,
+      required_field_ids jsonb,
+      bank_ids jsonb
     )
     cross join lateral jsonb_array_elements_text(coalesce(i.required_field_ids, '[]'::jsonb)) as field_id
     on conflict (product_id, field_id) do update set required = excluded.required
+  `;
+
+  await tx`
+    insert into crm.product_banks (product_id, bank_id)
+    select i.id, bank_id
+    from jsonb_to_recordset(${tx.json(payload)}) as i(
+      id text,
+      name text,
+      tag text,
+      color text,
+      available_for_partners boolean,
+      required_field_ids jsonb,
+      bank_ids jsonb
+    )
+    cross join lateral jsonb_array_elements_text(coalesce(i.bank_ids, '[]'::jsonb)) as bank_id
+    where exists (select 1 from crm.banks b where b.id = bank_id)
+    on conflict do nothing
   `;
 }
 
 async function syncBanks(tx: Tx, banks: BankConfig[]): Promise<void> {
   if (banks.length === 0) {
+    await tx`delete from crm.product_banks`;
     await tx`delete from crm.banks`;
     return;
   }
 
-  const payload = banks.map((bank) => ({ id: bank.id, name: bank.name }));
+  const payload = banks.map((bank) => ({
+    id: bank.id,
+    name: bank.name,
+    storm_access_enabled: Boolean(bank.stormAccessEnabled),
+    storm_username: bank.stormUsername || "",
+    storm_password: bank.stormPassword || "",
+    bank_access_enabled: Boolean(bank.bankAccessEnabled),
+    bank_username: bank.bankUsername || "",
+    bank_password: bank.bankPassword || "",
+    operational_guide_enabled: Boolean(bank.operationalGuideEnabled),
+    operational_guide_display_name: bank.operationalGuide?.displayName || "",
+    operational_guide_file_name: bank.operationalGuide?.fileName || "",
+    operational_guide_storage_id: bank.operationalGuide?.storageId || "",
+  }));
 
   await tx`
     with input as (
-      select * from jsonb_to_recordset(${tx.json(payload)}) as x(id text, name text)
+      select * from jsonb_to_recordset(${tx.json(payload)}) as x(
+        id text,
+        name text,
+        storm_access_enabled boolean,
+        storm_username text,
+        storm_password text,
+        bank_access_enabled boolean,
+        bank_username text,
+        bank_password text,
+        operational_guide_enabled boolean,
+        operational_guide_display_name text,
+        operational_guide_file_name text,
+        operational_guide_storage_id text
+      )
     ),
     del_banks as (
       delete from crm.banks b
@@ -275,9 +470,35 @@ async function syncBanks(tx: Tx, banks: BankConfig[]): Promise<void> {
       returning 1
     ),
     upsert_banks as (
-      insert into crm.banks (id, name, updated_at)
-      select id, name, now() from input
-      on conflict (id) do update set name = excluded.name, updated_at = now()
+      insert into crm.banks (
+        id, name,
+        storm_access_enabled, storm_username, storm_password,
+        bank_access_enabled, bank_username, bank_password,
+        operational_guide_enabled,
+        operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id,
+        updated_at
+      )
+      select
+        id, name,
+        storm_access_enabled, storm_username, storm_password,
+        bank_access_enabled, bank_username, bank_password,
+        operational_guide_enabled,
+        operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id,
+        now()
+      from input
+      on conflict (id) do update set
+        name = excluded.name,
+        storm_access_enabled = excluded.storm_access_enabled,
+        storm_username = excluded.storm_username,
+        storm_password = excluded.storm_password,
+        bank_access_enabled = excluded.bank_access_enabled,
+        bank_username = excluded.bank_username,
+        bank_password = excluded.bank_password,
+        operational_guide_enabled = excluded.operational_guide_enabled,
+        operational_guide_display_name = excluded.operational_guide_display_name,
+        operational_guide_file_name = excluded.operational_guide_file_name,
+        operational_guide_storage_id = excluded.operational_guide_storage_id,
+        updated_at = now()
       returning id
     )
     select 1
@@ -351,14 +572,14 @@ async function saveSystemSettingsToPostgres(
   const sql = await getSql();
 
   await sql.begin(async (tx) => {
-    if (section === "all" || section === "categories") {
-      await syncCategories(tx, next.categories);
+    if (section === "all" || section === "banks") {
+      await syncBanks(tx, next.banks);
     }
     if (section === "all" || section === "products") {
       await syncProducts(tx, next.products);
     }
-    if (section === "all" || section === "banks") {
-      await syncBanks(tx, next.banks);
+    if (section === "all" || section === "categories") {
+      await syncCategories(tx, next.categories);
     }
     if (section === "all" || section === "attendanceStatuses") {
       await syncAttendanceStatuses(tx, next.attendanceStatuses);

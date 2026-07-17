@@ -16,13 +16,31 @@ export type ProductConfig = {
   tag: string;
   /** Hex #rrggbb — cor da tag (mesmo padrão dos status). */
   color: string;
+  /** Bancos (Configurações → Bancos) vinculados a este produto. */
+  bankIds: string[];
+  /** Reserva: disponibilizar produto no fluxo de parceiros. */
+  availableForPartners: boolean;
   availableFieldIds: ClientFieldId[];
   requiredFieldIds: ClientFieldId[];
+};
+
+export type BankOperationalGuide = {
+  displayName: string;
+  fileName: string;
+  storageId: string;
 };
 
 export type BankConfig = {
   id: string;
   name: string;
+  stormAccessEnabled: boolean;
+  stormUsername: string;
+  stormPassword: string;
+  bankAccessEnabled: boolean;
+  bankUsername: string;
+  bankPassword: string;
+  operationalGuideEnabled: boolean;
+  operationalGuide: BankOperationalGuide | null;
 };
 
 export type AttendanceStatusConfig = {

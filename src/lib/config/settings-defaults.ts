@@ -8,6 +8,7 @@ import type {
   UserCategory,
 } from "@/lib/config/settings-types";
 import { DEFAULT_STATUS_COLOR, normalizeStatusColor } from "@/lib/config/status-colors";
+import { isPartnerLinkedUserCategoryId } from "@/lib/partners/partner.constants";
 
 const masterCategoryId = "cat-master";
 const atendenteCategoryId = "cat-atendente";
@@ -60,6 +61,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       name: "Empréstimo CLT",
       tag: "CLT",
       color: "#be1c6a",
+      bankIds: [],
+      availableForPartners: false,
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone", "tipo_cliente", "renda_mensal"],
     },
@@ -68,6 +71,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       name: "Antecipação FGTS",
       tag: "FGTS",
       color: "#0d9488",
+      bankIds: [],
+      availableForPartners: false,
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone"],
     },
@@ -82,6 +87,8 @@ export function createEmptyProduct(): import("@/lib/config/settings-types").Prod
     name: "",
     tag: "",
     color: DEFAULT_STATUS_COLOR,
+    bankIds: [],
+    availableForPartners: false,
     availableFieldIds: [...ALL_CLIENT_FIELD_IDS],
     requiredFieldIds: [],
   });
@@ -91,6 +98,14 @@ export function createEmptyBank(): BankConfig {
   return {
     id: `bank-${crypto.randomUUID().slice(0, 8)}`,
     name: "",
+    stormAccessEnabled: false,
+    stormUsername: "",
+    stormPassword: "",
+    bankAccessEnabled: false,
+    bankUsername: "",
+    bankPassword: "",
+    operationalGuideEnabled: false,
+    operationalGuide: null,
   };
 }
 
@@ -144,7 +159,9 @@ export function normalizeSettings(settings: SystemSettings & { defaultCategoryId
       : DEFAULT_SYSTEM_SETTINGS.categories;
 
   const validMenuIds = new Set(ALL_MENU_ITEM_IDS);
-  const categories = rawCategories.map((c) => {
+  const categories = rawCategories
+    .filter((c) => !isPartnerLinkedUserCategoryId(c.id))
+    .map((c) => {
     const menuIds = ensureKanbanMenuForClientCategories(
       c.menuIds.filter((id): id is MenuItemId => validMenuIds.has(id as MenuItemId)),
     );
@@ -157,9 +174,14 @@ export function normalizeSettings(settings: SystemSettings & { defaultCategoryId
 
   const products = settings.products.map((p) => normalizeProductFields(p));
   const banks = normalizeBanks(settings.banks ?? []);
+  const bankIdSet = new Set(banks.map((bank) => bank.id));
+  const productsWithValidBanks = products.map((product) => ({
+    ...product,
+    bankIds: product.bankIds.filter((id) => bankIdSet.has(id)),
+  }));
   const attendanceStatuses = normalizeAttendanceStatuses(settings.attendanceStatuses ?? []);
 
-  return { categories, products, banks, attendanceStatuses };
+  return { categories, products: productsWithValidBanks, banks, attendanceStatuses };
 }
 
 export function createEmptyAttendanceStatus(): AttendanceStatusConfig {
@@ -203,10 +225,30 @@ export function normalizeAttendanceStatuses(
 export function normalizeBanks(banks: BankConfig[]): BankConfig[] {
   const seen = new Set<string>();
   return banks
-    .map((bank) => ({
-      id: String(bank.id ?? `bank-${crypto.randomUUID().slice(0, 8)}`),
-      name: String(bank.name ?? "").trim(),
-    }))
+    .map((bank) => {
+      const guideRaw = bank.operationalGuide;
+      const storageId = String(guideRaw?.storageId ?? "").trim();
+      const operationalGuide =
+        storageId.length > 0
+          ? {
+              displayName: String(guideRaw?.displayName ?? "").trim(),
+              fileName: String(guideRaw?.fileName ?? "").trim(),
+              storageId,
+            }
+          : null;
+      return {
+        id: String(bank.id ?? `bank-${crypto.randomUUID().slice(0, 8)}`),
+        name: String(bank.name ?? "").trim(),
+        stormAccessEnabled: Boolean(bank.stormAccessEnabled),
+        stormUsername: String(bank.stormUsername ?? "").trim(),
+        stormPassword: String(bank.stormPassword ?? ""),
+        bankAccessEnabled: Boolean(bank.bankAccessEnabled),
+        bankUsername: String(bank.bankUsername ?? "").trim(),
+        bankPassword: String(bank.bankPassword ?? ""),
+        operationalGuideEnabled: Boolean(bank.operationalGuideEnabled),
+        operationalGuide,
+      };
+    })
     .filter((bank) => {
       if (!bank.name) return false;
       const key = bank.name.toLowerCase();
@@ -244,11 +286,16 @@ export function normalizeProductFields(
   const name = String(product.name ?? "").trim();
   // Tag segue o nome do produto (sem campo separado na UI)
   const tag = name || String(product.tag ?? "").trim();
+  const bankIds = Array.isArray(product.bankIds)
+    ? [...new Set(product.bankIds.map((id) => String(id || "").trim()).filter(Boolean))]
+    : [];
   return {
     ...product,
     name,
     tag,
     color: normalizeStatusColor(product.color, DEFAULT_STATUS_COLOR),
+    bankIds,
+    availableForPartners: Boolean(product.availableForPartners),
     availableFieldIds,
     requiredFieldIds,
   };

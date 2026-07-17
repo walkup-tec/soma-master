@@ -1,3 +1,26 @@
+## 2026-07-17 19:25 — Fix Push parcial (comunidade + e-mail)
+- Auto-resolve JID via inviteInfo; envio EVO com instanceName; e-mail sequencial + falha real se 0 enviados.
+- Histórico/toast exibem detalhe da falha.
+- Em produção: definir `SOMA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID` se a Evolution timeoutar.
+- LOG: `doc/LOG-2026-07-17__192500__fix-push-parcial-comunidade-email.md`.
+
+## 2026-07-17 19:20 — Bancos (acessos/roteiro) + Produtos em etapas
+- Bancos: Storm/Banco (user/senha + copiar) e roteiro PDF com nome de exibição.
+- Produtos: wizard (nome+cor → bancos → campos pessoais/prof/fin → parceiros).
+- LOG: `doc/LOG-2026-07-17__192000__bancos-acessos-produtos-wizard.md`.
+- Keywords: bancos storm, roteiro pdf, wizard produtos, parceiros.
+
+## 2026-07-17 18:55 — Removido card Comunidade WhatsApp da tela Push
+- UI de config (link, instância, JID, Salvar comunidade) retirada de Gestão → Push.
+- Destino “Comunidade WhatsApp” e envio via env/constants continuam no backend.
+- Keywords: push, comunidade UI.
+
+## 2026-07-17 18:50 — Categorias de usuário ≠ categorias de parceiro
+- Removida correlação indevida: seed de parceiro não polui mais Configurações → Categorias.
+- FK técnica: `partner-cat-*`; UI volta a Master / Atendente / Gerente (defaults).
+- LOG: `doc/LOG-2026-07-17__185000__fix-categorias-usuario-vs-parceiro.md`.
+- Keywords: categorias usuário, partner-cat, user_categories.
+
 ## 2026-07-17 18:45 — Modal deploy: forçar paleta Soma + invalidar cache SW
 - Estilos versionados (`soma-brand-v3`) sobrescrevem CSS antigo; marca “Soma Promotora” no card.
 - Cores fixas: magenta `#be1c6a`, lima `#ecf759`, azul `#2775e5` — sem pink/roxo/ciano WABA.

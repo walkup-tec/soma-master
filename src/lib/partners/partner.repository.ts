@@ -1,5 +1,6 @@
 import { ALL_MENU_ITEM_IDS, type MenuItemId } from "@/lib/config/menu-items";
 import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
+import { partnerCategoryUserCategoryId } from "@/lib/partners/partner.constants";
 import type {
   PartnerEventAction,
   PartnerEventRecord,

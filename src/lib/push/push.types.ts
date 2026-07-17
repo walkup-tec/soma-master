@@ -18,7 +18,7 @@ export type SomaPushDeliveryResults = {
   users?: { targeted: number; roles: SomaPushUserRole[] };
   partners?: { targeted: number };
   community?: { ok: boolean; detail: string; groupJid?: string };
-  email?: { sent: number; skipped: number; failed: number };
+  email?: { sent: number; skipped: number; failed: number; detail?: string };
 };
 
 export type SomaPushMessage = {

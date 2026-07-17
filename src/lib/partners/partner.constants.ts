@@ -13,6 +13,27 @@ export const PARTNER_CATEGORIES: Array<{ value: PartnerCategory; label: string }
   { value: "atendente", label: "Atendente" },
 ];
 
+/**
+ * IDs em `crm.user_categories` usados só para FK de usuários-parceiro.
+ * Não aparecem em Configurações → Categorias de usuário.
+ */
+export function partnerCategoryUserCategoryId(category: PartnerCategory): string {
+  return `partner-cat-${category}`;
+}
+
+/** Categorias legadas que foram seedadas por engano como categorias de usuário. */
+export const LEGACY_PARTNER_ONLY_CATEGORY_IDS = [
+  "cat-substabelecido",
+  "cat-suporte",
+  "cat-corban",
+] as const;
+
+/** True se o id não deve aparecer na lista de categorias de usuário do admin. */
+export function isPartnerLinkedUserCategoryId(id: string): boolean {
+  if (id.startsWith("partner-cat-")) return true;
+  return (LEGACY_PARTNER_ONLY_CATEGORY_IDS as readonly string[]).includes(id);
+}
+
 export const PARTNER_CATEGORY_ALIASES: Record<PartnerCategory, string> = {
   substabelecido: "SB",
   gerente: "GE",

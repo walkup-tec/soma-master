@@ -1,26 +1,31 @@
 import { MASTER_USER_ID } from "@/lib/auth/master-user";
+import { DEFAULT_SYSTEM_SETTINGS } from "@/lib/config/settings-defaults";
 import type { Sql } from "@/lib/db/postgres";
+import {
+  LEGACY_PARTNER_ONLY_CATEGORY_IDS,
+  PARTNER_CATEGORIES,
+  partnerCategoryUserCategoryId,
+} from "@/lib/partners/partner.constants";
 
 let ensured = false;
-
-const PARTNER_CATEGORIES = [
-  ["cat-substabelecido", "Substabelecido"],
-  ["cat-gerente", "Gerente"],
-  ["cat-suporte", "Suporte"],
-  ["cat-corban", "Corban"],
-  ["cat-atendente", "Atendente"],
-] as const;
 
 /** Provisiona o domínio Parceiros de forma idempotente durante o boot. */
 export async function ensurePartnerSchema(sql: Sql): Promise<void> {
   if (ensured) return;
 
   await sql.begin(async (tx) => {
-    for (const [id, name] of PARTNER_CATEGORIES) {
+    // Categorias técnicas só para FK de parceiros — prefixo partner-cat-* (não misturar com usuário).
+    for (const { value, label } of PARTNER_CATEGORIES) {
+      const id = partnerCategoryUserCategoryId(value);
       await tx`
         insert into crm.user_categories (id, name, home_menu_id)
-        values (${id}, ${name}, 'parceiros')
+        values (${id}, ${label}, 'parceiros')
         on conflict (id) do update set name = excluded.name
+      `;
+      await tx`
+        insert into crm.user_category_menus (category_id, menu_id)
+        values (${id}, 'parceiros')
+        on conflict do nothing
       `;
     }
 
@@ -178,7 +183,63 @@ export async function ensurePartnerSchema(sql: Sql): Promise<void> {
       left join crm.user_categories c on c.id = u.category_id
       on conflict (user_id) do nothing
     `;
+
+    // Parceiros usam partner-cat-*; master permanece em cat-master.
+    await tx`
+      update crm.users u
+      set category_id = 'partner-cat-' || p.partner_category,
+          updated_at = now()
+      from crm.partner_profiles p
+      where p.user_id = u.id
+        and u.id <> ${MASTER_USER_ID}
+        and u.category_id is distinct from ('partner-cat-' || p.partner_category)
+    `;
+
+    // Restaura Master / Atendente / Gerente se ainda estiverem corrompidos pelo seed antigo
+    // (home_menu_id = 'parceiros') ou se a linha não existir. Não sobrescreve customizações válidas.
+    for (const category of DEFAULT_SYSTEM_SETTINGS.categories) {
+      const existing = await tx<{ home_menu_id: string }[]>`
+        select home_menu_id from crm.user_categories where id = ${category.id} limit 1
+      `;
+      const needsRestore =
+        existing.length === 0 || existing[0]?.home_menu_id === "parceiros";
+      if (!needsRestore) continue;
+
+      await tx`
+        insert into crm.user_categories (id, name, home_menu_id)
+        values (${category.id}, ${category.name}, ${category.homeMenuId})
+        on conflict (id) do update set
+          name = excluded.name,
+          home_menu_id = excluded.home_menu_id
+      `;
+      await tx`delete from crm.user_category_menus where category_id = ${category.id}`;
+      for (const menuId of category.menuIds) {
+        await tx`
+          insert into crm.user_category_menus (category_id, menu_id)
+          values (${category.id}, ${menuId})
+          on conflict do nothing
+        `;
+      }
+    }
+
+    // Remove categorias legadas só-parceiro se ninguém mais aponta para elas.
+    for (const legacyId of LEGACY_PARTNER_ONLY_CATEGORY_IDS) {
+      await tx`
+        delete from crm.user_category_menus m
+        where m.category_id = ${legacyId}
+          and not exists (select 1 from crm.users u where u.category_id = ${legacyId})
+      `;
+      await tx`
+        delete from crm.user_categories c
+        where c.id = ${legacyId}
+          and not exists (select 1 from crm.users u where u.category_id = ${legacyId})
+      `;
+    }
   });
+
+  // Evita cache de settings com categorias de parceiro misturadas.
+  const { clearSystemSettingsCache } = await import("@/lib/config/settings.repository");
+  clearSystemSettingsCache();
 
   ensured = true;
 }

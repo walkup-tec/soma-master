@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, Check, ImagePlus, Loader2, Send, Sparkles, Users } from "lucide-react";
+import { Bell, Check, ImagePlus, Loader2, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  getPushCommunityConfigFn,
   listPushHistoryFn,
   reviewPushMessageFn,
   sendPushMessageFn,
-  updatePushCommunityConfigFn,
   uploadPushImageFn,
 } from "@/lib/push/push.server";
 import type {
@@ -52,8 +50,6 @@ function statusLabel(status: SomaPushMessage["status"]): string {
 }
 
 export function PushScreen() {
-  const getCommunity = useServerFn(getPushCommunityConfigFn);
-  const updateCommunity = useServerFn(updatePushCommunityConfigFn);
   const listHistory = useServerFn(listPushHistoryFn);
   const reviewMessage = useServerFn(reviewPushMessageFn);
   const uploadImage = useServerFn(uploadPushImageFn);
@@ -65,30 +61,23 @@ export function PushScreen() {
   const [audiences, setAudiences] = useState<SomaPushAudience[]>(["users", "partners"]);
   const [userRoles, setUserRoles] = useState<SomaPushUserRole[]>(["master", "user"]);
   const [image, setImage] = useState<SomaPushImageAttachment | null>(null);
-  const [communityLink, setCommunityLink] = useState("");
-  const [groupJid, setGroupJid] = useState("");
-  const [evoInstance, setEvoInstance] = useState("");
   const [history, setHistory] = useState<SomaPushMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [sending, setSending] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [community, rows] = await Promise.all([getCommunity(), listHistory()]);
-      setCommunityLink(community.config.communityInviteLink);
-      setGroupJid(community.config.communityAnnouncementGroupJid);
-      setEvoInstance(community.config.communityEvoInstance);
+      const rows = await listHistory();
       setHistory(rows);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível carregar o Push.");
     } finally {
       setLoading(false);
     }
-  }, [getCommunity, listHistory]);
+  }, [listHistory]);
 
   useEffect(() => {
     void refresh();
@@ -179,7 +168,21 @@ export function PushScreen() {
       } else if (result.message.status === "sent") {
         toast.success("Comunicado enviado.");
       } else if (result.message.status === "partial") {
-        toast.warning("Comunicado parcialmente enviado. Veja o histórico.");
+        const communityDetail = result.message.deliveryResults?.community?.detail;
+        const emailDetail = result.message.deliveryResults?.email?.detail;
+        const bits = [
+          communityDetail && result.message.deliveryResults?.community?.ok === false
+            ? `Comunidade: ${communityDetail}`
+            : null,
+          emailDetail && (result.message.deliveryResults?.email?.sent ?? 0) === 0
+            ? `E-mail: ${emailDetail}`
+            : null,
+        ].filter(Boolean);
+        toast.warning(
+          bits.length
+            ? `Envio parcial. ${bits.join(" · ")}`
+            : "Comunicado parcialmente enviado. Veja o histórico.",
+        );
       } else {
         toast.warning(`Status: ${statusLabel(result.message.status)}`);
       }
@@ -192,27 +195,6 @@ export function PushScreen() {
       toast.error(error instanceof Error ? error.message : "Não foi possível enviar o push.");
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleSaveCommunity = async () => {
-    setSavingConfig(true);
-    try {
-      const saved = await updateCommunity({
-        data: {
-          communityInviteLink: communityLink,
-          communityAnnouncementGroupJid: groupJid,
-          communityEvoInstance: evoInstance,
-        },
-      });
-      setCommunityLink(saved.communityInviteLink);
-      setGroupJid(saved.communityAnnouncementGroupJid);
-      setEvoInstance(saved.communityEvoInstance);
-      toast.success("Configuração da comunidade salva.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao salvar a comunidade.");
-    } finally {
-      setSavingConfig(false);
     }
   };
 
@@ -369,72 +351,6 @@ export function PushScreen() {
             </Button>
           </CardContent>
         </Card>
-
-        <Card className="border-border/60 shadow-soft">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2 text-base">
-              <Users className="size-4 text-primary" />
-              Comunidade WhatsApp
-            </CardTitle>
-            <CardDescription>
-              A instância Soma já é admin e proprietária desta comunidade.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="push-community-link">
-                Link do convite
-              </label>
-              <Input
-                id="push-community-link"
-                value={communityLink}
-                onChange={(event) => setCommunityLink(event.target.value)}
-              />
-              <a
-                href={communityLink}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary underline"
-              >
-                Abrir comunidade
-              </a>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="push-evo-instance">
-                Instância Evolution
-              </label>
-              <Input
-                id="push-evo-instance"
-                value={evoInstance}
-                onChange={(event) => setEvoInstance(event.target.value)}
-                placeholder="soma-crm"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="push-group-jid">
-                JID do grupo de anúncios (opcional)
-              </label>
-              <Input
-                id="push-group-jid"
-                value={groupJid}
-                onChange={(event) => setGroupJid(event.target.value)}
-                placeholder="120363...@g.us"
-              />
-              <p className="text-xs text-muted-foreground">
-                Se vazio, o sistema tenta descobrir o grupo de Anúncios automaticamente.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void handleSaveCommunity()}
-              disabled={savingConfig}
-            >
-              {savingConfig ? <Loader2 className="size-4 animate-spin" /> : null}
-              Salvar comunidade
-            </Button>
-          </CardContent>
-        </Card>
       </div>
 
       <Card className="border-border/60 shadow-soft">
@@ -462,6 +378,26 @@ export function PushScreen() {
                   {new Date(row.sentAt || row.createdAt).toLocaleString("pt-BR")} ·{" "}
                   {row.audiences.join(", ")}
                 </p>
+                {row.deliveryResults?.community || row.deliveryResults?.email ? (
+                  <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                    {row.deliveryResults.community ? (
+                      <p>
+                        Comunidade:{" "}
+                        {row.deliveryResults.community.ok ? "OK" : "falhou"} —{" "}
+                        {row.deliveryResults.community.detail}
+                      </p>
+                    ) : null}
+                    {row.deliveryResults.email ? (
+                      <p>
+                        E-mail: {row.deliveryResults.email.sent} ok /{" "}
+                        {row.deliveryResults.email.failed} falha
+                        {row.deliveryResults.email.detail
+                          ? ` — ${row.deliveryResults.email.detail}`
+                          : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ))
           )}

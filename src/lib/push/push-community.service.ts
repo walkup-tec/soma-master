@@ -33,6 +33,29 @@ function isTruthyFlag(value: unknown): boolean {
   return text === "true" || text === "1" || text === "yes";
 }
 
+function extractInviteCode(link: string): string {
+  const raw = String(link || "").trim();
+  const match = raw.match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/i);
+  return match?.[1]?.trim() || "";
+}
+
+function pickJidFromUnknown(raw: unknown): string {
+  if (!raw || typeof raw !== "object") return "";
+  const record = raw as Record<string, unknown>;
+  const nested =
+    record.data && typeof record.data === "object"
+      ? (record.data as Record<string, unknown>)
+      : record.response && typeof record.response === "object"
+        ? (record.response as Record<string, unknown>)
+        : record;
+  const candidates = [nested.id, nested.jid, nested.groupJid, nested.groupId, record.id, record.jid];
+  for (const value of candidates) {
+    const jid = String(value || "").trim();
+    if (jid.includes("@g.us")) return jid;
+  }
+  return "";
+}
+
 function pickAnnouncementGroupJid(groups: Array<Record<string, unknown>>): string {
   for (const group of groups) {
     if (
@@ -48,28 +71,33 @@ function pickAnnouncementGroupJid(groups: Array<Record<string, unknown>>): strin
   for (const group of groups) {
     const jid = String(group.id || group.jid || group.groupJid || "").trim();
     const subject = String(group.subject || group.name || "").toLowerCase();
-    if (jid.includes("@g.us") && (subject.includes("anúncio") || subject.includes("anuncio"))) {
+    if (
+      jid.includes("@g.us") &&
+      (subject.includes("anúncio") ||
+        subject.includes("anuncio") ||
+        subject.includes("avisos") ||
+        subject.includes("announcement"))
+    ) {
       return jid;
     }
   }
   return "";
 }
 
-async function evolutionFetchGroups(instanceName: string): Promise<Array<Record<string, unknown>>> {
+async function evolutionGetJson(
+  path: string,
+  timeoutMs: number,
+): Promise<{ ok: boolean; status: number; json: unknown; rawText: string }> {
   const base = process.env.EVOLUTION_API_URL?.trim().replace(/\/+$/, "") ?? "";
   const apiKey = process.env.EVOLUTION_API_KEY?.trim() ?? "";
   if (!base || !apiKey) {
     throw new Error("Evolution API não configurada.");
   }
-  assertSomaOwnedInstance(instanceName);
-  const response = await fetch(
-    `${base}/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`,
-    {
-      method: "GET",
-      headers: { apikey: apiKey, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(15_000),
-    },
-  );
+  const response = await fetch(`${base}${path}`, {
+    method: "GET",
+    headers: { apikey: apiKey, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   const rawText = await response.text();
   let json: unknown = null;
   try {
@@ -77,12 +105,41 @@ async function evolutionFetchGroups(instanceName: string): Promise<Array<Record<
   } catch {
     json = null;
   }
-  if (!response.ok) {
+  return { ok: response.ok, status: response.status, json, rawText };
+}
+
+async function evolutionFetchGroups(instanceName: string): Promise<Array<Record<string, unknown>>> {
+  assertSomaOwnedInstance(instanceName);
+  const result = await evolutionGetJson(
+    `/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`,
+    20_000,
+  );
+  if (!result.ok) {
     throw new Error(
-      `Não foi possível listar grupos da comunidade (${response.status}): ${rawText.slice(0, 220)}`,
+      `Não foi possível listar grupos da comunidade (${result.status}): ${result.rawText.slice(0, 220)}`,
     );
   }
-  return parseGroupsPayload(json);
+  return parseGroupsPayload(result.json);
+}
+
+/** Resolve JID via código do convite (mais rápido que listar todos os grupos). */
+async function evolutionResolveJidFromInvite(
+  instanceName: string,
+  inviteLink: string,
+): Promise<string> {
+  const inviteCode = extractInviteCode(inviteLink);
+  if (!inviteCode) return "";
+  assertSomaOwnedInstance(instanceName);
+  try {
+    const result = await evolutionGetJson(
+      `/group/inviteInfo/${encodeURIComponent(instanceName)}?inviteCode=${encodeURIComponent(inviteCode)}`,
+      12_000,
+    );
+    if (!result.ok) return "";
+    return pickJidFromUnknown(result.json);
+  } catch {
+    return "";
+  }
 }
 
 async function resolveAnnouncementGroupJid(instanceName: string): Promise<string> {
@@ -94,11 +151,22 @@ async function resolveAnnouncementGroupJid(instanceName: string): Promise<string
     return config.communityAnnouncementGroupJid;
   }
 
+  const inviteLink = config.communityInviteLink || resolvePushCommunityInviteLink();
+  const fromInvite = await evolutionResolveJidFromInvite(instanceName, inviteLink);
+  if (fromInvite) {
+    writePushConfig({
+      ...config,
+      communityEvoInstance: instanceName,
+      communityAnnouncementGroupJid: fromInvite,
+    });
+    return fromInvite;
+  }
+
   const groups = await evolutionFetchGroups(instanceName);
   const jid = pickAnnouncementGroupJid(groups);
   if (!jid) {
     throw new Error(
-      "Grupo de Anúncios da comunidade não encontrado. Configure SOMA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel.",
+      "Grupo de Anúncios da comunidade não encontrado. Defina SOMA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID no Easypanel (JID …@g.us).",
     );
   }
   writePushConfig({
@@ -148,6 +216,7 @@ export async function sendPushToWhatsAppCommunity(
         mimeType: media.mimeType,
         fileName: image.fileName || "comunicado.jpg",
         caption: message,
+        instanceName,
       });
       if (!sendImage.ok) {
         return {
@@ -163,7 +232,11 @@ export async function sendPushToWhatsAppCommunity(
       return { ok: false, detail: "Informe título ou texto para a comunidade.", groupJid };
     }
 
-    const sendText = await evolutionSendText({ phone: groupJid, text: message });
+    const sendText = await evolutionSendText({
+      phone: groupJid,
+      text: message,
+      instanceName,
+    });
     if (!sendText.ok) {
       return {
         ok: false,
@@ -173,10 +246,13 @@ export async function sendPushToWhatsAppCommunity(
     }
     return { ok: true, detail: "Texto enviado à comunidade WhatsApp.", groupJid };
   } catch (error) {
-    return {
-      ok: false,
-      detail: error instanceof Error ? error.message : "Falha ao publicar na comunidade.",
-    };
+    const detail =
+      error instanceof Error && /aborted|timeout|TimeoutError/i.test(error.message)
+        ? "Timeout na Evolution ao resolver/enviar para a comunidade. Verifique se soma-crm está conectada e o JID em SOMA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID."
+        : error instanceof Error
+          ? error.message
+          : "Falha ao publicar na comunidade.";
+    return { ok: false, detail };
   }
 }
 

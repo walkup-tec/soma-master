@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSession } from "@tanstack/react-start/server";
 import { sessionConfig } from "@/lib/auth/session-config";
+import { saveBankOperationalGuidePdf } from "@/lib/config/bank-guide-media.service";
 import {
   loadSystemSettingsFromDisk,
   saveSystemSettingsToDisk,
@@ -59,4 +60,22 @@ export const saveSystemSettingsFn = createServerFn({ method: "POST" })
       throw new Error("Apenas usuários master podem alterar configurações.");
     }
     return saveSystemSettingsToDisk(data.settings, data.section);
+  });
+
+export const uploadBankOperationalGuideFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    if (!data || typeof data !== "object") throw new Error("Upload inválido.");
+    const body = data as Record<string, unknown>;
+    const fileName = String(body.fileName || "").trim();
+    const base64 = String(body.base64 || "").trim();
+    if (!fileName || !base64) throw new Error("Informe o PDF do roteiro.");
+    return { fileName, base64 };
+  })
+  .handler(async ({ data }) => {
+    const session = await getSession(sessionConfig);
+    if (!session.data?.userId || session.data.role !== "master") {
+      throw new Error("Apenas usuários master podem enviar roteiros.");
+    }
+    const buffer = Buffer.from(data.base64, "base64");
+    return saveBankOperationalGuidePdf({ buffer, fileName: data.fileName });
   });
