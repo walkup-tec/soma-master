@@ -1,0 +1,206 @@
+/**
+ * Resiliência de deploy (modelo WABA index.html):
+ * - Vigia /api/health em segundo plano; ao detectar queda (502/504, JSON do
+ *   Traefik "bad-gateway" ou rede), mostra o overlay "ATUALIZANDO O SISTEMA".
+ * - Segue sondando a cada 2s; com 3 sondas estáveis (ou drift de serverBootId,
+ *   que indica que o novo deploy subiu), fecha o modal e recarrega a tela.
+ * - Registra o service worker que preserva a shell do app em navegações
+ *   durante o redeploy, evitando a tela JSON "Cannot GET /api/errors/bad-gateway".
+ * Roda sem React — igual ao bootstrap do tema — para não depender da hidratação.
+ */
+export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
+  var POLL_MS = 2000;
+  var WATCH_MS = 8000;
+  var STABLE_PROBES_REQUIRED = 3;
+  var COMPLETE_RELOAD_DELAY_MS = 600;
+  var LONG_WAIT_MS = 120000;
+  var OVERLAY_ID = "soma-deploy-overlay";
+
+  var pollTimer = null;
+  var watchTimer = null;
+  var recoveryActive = false;
+  var pollStartedAt = 0;
+  var stableStreak = 0;
+  var baselineBootId = "";
+
+  function isProductionHost() {
+    var host = String(window.location.hostname || "").toLowerCase();
+    if (!host || host === "localhost" || host === "127.0.0.1" || host === "[::1]") return false;
+    if (/^(192\\.168\\.|10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.)/.test(host)) return false;
+    return host === "somaconecta.com.br" || host.indexOf("somaconecta.com.br") !== -1;
+  }
+
+  function ensureStyles() {
+    if (document.getElementById("soma-deploy-overlay-style")) return;
+    var style = document.createElement("style");
+    style.id = "soma-deploy-overlay-style";
+    style.textContent =
+      "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(3,7,18,.92);backdrop-filter:blur(6px)}" +
+      "#" + OVERLAY_ID + "[hidden]{display:none!important}" +
+      ".soma-deploy-card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(236,72,153,.28);background:linear-gradient(165deg,#131b2e 0%,#0e1525 100%);color:#f8fafc;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.45);transition:border-color .35s ease,box-shadow .35s ease}" +
+      ".soma-deploy-card.is-stabilizing{border-color:rgba(46,228,160,.45);box-shadow:0 24px 48px rgba(0,0,0,.45),0 0 32px rgba(46,228,160,.12)}" +
+      ".soma-deploy-visual{margin-bottom:18px}" +
+      ".soma-deploy-spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:2px solid rgba(236,72,153,.16);border-top-color:rgba(236,72,153,.9);animation:soma-deploy-orbit 1.2s linear infinite}" +
+      ".soma-deploy-progress-track{height:4px;border-radius:999px;background:rgba(148,163,184,.18);overflow:hidden;margin:0 auto;max-width:180px}" +
+      ".soma-deploy-progress-bar{height:100%;width:42%;border-radius:inherit;background:linear-gradient(90deg,#ec4899,#a855f7,#ec4899);background-size:200% 100%;animation:soma-deploy-progress-slide 1.35s ease-in-out infinite}" +
+      ".soma-deploy-card.is-stabilizing .soma-deploy-progress-bar{width:100%;animation:soma-deploy-progress-fill .9s ease-out forwards;background:linear-gradient(90deg,#2ee4a0,#22d3ee)}" +
+      ".soma-deploy-card.is-complete .soma-deploy-spinner{border-top-color:#2ee4a0;animation:none}" +
+      ".soma-deploy-title{margin:0 0 12px;font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#ec4899}" +
+      ".soma-deploy-card.is-stabilizing .soma-deploy-title{color:#2ee4a0}" +
+      ".soma-deploy-card p{margin:0 0 10px;color:#cbd5e1;line-height:1.55;font-size:.92rem}" +
+      ".soma-deploy-accent{margin-bottom:0!important;color:#22d3ee!important;font-size:.88rem}" +
+      "@keyframes soma-deploy-orbit{to{transform:rotate(360deg)}}" +
+      "@keyframes soma-deploy-progress-slide{0%{transform:translateX(-120%);background-position:0% 50%}100%{transform:translateX(280%);background-position:100% 50%}}" +
+      "@keyframes soma-deploy-progress-fill{from{transform:translateX(-8%)}to{transform:translateX(0)}}";
+    document.head.appendChild(style);
+  }
+
+  function ensureOverlay() {
+    var existing = document.getElementById(OVERLAY_ID);
+    if (existing) return existing;
+    if (!document.body) return null;
+    ensureStyles();
+    var el = document.createElement("div");
+    el.id = OVERLAY_ID;
+    el.setAttribute("hidden", "");
+    el.innerHTML =
+      '<div class="soma-deploy-card" role="status" aria-live="polite" aria-busy="true">' +
+      '<div class="soma-deploy-visual" aria-hidden="true">' +
+      '<div class="soma-deploy-spinner"></div>' +
+      '<div class="soma-deploy-progress-track"><div class="soma-deploy-progress-bar"></div></div>' +
+      "</div>" +
+      '<h1 class="soma-deploy-title">ATUALIZANDO O SISTEMA</h1>' +
+      '<p id="soma-deploy-message">Estamos aplicando melhorias para oferecer uma experi\\u00eancia cada vez melhor.</p>' +
+      '<p class="soma-deploy-accent">Em poucos segundos sua tela ser\\u00e1 atualizada automaticamente e voc\\u00ea poder\\u00e1 continuar normalmente.</p>' +
+      "</div>";
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function setPhase(phase) {
+    var card = document.querySelector("#" + OVERLAY_ID + " .soma-deploy-card");
+    if (!card) return;
+    card.classList.remove("is-stabilizing", "is-complete");
+    if (phase === "stabilizing") card.classList.add("is-stabilizing");
+    if (phase === "complete") card.classList.add("is-complete");
+  }
+
+  function showOverlay(message, phase) {
+    var el = ensureOverlay();
+    if (!el) return;
+    var msgEl = document.getElementById("soma-deploy-message");
+    if (msgEl && message) msgEl.textContent = message;
+    setPhase(phase || "deploying");
+    el.removeAttribute("hidden");
+  }
+
+  function hideOverlay() {
+    var el = document.getElementById(OVERLAY_ID);
+    if (el) el.setAttribute("hidden", "");
+  }
+
+  function completeRecovery() {
+    setPhase("complete");
+    window.setTimeout(function () {
+      window.location.reload();
+    }, COMPLETE_RELOAD_DELAY_MS);
+  }
+
+  async function probeHealth() {
+    try {
+      var response = await fetch("/api/health", { cache: "no-store", credentials: "same-origin" });
+      var data = null;
+      try {
+        data = await response.json();
+      } catch (_) {
+        data = null;
+      }
+      if (response.status >= 502 && response.status <= 504) return { stable: false };
+      if (!response.ok || !data || data.ok !== true) return { stable: false };
+      return { stable: true, bootId: String(data.serverBootId || "") };
+    } catch (_) {
+      return { stable: false };
+    }
+  }
+
+  async function pollUntilReady() {
+    if (!recoveryActive) return;
+    showOverlay();
+    var probe = await probeHealth();
+    if (probe.stable) {
+      stableStreak += 1;
+      setPhase("stabilizing");
+      if (stableStreak >= STABLE_PROBES_REQUIRED || (baselineBootId && probe.bootId && probe.bootId !== baselineBootId)) {
+        completeRecovery();
+        return;
+      }
+    } else {
+      stableStreak = 0;
+      setPhase("deploying");
+      if (Date.now() - pollStartedAt >= LONG_WAIT_MS) {
+        showOverlay(
+          "A atualiza\\u00e7\\u00e3o est\\u00e1 demorando mais que o usual. Continuamos verificando automaticamente \\u2014 aguarde nesta tela.",
+          "deploying"
+        );
+      }
+    }
+    pollTimer = window.setTimeout(function () {
+      pollTimer = null;
+      void pollUntilReady();
+    }, POLL_MS);
+  }
+
+  function startRecovery() {
+    if (recoveryActive) return;
+    recoveryActive = true;
+    pollStartedAt = Date.now();
+    stableStreak = 0;
+    void pollUntilReady();
+  }
+
+  async function watchInBackground() {
+    if (recoveryActive) return;
+    var probe = await probeHealth();
+    if (!probe.stable) {
+      startRecovery();
+      return;
+    }
+    if (!baselineBootId && probe.bootId) {
+      baselineBootId = probe.bootId;
+      return;
+    }
+    if (baselineBootId && probe.bootId && probe.bootId !== baselineBootId) {
+      showOverlay();
+      setPhase("stabilizing");
+      recoveryActive = true;
+      window.setTimeout(completeRecovery, 900);
+    }
+  }
+
+  window.somaDeployResilience = {
+    show: showOverlay,
+    hide: hideOverlay,
+    startRecovery: startRecovery,
+  };
+
+  if (!isProductionHost()) return;
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw-deploy-resilience.js?v=1", { scope: "/" }).catch(function () {});
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    void probeHealth().then(function (probe) {
+      if (probe.stable && probe.bootId) baselineBootId = probe.bootId;
+      if (!probe.stable) startRecovery();
+    });
+    watchTimer = window.setInterval(function () {
+      void watchInBackground();
+    }, WATCH_MS);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") void watchInBackground();
+    });
+  });
+})();`;

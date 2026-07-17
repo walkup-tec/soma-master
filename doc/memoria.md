@@ -354,6 +354,13 @@
 - LOG: `doc/LOG-2026-07-17__153300__parceiros-secoes-alias-senha-corban.md`.
 - Keywords: partner sections, menu permissions, corban, CN, senha 4 dígitos, partnerCategoryAlias.
 
+## 2026-07-17 17:05 — Overlay "Atualizando o sistema" pós-deploy
+- Modelo WABA portado: bootstrap `deploy-resilience.ts` no `__root.tsx` + SW `public/sw-deploy-resilience.js`.
+- `/api/health` devolve `serverBootId`; watcher 8s, poll 2s, 3 sondas estáveis ou drift de bootId ⇒ reload.
+- SW serve shell em cache quando navegação recebe 502–504 ou JSON `bad-gateway` do Traefik — nunca mais tela JSON.
+- Ativo só em produção (somaconecta.com.br). LOG: `doc/LOG-2026-07-17__170500__overlay-atualizando-sistema-pos-deploy.md`.
+- Keywords: deploy overlay, sw-deploy-resilience, serverBootId, bad-gateway.
+
 ## 2026-07-17 15:50 — Histórico só com bloqueio prévio
 - Item **Histórico** do dropdown de parceiros só aparece quando `hasBlockHistory` (exists em `crm.partner_events` com `action='blocked'`).
 - Campo novo em `PartnerRecord`; calculado na listagem e no `findVisiblePartner`.

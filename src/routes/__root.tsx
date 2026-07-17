@@ -14,6 +14,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SomaThemeRehydrate } from "@/components/theme/soma-theme-rehydrate";
 import { SOMA_THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme/soma-theme";
 import { SOMA_PROCESSING_BOOTSTRAP_SCRIPT } from "@/lib/ui/processing-overlay";
+import { SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT } from "@/lib/ui/deploy-resilience";
 
 function NotFoundComponent() {
   return (
@@ -114,6 +115,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: SOMA_THEME_BOOTSTRAP_SCRIPT }} />
         <HeadContent />
         <script dangerouslySetInnerHTML={{ __html: SOMA_PROCESSING_BOOTSTRAP_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>
         <SomaThemeRehydrate />
