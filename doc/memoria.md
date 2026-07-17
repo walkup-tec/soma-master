@@ -1,3 +1,25 @@
+## 2026-07-17 14:55 — Área Parceiros implementada
+- Nova rota `/app/parceiros`: abas Ativos/Inativos/Bloqueados, busca, Produção, bancos, paginação, tabela e ações.
+- Cadastro PF/PJ completo com categoria, login, PIX, endereço/ViaCEP, bancos e menus individuais.
+- Backend: `partner_profiles` + CTE recursiva, `user_menu_permissions`, `partner_banks`, `partner_events`; Master raiz e criador como pai fixo.
+- Pai gerencia descendentes; filho não vê outros ramos; hierarquia não altera clientes/chat/agenda.
+- Inativo/bloqueado não autentica; bloqueio exige motivo; CPF/CNPJ globalmente único.
+- Build client+SSR, ESLint e servidor local HTTP 200: OK. Schema Postgres provisionado sem erros.
+- LOG: `doc/LOG-2026-07-17__145500__implementacao-parceiros-hierarquia.md`.
+- Keywords: parceiros implementado, CTE recursiva, permissões individuais, ViaCEP, histórico bloqueio.
+
+## 2026-07-17 14:20 — Requisitos da área Parceiros
+- Hierarquia recursiva: criador é pai fixo; ator vê a si e descendentes, nunca ancestrais/irmãos/outros ramos; Master é raiz.
+- Hierarquia vale somente para cadastros da área Parceiros, sem ampliar clientes/chat/agenda/outros dados operacionais.
+- Pai pode gerenciar qualquer descendente do ramo; CPF/CNPJ é único globalmente.
+- Qualquer parceiro ativo com permissão `Cadastrar parceiros` pode criar filhos.
+- Campos separados: categoria (Substabelecido/Gerente/Suporte/Atendente) e pessoa (PF/PJ).
+- Estados: Ativo, Inativo/Desativado e Bloqueado; bloqueio exige motivo e todos os eventos são auditados.
+- Permissões serão individuais por parceiro e não podem exceder as do pai; bancos/produção começam com front preparado.
+- Mapeamento: seção Parceiros é placeholder; UI reaproveita Clientes/Usuários; backend evoluirá `crm.users` + CTE + permissões individuais + eventos; sem ampliar escopo operacional.
+- LOG: `doc/LOG-2026-07-17__142000__requisitos-arquitetura-parceiros-hierarquia.md`.
+- Keywords: parceiros, pai filho, parent_user_id, descendentes, permissões individuais, bloqueio, ViaCEP.
+
 ## 2026-07-17 14:00 — Gatilho de deploy de todo estado pendente
 - `main` e `origin/main` estavam em `6987dda`; demais modificações aparentes eram somente LF/CRLF (`NO_CONTENT_DIFF`).
 - Commit/push de deploy `540fedf`; produção continuou HTTP 200 com asset antigo `/assets/index-CBqzy7be.js` nas 20 tentativas por ~5 min.

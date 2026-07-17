@@ -20,6 +20,7 @@ import {
 
 const TITLES: Record<string, string> = {
   "/app": "Dashboard",
+  "/app/parceiros": "Parceiros",
   "/app/clientes": "Clientes",
   "/app/clientes/novo": "Novo cliente",
   "/app/kanban": "Kanban",
@@ -118,7 +119,9 @@ export function AppTopbar({ user }: { user: SessionData }) {
               </span>
               <span className="hidden md:block text-left leading-tight">
                 <span className="block text-xs font-semibold">{user.name}</span>
-                <span className="block text-[10px] text-muted-foreground capitalize">{user.role}</span>
+                <span className="block text-[10px] text-muted-foreground capitalize">
+                  {user.role}
+                </span>
               </span>
             </button>
           </DropdownMenuTrigger>

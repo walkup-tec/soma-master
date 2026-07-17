@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppUsuariosRouteImport } from './routes/app/usuarios'
 import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
+import { Route as AppParceirosRouteImport } from './routes/app/parceiros'
 import { Route as AppKanbanRouteImport } from './routes/app/kanban'
 import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
 import { Route as AppClientesRouteImport } from './routes/app/clientes'
@@ -55,6 +56,11 @@ const AppUsuariosRoute = AppUsuariosRouteImport.update({
 const AppRemarketingRoute = AppRemarketingRouteImport.update({
   id: '/remarketing',
   path: '/remarketing',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppParceirosRoute = AppParceirosRouteImport.update({
+  id: '/parceiros',
+  path: '/parceiros',
   getParentRoute: () => AppRoute,
 } as any)
 const AppKanbanRoute = AppKanbanRouteImport.update({
@@ -125,6 +131,7 @@ export interface FileRoutesByFullPath {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
+  '/app/parceiros': typeof AppParceirosRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
@@ -143,6 +150,7 @@ export interface FileRoutesByTo {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
+  '/app/parceiros': typeof AppParceirosRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app': typeof AppIndexRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
+  '/app/parceiros': typeof AppParceirosRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
@@ -184,6 +193,7 @@ export interface FileRouteTypes {
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/kanban'
+    | '/app/parceiros'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/kanban'
+    | '/app/parceiros'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/kanban'
+    | '/app/parceiros'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
@@ -283,6 +295,13 @@ declare module '@tanstack/react-router' {
       path: '/remarketing'
       fullPath: '/app/remarketing'
       preLoaderRoute: typeof AppRemarketingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/parceiros': {
+      id: '/app/parceiros'
+      path: '/parceiros'
+      fullPath: '/app/parceiros'
+      preLoaderRoute: typeof AppParceirosRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/kanban': {
@@ -394,6 +413,7 @@ interface AppRouteChildren {
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppKanbanRoute: typeof AppKanbanRoute
+  AppParceirosRoute: typeof AppParceirosRoute
   AppRemarketingRoute: typeof AppRemarketingRoute
   AppUsuariosRoute: typeof AppUsuariosRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -405,6 +425,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppClientesRoute: AppClientesRouteWithChildren,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppKanbanRoute: AppKanbanRoute,
+  AppParceirosRoute: AppParceirosRoute,
   AppRemarketingRoute: AppRemarketingRoute,
   AppUsuariosRoute: AppUsuariosRoute,
   AppIndexRoute: AppIndexRoute,

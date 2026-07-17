@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import { loadLocalEnvFile } from "@/lib/db/load-env-file";
 import { ensureClientListIndexes } from "@/lib/db/ensure-client-indexes";
+import { ensurePartnerSchema } from "@/lib/db/ensure-partner-schema";
 import { ensureDatabaseSeeded } from "@/lib/db/seed";
 
 loadLocalEnvFile();
@@ -23,8 +24,7 @@ export async function getSql(): Promise<Sql> {
   if (!sqlInstance) {
     // Via 172.17.0.1/socat ou IP: cert do Supabase não casa o hostname → SSL_INSECURE.
     const insecure =
-      process.env.DATABASE_SSL_INSECURE === "1" ||
-      process.env.DATABASE_SSL_INSECURE === "true";
+      process.env.DATABASE_SSL_INSECURE === "1" || process.env.DATABASE_SSL_INSECURE === "true";
     sqlInstance = postgres(url, {
       ssl: insecure ? { rejectUnauthorized: false } : "require",
       prepare: false,
@@ -38,6 +38,7 @@ export async function getSql(): Promise<Sql> {
   if (!ready) {
     ready = ensureDatabaseSeeded(sqlInstance)
       .then(() => ensureClientListIndexes(sqlInstance!))
+      .then(() => ensurePartnerSchema(sqlInstance!))
       .catch((error) => {
         ready = null;
         throw error;

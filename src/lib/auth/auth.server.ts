@@ -11,6 +11,7 @@ import { verifyPassword } from "@/lib/auth/password";
 import { sessionConfig, type SessionData } from "@/lib/auth/session-config";
 import { normalizeEmail } from "@/lib/auth/master-user";
 import { findUserByEmail, findUserById } from "@/lib/users/user.repository";
+import { getPartnerAccess } from "@/lib/partners/partner.repository";
 
 const ENRICH_TTL_MS = 10_000;
 
@@ -38,6 +39,7 @@ const loginInputSchema = (data: unknown) => {
 };
 
 async function resolveSessionAccess(
+  userId: string,
   role: SessionData["role"],
   categoryId: string,
 ): Promise<{ menuIds: MenuItemId[]; homeMenuId: MenuItemId }> {
@@ -48,7 +50,19 @@ async function resolveSessionAccess(
     return { menuIds, homeMenuId: resolveCategoryHomeMenuId(menuIds, preferred) };
   }
   const settings = await loadSystemSettingsFromDisk();
-  const menuIds = getMenuIdsForCategory(settings, categoryId);
+  const partnerAccess = await getPartnerAccess(userId);
+  if (partnerAccess && partnerAccess.status !== "active") {
+    throw new Error(
+      partnerAccess.status === "blocked"
+        ? "Esta conta está bloqueada. Contate seu responsável."
+        : "Esta conta está inativa. Contate seu responsável.",
+    );
+  }
+  const menuIds = partnerAccess?.uses_custom_menu_permissions
+    ? (partnerAccess.menu_ids.filter((id): id is MenuItemId =>
+        ALL_MENU_ITEM_IDS.includes(id as MenuItemId),
+      ) as MenuItemId[])
+    : getMenuIdsForCategory(settings, categoryId);
   const preferred = getHomeMenuIdForCategory(settings, categoryId);
   return { menuIds, homeMenuId: resolveCategoryHomeMenuId(menuIds, preferred) };
 }
@@ -64,13 +78,23 @@ function sessionNeedsPersist(session: SessionData, next: SessionData): boolean {
 }
 
 /** Sincroniza sessão com o cadastro atual (categoria, nome, menus). */
-async function enrichSession(session: SessionData): Promise<SessionData> {
+async function enrichSession(session: SessionData): Promise<SessionData | null> {
   const now = Date.now();
   const user = await findUserById(session.userId);
-  if (!user) return session;
+  if (!user) {
+    await clearSession(sessionConfig);
+    return null;
+  }
 
   const categoryId = user.categoryId;
-  const { menuIds, homeMenuId } = await resolveSessionAccess(user.role, categoryId);
+  let access: { menuIds: MenuItemId[]; homeMenuId: MenuItemId };
+  try {
+    access = await resolveSessionAccess(user.id, user.role, categoryId);
+  } catch {
+    await clearSession(sessionConfig);
+    return null;
+  }
+  const { menuIds, homeMenuId } = access;
 
   if (
     enrichCache &&
@@ -115,7 +139,7 @@ export const getAuthSessionFn = createServerFn({ method: "GET" }).handler(async 
   const session = await getSession<SessionData>(sessionConfig);
   const user = session.data;
   if (!user?.userId) return null;
-  return enrichSession(user);
+  return enrichSession(user as SessionData);
 });
 
 export const loginFn = createServerFn({ method: "POST" })
@@ -132,7 +156,7 @@ export const loginFn = createServerFn({ method: "POST" })
       throw new Error("E-mail ou senha incorretos.");
     }
 
-    const { menuIds, homeMenuId } = await resolveSessionAccess(user.role, user.categoryId);
+    const { menuIds, homeMenuId } = await resolveSessionAccess(user.id, user.role, user.categoryId);
     const sessionData = {
       userId: user.id,
       email: user.email,
