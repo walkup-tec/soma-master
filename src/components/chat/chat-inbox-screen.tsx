@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Search,
   Send,
+  Sparkles,
   StickyNote,
   UserRound,
 } from "lucide-react";
@@ -447,7 +448,11 @@ export function ChatInboxScreen({
                   }
                 }}
               >
-                {active?.aiEnabled ? <Bot className="size-4" /> : <BotOff className="size-4" />}
+                {active?.aiEnabled ? (
+                  <Sparkles className="size-4" />
+                ) : (
+                  <Sparkles className="size-4 opacity-60" />
+                )}
                 IA {active?.aiEnabled ? "on" : "off"}
               </Button>
             </header>
