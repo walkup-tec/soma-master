@@ -1,3 +1,8 @@
+## 2026-07-17 19:35 — Bancos: senha visível, link e ícone copiar
+- Senhas Storm/Banco em texto visível; campos `stormLink` / `bankLink`.
+- Após salvar, ícone de copiar ao lado de usuário, senha e link.
+- Keywords: bancos link, copiar senha, storm.
+
 ## 2026-07-17 19:25 — Fix Push parcial (comunidade + e-mail)
 - Auto-resolve JID via inviteInfo; envio EVO com instanceName; e-mail sequencial + falha real se 0 enviados.
 - Histórico/toast exibem detalhe da falha.

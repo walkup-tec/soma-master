@@ -36,9 +36,11 @@ export type BankConfig = {
   stormAccessEnabled: boolean;
   stormUsername: string;
   stormPassword: string;
+  stormLink: string;
   bankAccessEnabled: boolean;
   bankUsername: string;
   bankPassword: string;
+  bankLink: string;
   operationalGuideEnabled: boolean;
   operationalGuide: BankOperationalGuide | null;
 };

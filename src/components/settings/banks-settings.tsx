@@ -38,6 +38,46 @@ async function copyText(label: string, value: string) {
   }
 }
 
+function CredentialField(props: {
+  id: string;
+  label: string;
+  value: string;
+  placeholder?: string;
+  savedValue?: string;
+  showCopy: boolean;
+  onChange: (value: string) => void;
+}) {
+  const canCopy = props.showCopy && String(props.savedValue || "").trim().length > 0;
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={props.id}>{props.label}</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          id={props.id}
+          value={props.value}
+          onChange={(event) => props.onChange(event.target.value)}
+          placeholder={props.placeholder}
+          autoComplete="off"
+          className="flex-1"
+        />
+        {canCopy ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="shrink-0"
+            title={`Copiar ${props.label}`}
+            aria-label={`Copiar ${props.label}`}
+            onClick={() => void copyText(props.label, String(props.savedValue || ""))}
+          >
+            <Copy className="size-3.5" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function BanksSettings({ settings, onChange }: Props) {
   const uploadGuide = useServerFn(uploadBankOperationalGuideFn);
   const [banks, setBanks] = useState<BankConfig[]>(settings.banks ?? []);
@@ -120,6 +160,8 @@ export function BanksSettings({ settings, onChange }: Props) {
           ) : (
             banks.map((bank, index) => {
               const saved = savedById.get(bank.id);
+              const stormSaved = Boolean(saved?.stormAccessEnabled);
+              const bankSaved = Boolean(saved?.bankAccessEnabled);
               return (
                 <div
                   key={bank.id}
@@ -158,56 +200,37 @@ export function BanksSettings({ settings, onChange }: Props) {
                       <span>
                         <span className="font-medium">Acesso Storm</span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
-                          Usuário e senha apenas para consulta futura.
+                          Usuário, senha e link apenas para consulta futura.
                         </span>
                       </span>
                     </label>
                     {bank.stormAccessEnabled ? (
-                      <div className="ml-7 grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor={`storm-user-${bank.id}`}>Usuário Storm</Label>
-                          <Input
-                            id={`storm-user-${bank.id}`}
-                            value={bank.stormUsername}
-                            onChange={(event) =>
-                              patchBank(bank.id, { stormUsername: event.target.value })
-                            }
-                            autoComplete="off"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor={`storm-pass-${bank.id}`}>Senha Storm</Label>
-                          <Input
-                            id={`storm-pass-${bank.id}`}
-                            type="password"
-                            value={bank.stormPassword}
-                            onChange={(event) =>
-                              patchBank(bank.id, { stormPassword: event.target.value })
-                            }
-                            autoComplete="new-password"
-                          />
-                        </div>
-                        {saved?.stormAccessEnabled &&
-                        (saved.stormUsername || saved.stormPassword) ? (
-                          <div className="flex flex-wrap gap-2 sm:col-span-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void copyText("Usuário Storm", saved.stormUsername)}
-                            >
-                              <Copy className="size-3.5" /> Copiar usuário
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void copyText("Senha Storm", saved.stormPassword)}
-                            >
-                              <Copy className="size-3.5" /> Copiar senha
-                            </Button>
-                          </div>
-                        ) : null}
+                      <div className="ml-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <CredentialField
+                          id={`storm-user-${bank.id}`}
+                          label="Usuário Storm"
+                          value={bank.stormUsername}
+                          savedValue={saved?.stormUsername}
+                          showCopy={stormSaved}
+                          onChange={(value) => patchBank(bank.id, { stormUsername: value })}
+                        />
+                        <CredentialField
+                          id={`storm-pass-${bank.id}`}
+                          label="Senha Storm"
+                          value={bank.stormPassword}
+                          savedValue={saved?.stormPassword}
+                          showCopy={stormSaved}
+                          onChange={(value) => patchBank(bank.id, { stormPassword: value })}
+                        />
+                        <CredentialField
+                          id={`storm-link-${bank.id}`}
+                          label="Link Storm"
+                          value={bank.stormLink}
+                          savedValue={saved?.stormLink}
+                          showCopy={stormSaved}
+                          placeholder="https://..."
+                          onChange={(value) => patchBank(bank.id, { stormLink: value })}
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -223,56 +246,37 @@ export function BanksSettings({ settings, onChange }: Props) {
                       <span>
                         <span className="font-medium">Acesso Banco</span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
-                          Usuário e senha apenas para consulta futura.
+                          Usuário, senha e link apenas para consulta futura.
                         </span>
                       </span>
                     </label>
                     {bank.bankAccessEnabled ? (
-                      <div className="ml-7 grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor={`bank-user-${bank.id}`}>Usuário Banco</Label>
-                          <Input
-                            id={`bank-user-${bank.id}`}
-                            value={bank.bankUsername}
-                            onChange={(event) =>
-                              patchBank(bank.id, { bankUsername: event.target.value })
-                            }
-                            autoComplete="off"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor={`bank-pass-${bank.id}`}>Senha Banco</Label>
-                          <Input
-                            id={`bank-pass-${bank.id}`}
-                            type="password"
-                            value={bank.bankPassword}
-                            onChange={(event) =>
-                              patchBank(bank.id, { bankPassword: event.target.value })
-                            }
-                            autoComplete="new-password"
-                          />
-                        </div>
-                        {saved?.bankAccessEnabled &&
-                        (saved.bankUsername || saved.bankPassword) ? (
-                          <div className="flex flex-wrap gap-2 sm:col-span-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void copyText("Usuário Banco", saved.bankUsername)}
-                            >
-                              <Copy className="size-3.5" /> Copiar usuário
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void copyText("Senha Banco", saved.bankPassword)}
-                            >
-                              <Copy className="size-3.5" /> Copiar senha
-                            </Button>
-                          </div>
-                        ) : null}
+                      <div className="ml-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <CredentialField
+                          id={`bank-user-${bank.id}`}
+                          label="Usuário Banco"
+                          value={bank.bankUsername}
+                          savedValue={saved?.bankUsername}
+                          showCopy={bankSaved}
+                          onChange={(value) => patchBank(bank.id, { bankUsername: value })}
+                        />
+                        <CredentialField
+                          id={`bank-pass-${bank.id}`}
+                          label="Senha Banco"
+                          value={bank.bankPassword}
+                          savedValue={saved?.bankPassword}
+                          showCopy={bankSaved}
+                          onChange={(value) => patchBank(bank.id, { bankPassword: value })}
+                        />
+                        <CredentialField
+                          id={`bank-link-${bank.id}`}
+                          label="Link Banco"
+                          value={bank.bankLink}
+                          savedValue={saved?.bankLink}
+                          showCopy={bankSaved}
+                          placeholder="https://..."
+                          onChange={(value) => patchBank(bank.id, { bankLink: value })}
+                        />
                       </div>
                     ) : null}
                   </div>

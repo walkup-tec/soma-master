@@ -101,9 +101,11 @@ export function createEmptyBank(): BankConfig {
     stormAccessEnabled: false,
     stormUsername: "",
     stormPassword: "",
+    stormLink: "",
     bankAccessEnabled: false,
     bankUsername: "",
     bankPassword: "",
+    bankLink: "",
     operationalGuideEnabled: false,
     operationalGuide: null,
   };
@@ -242,9 +244,11 @@ export function normalizeBanks(banks: BankConfig[]): BankConfig[] {
         stormAccessEnabled: Boolean(bank.stormAccessEnabled),
         stormUsername: String(bank.stormUsername ?? "").trim(),
         stormPassword: String(bank.stormPassword ?? ""),
+        stormLink: String(bank.stormLink ?? "").trim(),
         bankAccessEnabled: Boolean(bank.bankAccessEnabled),
         bankUsername: String(bank.bankUsername ?? "").trim(),
         bankPassword: String(bank.bankPassword ?? ""),
+        bankLink: String(bank.bankLink ?? "").trim(),
         operationalGuideEnabled: Boolean(bank.operationalGuideEnabled),
         operationalGuide,
       };

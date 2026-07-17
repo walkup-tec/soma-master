@@ -72,6 +72,10 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
   `;
   await sql`
     alter table crm.banks
+    add column if not exists storm_link text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
     add column if not exists bank_access_enabled boolean not null default false
   `;
   await sql`
@@ -81,6 +85,10 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
   await sql`
     alter table crm.banks
     add column if not exists bank_password text not null default ''
+  `;
+  await sql`
+    alter table crm.banks
+    add column if not exists bank_link text not null default ''
   `;
   await sql`
     alter table crm.banks
@@ -138,9 +146,11 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
         storm_access_enabled: boolean | null;
         storm_username: string | null;
         storm_password: string | null;
+        storm_link: string | null;
         bank_access_enabled: boolean | null;
         bank_username: string | null;
         bank_password: string | null;
+        bank_link: string | null;
         operational_guide_enabled: boolean | null;
         operational_guide_display_name: string | null;
         operational_guide_file_name: string | null;
@@ -149,8 +159,8 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
     >`
       select
         id, name,
-        storm_access_enabled, storm_username, storm_password,
-        bank_access_enabled, bank_username, bank_password,
+        storm_access_enabled, storm_username, storm_password, storm_link,
+        bank_access_enabled, bank_username, bank_password, bank_link,
         operational_guide_enabled,
         operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id
       from crm.banks
@@ -217,9 +227,11 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
         stormAccessEnabled: Boolean(bank.storm_access_enabled),
         stormUsername: bank.storm_username ?? "",
         stormPassword: bank.storm_password ?? "",
+        stormLink: bank.storm_link ?? "",
         bankAccessEnabled: Boolean(bank.bank_access_enabled),
         bankUsername: bank.bank_username ?? "",
         bankPassword: bank.bank_password ?? "",
+        bankLink: bank.bank_link ?? "",
         operationalGuideEnabled: Boolean(bank.operational_guide_enabled),
         operationalGuide: storageId
           ? {
@@ -438,9 +450,11 @@ async function syncBanks(tx: Tx, banks: BankConfig[]): Promise<void> {
     storm_access_enabled: Boolean(bank.stormAccessEnabled),
     storm_username: bank.stormUsername || "",
     storm_password: bank.stormPassword || "",
+    storm_link: bank.stormLink || "",
     bank_access_enabled: Boolean(bank.bankAccessEnabled),
     bank_username: bank.bankUsername || "",
     bank_password: bank.bankPassword || "",
+    bank_link: bank.bankLink || "",
     operational_guide_enabled: Boolean(bank.operationalGuideEnabled),
     operational_guide_display_name: bank.operationalGuide?.displayName || "",
     operational_guide_file_name: bank.operationalGuide?.fileName || "",
@@ -455,9 +469,11 @@ async function syncBanks(tx: Tx, banks: BankConfig[]): Promise<void> {
         storm_access_enabled boolean,
         storm_username text,
         storm_password text,
+        storm_link text,
         bank_access_enabled boolean,
         bank_username text,
         bank_password text,
+        bank_link text,
         operational_guide_enabled boolean,
         operational_guide_display_name text,
         operational_guide_file_name text,
@@ -472,16 +488,16 @@ async function syncBanks(tx: Tx, banks: BankConfig[]): Promise<void> {
     upsert_banks as (
       insert into crm.banks (
         id, name,
-        storm_access_enabled, storm_username, storm_password,
-        bank_access_enabled, bank_username, bank_password,
+        storm_access_enabled, storm_username, storm_password, storm_link,
+        bank_access_enabled, bank_username, bank_password, bank_link,
         operational_guide_enabled,
         operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id,
         updated_at
       )
       select
         id, name,
-        storm_access_enabled, storm_username, storm_password,
-        bank_access_enabled, bank_username, bank_password,
+        storm_access_enabled, storm_username, storm_password, storm_link,
+        bank_access_enabled, bank_username, bank_password, bank_link,
         operational_guide_enabled,
         operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id,
         now()
@@ -491,9 +507,11 @@ async function syncBanks(tx: Tx, banks: BankConfig[]): Promise<void> {
         storm_access_enabled = excluded.storm_access_enabled,
         storm_username = excluded.storm_username,
         storm_password = excluded.storm_password,
+        storm_link = excluded.storm_link,
         bank_access_enabled = excluded.bank_access_enabled,
         bank_username = excluded.bank_username,
         bank_password = excluded.bank_password,
+        bank_link = excluded.bank_link,
         operational_guide_enabled = excluded.operational_guide_enabled,
         operational_guide_display_name = excluded.operational_guide_display_name,
         operational_guide_file_name = excluded.operational_guide_file_name,
