@@ -9,7 +9,6 @@ import {
   Send,
   Sparkles,
   StickyNote,
-  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/clients/status-badge";
@@ -113,6 +112,8 @@ export function ChatInboxScreen({
     setSelectedId(id);
     setLoadingThread(true);
     try {
+      // Abrir conversa = assumir atendimento (atribui ao usuário e pausa IA local)
+      await joinChat({ data: { conversationId: id } });
       const thread = await getThread({ data: { conversationId: id } });
       setActive(thread.conversation);
       setMessages(thread.messages);
@@ -129,7 +130,7 @@ export function ChatInboxScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll leve — novas mensagens via webhook / teste
+  // Poll leve — novas mensagens via webhook / teste (não reatribui)
   useEffect(() => {
     const id = window.setInterval(() => {
       void refreshList().then(() => {
@@ -144,18 +145,6 @@ export function ChatInboxScreen({
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
-
-  async function handleJoin() {
-    if (!selectedId) return;
-    try {
-      const conv = await joinChat({ data: { conversationId: selectedId } });
-      setActive(conv);
-      toast.success("Você entrou no atendimento. IA pausada nesta conversa.");
-      await openConversation(selectedId);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao entrar no atendimento");
-    }
-  }
 
   async function handleSend() {
     if (!selectedId || !text.trim()) return;
@@ -427,9 +416,6 @@ export function ChatInboxScreen({
                 </h3>
                 <p className="text-xs text-muted-foreground">{active?.phone}</p>
               </div>
-              <Button size="sm" variant="outline" className="cursor-pointer" onClick={() => void handleJoin()}>
-                <UserRound className="size-4" /> Assumir
-              </Button>
               <Button
                 size="sm"
                 variant={active?.aiEnabled ? "secondary" : "outline"}
