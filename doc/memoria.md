@@ -1,4 +1,11 @@
-﻿## 2026-07-17 — Overlay Processando + tema pós-reload
+﻿## 2026-07-17 — Tema escuro apagado pelo AppTopbar
+
+- Causa: ``useState(false)`` + ``useEffect`` que fazia ``classList.toggle('dark', false)`` no mount → limpava o dark do bootstrap após reload (ex.: Atualizar status EVO).
+- Fix: ler tema do DOM/localStorage; ``persistSomaTheme`` + ``data-theme-toggle``.
+- Overlay Processando só aparece após Redeploy com ``f421c02+``; site 404/502 = heal Traefik primeiro.
+- Keywords: app-topbar, dark mode, persistSomaTheme
+
+## 2026-07-17 — Overlay Processando + tema pós-reload
 
 - Forms POST mostram overlay “Processando…” (bootstrap sem React).
 - Tema escuro reaplicado no head + pageshow (não volta ao claro após Atualizar status EVO).
