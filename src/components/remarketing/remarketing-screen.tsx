@@ -81,8 +81,13 @@ export function RemarketingScreen({ initialFilter, initialItems }: Props) {
     [listRemarketing, navigate],
   );
 
-  const productName = (productId: string) =>
-    settings.products.find((product) => product.id === productId)?.name ?? productId;
+  const productMeta = (productId: string) => {
+    const product = settings.products.find((item) => item.id === productId);
+    return {
+      label: product ? (product.tag.trim() || product.name) : productId,
+      color: product?.color ?? "#64748b",
+    };
+  };
 
   const statusLabel = (statusId: string) => resolveAttendanceStatusLabel(statusId, settings);
   const statusColor = (statusId: string) => resolveAttendanceStatusColor(statusId, settings);
@@ -168,7 +173,7 @@ export function RemarketingScreen({ initialFilter, initialItems }: Props) {
             ) : (
               <ClientsDataTable
                 items={items}
-                productName={productName}
+                productMeta={productMeta}
                 statusLabel={statusLabel}
                 statusColor={statusColor}
                 onAction={openAction}

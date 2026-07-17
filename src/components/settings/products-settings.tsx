@@ -16,8 +16,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StatusBadge } from "@/components/clients/status-badge";
 import { CLIENT_FIELD_GROUPS, type ClientFieldId } from "@/lib/config/client-fields";
-import { createEmptyProduct, normalizeProductFields } from "@/lib/config/settings-defaults";
+import {
+  createEmptyProduct,
+  normalizeProductFields,
+  resolveProductTagLabel,
+} from "@/lib/config/settings-defaults";
+import { DEFAULT_STATUS_COLOR, normalizeStatusColor } from "@/lib/config/status-colors";
 import type { ProductConfig, SystemSettings } from "@/lib/config/settings-types";
 
 type Props = {
@@ -201,10 +207,17 @@ export function ProductsSettings({ settings, onChange }: Props) {
                   onClick={() => setSelectedId(product.id)}
                   className="min-w-0 flex-1 rounded-md px-1 py-1 text-left text-sm"
                 >
-                  <span className={`block truncate ${isSelected ? "font-medium" : ""}`}>
-                    {product.name || "Sem nome"}
+                  <span className="flex items-center gap-2">
+                    <StatusBadge
+                      label={resolveProductTagLabel(product)}
+                      color={product.color}
+                      className="max-w-[9rem] truncate"
+                    />
+                    <span className={`truncate ${isSelected ? "font-medium" : ""}`}>
+                      {product.name || "Sem nome"}
+                    </span>
                   </span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
                     {product.requiredFieldIds.length} obrigatório(s) · {product.availableFieldIds.length}{" "}
                     disponível(is)
                   </span>
@@ -272,6 +285,56 @@ export function ProductsSettings({ settings, onChange }: Props) {
                 }}
                 placeholder="Ex.: Empréstimo CLT, FGTS, Cartão consignado"
               />
+            </div>
+
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-2 w-full max-w-[12rem]">
+                <Label htmlFor="product-tag">Tag</Label>
+                <Input
+                  id="product-tag"
+                  value={selected.tag}
+                  onChange={(e) => {
+                    const nextProducts = products.map((product) =>
+                      product.id === selected.id ? { ...product, tag: e.target.value } : product,
+                    );
+                    setProducts(nextProducts);
+                  }}
+                  onBlur={() => {
+                    if (!selected) return;
+                    void persistProducts(
+                      products.map((p) => (p.id === selected.id ? normalizeProductFields(p) : p)),
+                      { quiet: true },
+                    );
+                  }}
+                  placeholder="Ex.: CLT"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-color">Cor</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="product-color"
+                    type="color"
+                    value={normalizeStatusColor(selected.color, DEFAULT_STATUS_COLOR)}
+                    onChange={(event) => {
+                      updateSelected({ color: event.target.value });
+                    }}
+                    className="h-9 w-9 shrink-0 cursor-pointer appearance-none border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-0"
+                    aria-label="Cor da tag do produto"
+                    title="Cor da tag"
+                  />
+                  <StatusBadge
+                    label={resolveProductTagLabel(selected)}
+                    color={selected.color}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+              A <strong className="text-foreground">tag</strong> e a{" "}
+              <strong className="text-foreground">cor</strong> aparecem nas listagens (como o status
+              de atendimento). Se a tag estiver vazia, usa o nome do produto.
             </div>
 
             <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">

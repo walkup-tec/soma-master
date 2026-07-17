@@ -15,6 +15,14 @@ export async function ensureDatabaseSeeded(sql: Sql): Promise<void> {
     alter table crm.user_categories
     add column if not exists home_menu_id text not null default 'dashboard'
   `;
+  await sql`
+    alter table crm.products
+    add column if not exists tag text not null default ''
+  `;
+  await sql`
+    alter table crm.products
+    add column if not exists color text not null default '#64748b'
+  `;
 
   await sql.begin(async (tx) => {
     for (const category of settings.categories) {
@@ -34,9 +42,12 @@ export async function ensureDatabaseSeeded(sql: Sql): Promise<void> {
 
     for (const product of settings.products.map((item) => normalizeProductFields(item))) {
       await tx`
-        insert into crm.products (id, name)
-        values (${product.id}, ${product.name})
-        on conflict (id) do nothing
+        insert into crm.products (id, name, tag, color)
+        values (${product.id}, ${product.name}, ${product.tag}, ${product.color})
+        on conflict (id) do update set
+          name = excluded.name,
+          tag = excluded.tag,
+          color = excluded.color
       `;
       if (product.requiredFieldIds.length === 0) continue;
       const requiredRows = product.requiredFieldIds.map((fieldId) => ({

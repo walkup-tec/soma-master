@@ -41,6 +41,14 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
     alter table crm.user_categories
     add column if not exists home_menu_id text not null default 'dashboard'
   `;
+  await sql`
+    alter table crm.products
+    add column if not exists tag text not null default ''
+  `;
+  await sql`
+    alter table crm.products
+    add column if not exists color text not null default '#64748b'
+  `;
 
   const [categories, menus, products, productFields, banks, attendanceStatuses] = await Promise.all([
     sql<{ id: string; name: string; home_menu_id: string | null }[]>`
@@ -49,8 +57,8 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
     sql<{ category_id: string; menu_id: string }[]>`
       select category_id, menu_id from crm.user_category_menus
     `,
-    sql<{ id: string; name: string }[]>`
-      select id, name from crm.products order by name
+    sql<{ id: string; name: string; tag: string | null; color: string | null }[]>`
+      select id, name, tag, color from crm.products order by name
     `,
     sql<{ product_id: string; field_id: string; required: boolean }[]>`
       select product_id, field_id, required from crm.product_fields
@@ -94,6 +102,8 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
       return {
         id: product.id,
         name: product.name,
+        tag: product.tag ?? "",
+        color: product.color ?? "#64748b",
         requiredFieldIds: fields.required,
         availableFieldIds: fields.optional,
       };
@@ -187,13 +197,21 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
   const payload = products.map((product) => ({
     id: product.id,
     name: product.name,
+    tag: product.tag || "",
+    color: product.color || "#64748b",
     required_field_ids: product.requiredFieldIds,
   }));
 
   await tx`
     with input as (
       select *
-      from jsonb_to_recordset(${tx.json(payload)}) as x(id text, name text, required_field_ids jsonb)
+      from jsonb_to_recordset(${tx.json(payload)}) as x(
+        id text,
+        name text,
+        tag text,
+        color text,
+        required_field_ids jsonb
+      )
     ),
     del_field_orphans as (
       delete from crm.product_fields f
@@ -206,9 +224,13 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       returning 1
     ),
     upsert_products as (
-      insert into crm.products (id, name, updated_at)
-      select id, name, now() from input
-      on conflict (id) do update set name = excluded.name, updated_at = now()
+      insert into crm.products (id, name, tag, color, updated_at)
+      select id, name, tag, color, now() from input
+      on conflict (id) do update set
+        name = excluded.name,
+        tag = excluded.tag,
+        color = excluded.color,
+        updated_at = now()
       returning id
     ),
     del_fields as (
@@ -223,7 +245,13 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
   await tx`
     insert into crm.product_fields (product_id, field_id, required)
     select i.id, field_id, true
-    from jsonb_to_recordset(${tx.json(payload)}) as i(id text, name text, required_field_ids jsonb)
+    from jsonb_to_recordset(${tx.json(payload)}) as i(
+      id text,
+      name text,
+      tag text,
+      color text,
+      required_field_ids jsonb
+    )
     cross join lateral jsonb_array_elements_text(coalesce(i.required_field_ids, '[]'::jsonb)) as field_id
     on conflict (product_id, field_id) do update set required = excluded.required
   `;

@@ -55,8 +55,13 @@ function Dashboard() {
   const statusLabel = (statusId: string) => resolveAttendanceStatusLabel(statusId, settings);
   const statusColor = (statusId: string) => resolveAttendanceStatusColor(statusId, settings);
 
-  const productName = (productId: string) =>
-    settings.products.find((product) => product.id === productId)?.name ?? productId;
+  const productMeta = (productId: string) => {
+    const product = settings.products.find((item) => item.id === productId);
+    return {
+      label: product ? (product.tag.trim() || product.name) : productId,
+      color: product?.color ?? "#64748b",
+    };
+  };
 
   const statusPie = summary.byStatus
     .filter((row) => row.count > 0)
@@ -171,8 +176,11 @@ function Dashboard() {
                         className="border-t border-border/60 transition-colors hover:bg-muted/30"
                       >
                         <td className="px-5 py-3 font-medium">{primaryLabel(client)}</td>
-                        <td className="px-5 py-3 text-muted-foreground">
-                          {productName(client.productId)}
+                        <td className="px-5 py-3">
+                          <StatusBadge
+                            label={productMeta(client.productId).label}
+                            color={productMeta(client.productId).color}
+                          />
                         </td>
                         <td className="px-5 py-3 text-muted-foreground">
                           {client.telefone ?? "—"}

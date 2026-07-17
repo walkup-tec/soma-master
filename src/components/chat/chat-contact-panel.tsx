@@ -189,7 +189,17 @@ export function ChatContactPanel({
             <SelectContent>
               {products.map((item) => (
                 <SelectItem key={item.id} value={item.id}>
-                  {item.name}
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className="inline-block size-2 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                      aria-hidden
+                    />
+                    {item.name}
+                    {item.tag ? (
+                      <span className="text-xs text-muted-foreground">({item.tag})</span>
+                    ) : null}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

@@ -13,9 +13,11 @@ import type { ClientActionKind } from "@/components/clients/client-action-modals
 import type { ClientListItem } from "@/lib/clients/client.types";
 import { formatLocalDateLabel } from "@/lib/dates/local-date";
 
+type ProductBadgeInfo = { label: string; color: string };
+
 type Props = {
   items: Array<ClientListItem & { contactDate?: string }>;
-  productName: (productId: string) => string;
+  productMeta: (productId: string) => ProductBadgeInfo;
   statusLabel: (statusId: string) => string;
   statusColor?: (statusId: string) => string;
   onAction: (client: ClientListItem, action: ClientActionKind) => void;
@@ -33,14 +35,13 @@ function primaryValue(client: ClientListItem) {
   return client.nome ?? client.cpf ?? client.telefone ?? client.id;
 }
 
-function productsLabel(client: ClientListItem, productName: (productId: string) => string) {
-  const ids = client.productIds?.length ? client.productIds : [client.productId];
-  return ids.map((id) => productName(id)).join(", ");
+function productIdsOf(client: ClientListItem): string[] {
+  return client.productIds?.length ? client.productIds : [client.productId];
 }
 
 export function ClientsDataTable({
   items,
-  productName,
+  productMeta,
   statusLabel,
   statusColor,
   onAction,
@@ -102,7 +103,14 @@ export function ClientsDataTable({
                     {client.contactDate ? formatLocalDateLabel(client.contactDate) : "—"}
                   </TableCell>
                 ) : null}
-                <TableCell>{productsLabel(client, productName)}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {productIdsOf(client).map((id) => {
+                      const meta = productMeta(id);
+                      return <StatusBadge key={id} label={meta.label} color={meta.color} />;
+                    })}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <StatusBadge
                     label={statusLabel(client.status)}

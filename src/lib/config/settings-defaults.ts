@@ -58,12 +58,16 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     {
       id: "prod-clt",
       name: "Empréstimo CLT",
+      tag: "CLT",
+      color: "#be1c6a",
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone", "tipo_cliente", "renda_mensal"],
     },
     {
       id: "prod-fgts",
       name: "Antecipação FGTS",
+      tag: "FGTS",
+      color: "#0d9488",
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone"],
     },
@@ -76,6 +80,8 @@ export function createEmptyProduct(): import("@/lib/config/settings-types").Prod
   return normalizeProductFields({
     id: `prod-${crypto.randomUUID().slice(0, 8)}`,
     name: "",
+    tag: "",
+    color: DEFAULT_STATUS_COLOR,
     availableFieldIds: [...ALL_CLIENT_FIELD_IDS],
     requiredFieldIds: [],
   });
@@ -235,5 +241,21 @@ export function normalizeProductFields(
   const requiredFieldIds = migrateFieldIdList(product.requiredFieldIds);
   const requiredSet = new Set(requiredFieldIds);
   const availableFieldIds = ALL_CLIENT_FIELD_IDS.filter((id) => !requiredSet.has(id));
-  return { ...product, availableFieldIds, requiredFieldIds };
+  const name = String(product.name ?? "").trim();
+  const tag = String(product.tag ?? "").trim();
+  return {
+    ...product,
+    name,
+    tag,
+    color: normalizeStatusColor(product.color, DEFAULT_STATUS_COLOR),
+    availableFieldIds,
+    requiredFieldIds,
+  };
+}
+
+/** Texto exibido na tag colorida (tag curta ou nome completo). */
+export function resolveProductTagLabel(
+  product: Pick<import("@/lib/config/settings-types").ProductConfig, "name" | "tag">,
+): string {
+  return product.tag.trim() || product.name.trim() || "Produto";
 }
