@@ -10,9 +10,9 @@ import { useSystemSettings } from "@/hooks/use-system-settings";
 import { getChatbotSettingsLoaderFn } from "@/lib/chat/chat.server";
 
 const SETTINGS_TABS = [
-  "categorias",
-  "produtos",
   "bancos",
+  "produtos",
+  "categorias",
   "status-atendimento",
   "chatbot",
 ] as const;
@@ -20,8 +20,8 @@ const SETTINGS_TABS = [
 type SettingsTabId = (typeof SETTINGS_TABS)[number];
 
 function parseTab(value: unknown): SettingsTabId {
-  const raw = String(value ?? "categorias");
-  return (SETTINGS_TABS.includes(raw as SettingsTabId) ? raw : "categorias") as SettingsTabId;
+  const raw = String(value ?? "bancos");
+  return (SETTINGS_TABS.includes(raw as SettingsTabId) ? raw : "bancos") as SettingsTabId;
 }
 
 type SettingsSearch = {
@@ -62,7 +62,7 @@ function ConfiguracoesPage() {
         </div>
         <h2 className="font-display text-2xl font-bold tracking-tight">Configurações</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Categorias, produtos, bancos, status e Integração EVO (Chatbot).
+          Bancos, produtos, categorias, status e Integração EVO (Chatbot).
         </p>
       </div>
 
@@ -74,14 +74,14 @@ function ConfiguracoesPage() {
         className="space-y-6"
       >
         <TabsList>
-          <TabsTrigger value="categorias" className="gap-2">
-            <Shield className="size-4" /> Categorias de usuário
+          <TabsTrigger value="bancos" className="gap-2">
+            <Landmark className="size-4" /> Bancos
           </TabsTrigger>
           <TabsTrigger value="produtos" className="gap-2">
             <Package className="size-4" /> Produtos
           </TabsTrigger>
-          <TabsTrigger value="bancos" className="gap-2">
-            <Landmark className="size-4" /> Bancos
+          <TabsTrigger value="categorias" className="gap-2">
+            <Shield className="size-4" /> Categorias de usuário
           </TabsTrigger>
           <TabsTrigger value="status-atendimento" className="gap-2">
             <ListChecks className="size-4" /> Status de atendimento
@@ -91,10 +91,12 @@ function ConfiguracoesPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="categorias">
-          <UserCategoriesSettings
+        <TabsContent value="bancos">
+          <BanksSettings
             settings={settings}
-            onChange={(next) => setSettings(next, "categories")}
+            onChange={(next) => {
+              void setSettings(next, "banks");
+            }}
           />
         </TabsContent>
 
@@ -105,12 +107,10 @@ function ConfiguracoesPage() {
           />
         </TabsContent>
 
-        <TabsContent value="bancos">
-          <BanksSettings
+        <TabsContent value="categorias">
+          <UserCategoriesSettings
             settings={settings}
-            onChange={(next) => {
-              void setSettings(next, "banks");
-            }}
+            onChange={(next) => setSettings(next, "categories")}
           />
         </TabsContent>
 
