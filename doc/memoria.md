@@ -1,4 +1,10 @@
-﻿## 2026-07-17 11:03 — Chat: anexar mídia ao cliente, PDF e Abrir
+## 2026-07-17 13:03 — Favicon errado ao abrir mídia do chat
+- Navegador usa `GET /favicon.ico` em respostas não-HTML; o `.ico` na raiz era legado.
+- Novo `scripts/build-favicon-ico.mjs` regenera `public/favicon.ico` (PNG-in-ICO 16/32/48 do ícone Soma).
+- LOG: `doc/LOG-2026-07-17__130300__favicon-ico-raiz-midia-chat.md`.
+- Keywords: favicon.ico, aba imagem, PNG-in-ICO.
+
+## 2026-07-17 11:03 — Chat: anexar mídia ao cliente, PDF e Abrir
 - Webhook Evolution agora reconhece `documentMessage` PDF; domínio ganhou `messageType: document`.
 - Imagem/PDF recebido mostra `Abrir` e `Anexar imagem/PDF`; toast discreto e estado `Anexado`.
 - Anexo é copiado no servidor para `client-attachments`, com validação conversa-cliente/usuário e dedupe por `source_chat_media_id`.
