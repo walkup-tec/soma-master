@@ -9,8 +9,17 @@ export const PARTNER_CATEGORIES: Array<{ value: PartnerCategory; label: string }
   { value: "substabelecido", label: "Substabelecido" },
   { value: "gerente", label: "Gerente" },
   { value: "suporte", label: "Suporte" },
+  { value: "corban", label: "Corban" },
   { value: "atendente", label: "Atendente" },
 ];
+
+export const PARTNER_CATEGORY_ALIASES: Record<PartnerCategory, string> = {
+  substabelecido: "SB",
+  gerente: "GE",
+  suporte: "SE",
+  corban: "CN",
+  atendente: "AE",
+};
 
 export const PARTNER_PERSON_TYPES: Array<{ value: PartnerPersonType; label: string }> = [
   { value: "pf", label: "Pessoa Física" },
@@ -41,6 +50,10 @@ export const PARTNER_BANKS = [
 
 export function partnerCategoryLabel(value: PartnerCategory): string {
   return PARTNER_CATEGORIES.find((item) => item.value === value)?.label ?? value;
+}
+
+export function partnerCategoryAlias(value: PartnerCategory): string {
+  return PARTNER_CATEGORY_ALIASES[value];
 }
 
 export function partnerStatusLabel(value: PartnerStatus): string {

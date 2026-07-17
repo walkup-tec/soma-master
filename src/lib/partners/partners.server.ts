@@ -21,6 +21,7 @@ import type {
   PartnerStatus,
   PartnerUpsertInput,
 } from "@/lib/partners/partner.types";
+import { lookupBrazilApiCnpj } from "@/lib/partners/brasil-api-cnpj.adapter";
 import { lookupViaCep } from "@/lib/partners/viacep.adapter";
 
 async function requirePartnerActor(): Promise<PartnerActor> {
@@ -141,6 +142,11 @@ function cepSchema(data: unknown): { cep: string } {
   return { cep: stringValue(value.cep) };
 }
 
+function cnpjSchema(data: unknown): { cnpj: string } {
+  const value = objectData(data);
+  return { cnpj: stringValue(value.cnpj) };
+}
+
 export const listPartnersFn = createServerFn({ method: "POST" })
   .inputValidator(partnerListSchema)
   .handler(async ({ data }) => listPartners(await requirePartnerActor(), data));
@@ -179,4 +185,11 @@ export const lookupPartnerCepFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requirePartnerActor();
     return lookupViaCep(data.cep);
+  });
+
+export const lookupPartnerCnpjFn = createServerFn({ method: "POST" })
+  .inputValidator(cnpjSchema)
+  .handler(async ({ data }) => {
+    await requirePartnerActor();
+    return lookupBrazilApiCnpj(data.cnpj);
   });

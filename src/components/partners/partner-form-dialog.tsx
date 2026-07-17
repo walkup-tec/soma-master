@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, MapPin, Save, UserRoundPlus } from "lucide-react";
+import { Building2, Copy, KeyRound, Loader2, MapPin, Save, UserRoundPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,7 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MENU_ITEMS, MENU_SECTIONS, type MenuItemId } from "@/lib/config/menu-items";
+import {
+  MENU_ITEMS,
+  MENU_SECTIONS,
+  type MenuItemId,
+  type MenuSectionId,
+} from "@/lib/config/menu-items";
 import { BRAZIL_UFS } from "@/lib/geo/brazil-ufs";
 import { maskCep, isCompleteCep } from "@/lib/masks/br-cep";
 import { isCompleteCpf, maskCpf } from "@/lib/masks/br-cpf";
@@ -34,9 +39,11 @@ import {
   PARTNER_CATEGORIES,
   PARTNER_PERSON_TYPES,
   PARTNER_PIX_KEY_TYPES,
+  partnerCategoryAlias,
 } from "@/lib/partners/partner.constants";
 import {
   createPartnerFn,
+  lookupPartnerCnpjFn,
   lookupPartnerCepFn,
   updatePartnerFn,
 } from "@/lib/partners/partners.server";
@@ -71,10 +78,17 @@ function emptyForm(allowedMenuIds: MenuItemId[]): PartnerFormState {
     state: "",
     complement: "",
     number: "",
-    menuIds: allowedMenuIds.includes("parceiros") ? ["parceiros"] : [],
+    menuIds: [],
     canCreatePartners: false,
     bankIds: [],
   };
+}
+
+function sectionsFromMenuIds(menuIds: MenuItemId[]): MenuSectionId[] {
+  const selected = new Set(menuIds);
+  return MENU_SECTIONS.filter((section) =>
+    MENU_ITEMS.some((item) => item.section === section.id && selected.has(item.id)),
+  ).map((section) => section.id);
 }
 
 function maskPixKey(type: PartnerPixKeyType, value: string): string {
@@ -172,6 +186,7 @@ function Field({
 function validateClientForm(
   form: PartnerFormState,
   isEditing: boolean,
+  originalCategory?: PartnerCategory,
 ): Partial<Record<keyof PartnerFormState | "banks" | "menus", string>> {
   const errors: Partial<Record<keyof PartnerFormState | "banks" | "menus", string>> = {};
 
@@ -190,11 +205,14 @@ function validateClientForm(
   if (!isFilledValidEmail(form.email)) {
     errors.email = "Informe um e-mail válido.";
   }
-  if (!isEditing && form.password.length < 8) {
-    errors.password = "A senha deve ter ao menos 8 caracteres.";
+  if (!isEditing && !/^\d{4}$/.test(form.password)) {
+    errors.password = "Informe exatamente 4 dígitos numéricos.";
   }
-  if (isEditing && form.password && form.password.length < 8) {
-    errors.password = "A nova senha deve ter ao menos 8 caracteres.";
+  if (isEditing && form.password && !/^\d{4}$/.test(form.password)) {
+    errors.password = "A nova senha deve ter exatamente 4 dígitos numéricos.";
+  }
+  if (isEditing && originalCategory !== form.category && !/^\d{4}$/.test(form.password)) {
+    errors.password = "Ao alterar a categoria, informe uma nova senha de 4 dígitos.";
   }
   if (!isCompletePhoneBr(form.phone)) {
     errors.phone = "Informe um telefone válido com DDD.";
@@ -241,14 +259,20 @@ export function PartnerFormDialog({
   const createPartner = useServerFn(createPartnerFn);
   const updatePartner = useServerFn(updatePartnerFn);
   const lookupCep = useServerFn(lookupPartnerCepFn);
+  const lookupCnpj = useServerFn(lookupPartnerCnpjFn);
   const [form, setForm] = useState<PartnerFormState>(() => emptyForm(allowedMenuIds));
   const [saving, setSaving] = useState(false);
   const [lookingUpCep, setLookingUpCep] = useState(false);
+  const [lookingUpCnpj, setLookingUpCnpj] = useState(false);
   const [touchedSubmit, setTouchedSubmit] = useState(false);
+  const [selectedSections, setSelectedSections] = useState<MenuSectionId[]>([]);
+  const [generatedAccessCode, setGeneratedAccessCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setForm(partner ? formFromPartner(partner) : emptyForm(allowedMenuIds));
+    const nextForm = partner ? formFromPartner(partner) : emptyForm(allowedMenuIds);
+    setForm(nextForm);
+    setSelectedSections(sectionsFromMenuIds(nextForm.menuIds));
     setTouchedSubmit(false);
   }, [allowedMenuIds, open, partner]);
 
@@ -258,7 +282,7 @@ export function PartnerFormDialog({
   );
 
   const fieldErrors = useMemo(
-    () => (touchedSubmit ? validateClientForm(form, Boolean(partner)) : {}),
+    () => (touchedSubmit ? validateClientForm(form, Boolean(partner), partner?.category) : {}),
     [form, partner, touchedSubmit],
   );
 
@@ -280,6 +304,25 @@ export function PartnerFormDialog({
     }
   };
 
+  const toggleSection = (sectionId: MenuSectionId) => {
+    if (selectedSections.includes(sectionId)) {
+      const sectionMenuIds = new Set(
+        MENU_ITEMS.filter((item) => item.section === sectionId).map((item) => item.id),
+      );
+      setSelectedSections((current) => current.filter((id) => id !== sectionId));
+      setForm((current) => {
+        const menuIds = current.menuIds.filter((id) => !sectionMenuIds.has(id));
+        return {
+          ...current,
+          menuIds,
+          canCreatePartners: sectionId === "parceiros" ? false : current.canCreatePartners,
+        };
+      });
+      return;
+    }
+    setSelectedSections((current) => [...current, sectionId]);
+  };
+
   const toggleBank = (bankId: string) => {
     update(
       "bankIds",
@@ -293,9 +336,17 @@ export function PartnerFormDialog({
     setForm((current) => ({
       ...current,
       personType: value,
-      taxId: maskTaxId(current.taxId, value === "pf" ? "cpf" : "cnpj"),
-      rg: value === "pf" ? current.rg : "",
+      name: current.personType === value ? current.name : "",
+      taxId:
+        current.personType === value
+          ? maskTaxId(current.taxId, value === "pf" ? "cpf" : "cnpj")
+          : "",
+      rg: current.personType === value && value === "pf" ? current.rg : "",
     }));
+  };
+
+  const handleCategoryChange = (value: PartnerCategory) => {
+    update("category", value);
   };
 
   const handlePixTypeChange = (value: PartnerPixKeyType) => {
@@ -331,9 +382,54 @@ export function PartnerFormDialog({
     }
   };
 
+  const handleLookupCnpj = async () => {
+    if (form.personType !== "pj" || !isCompleteCnpj(form.taxId)) {
+      toast.error("Informe um CNPJ válido com 14 dígitos.");
+      return;
+    }
+    const requestedCnpj = form.taxId.replace(/\D/g, "");
+    setLookingUpCnpj(true);
+    try {
+      const company = await lookupCnpj({ data: { cnpj: requestedCnpj } });
+      setForm((current) => {
+        if (current.personType !== "pj" || current.taxId.replace(/\D/g, "") !== requestedCnpj) {
+          return current;
+        }
+        const companyPhone = isCompletePhoneBr(company.phone) ? maskPhoneBr(company.phone) : "";
+        return {
+          ...current,
+          taxId: maskTaxId(company.cnpj, "cnpj"),
+          name: company.legalName || current.name,
+          email: isFilledValidEmail(company.email) ? company.email : current.email,
+          phone: companyPhone || current.phone,
+          whatsapp: companyPhone || current.whatsapp,
+          cep: isCompleteCep(company.cep) ? maskCep(company.cep) : current.cep,
+          street: company.street || current.street,
+          neighborhood: company.neighborhood || current.neighborhood,
+          city: company.city || current.city,
+          state: company.state || current.state,
+          complement: company.complement || current.complement,
+          number: company.number || current.number,
+        };
+      });
+      if (
+        company.registrationStatus &&
+        company.registrationStatus.toLocaleUpperCase("pt-BR") !== "ATIVA"
+      ) {
+        toast.warning(`Empresa localizada com situação ${company.registrationStatus}.`);
+      } else {
+        toast.success("Dados da empresa preenchidos pela BrasilAPI.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível consultar o CNPJ.");
+    } finally {
+      setLookingUpCnpj(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setTouchedSubmit(true);
-    const errors = validateClientForm(form, Boolean(partner));
+    const errors = validateClientForm(form, Boolean(partner), partner?.category);
     const firstError = Object.values(errors)[0];
     if (firstError) {
       toast.error(firstError);
@@ -344,10 +440,12 @@ export function PartnerFormDialog({
     try {
       const data = { ...form, password: form.password || undefined };
       if (partner) {
-        await updatePartner({ data: { ...data, partnerId: partner.id } });
+        const result = await updatePartner({ data: { ...data, partnerId: partner.id } });
+        setGeneratedAccessCode(result.accessCode);
         toast.success("Parceiro atualizado.");
       } else {
-        await createPartner({ data });
+        const result = await createPartner({ data });
+        setGeneratedAccessCode(result.accessCode);
         toast.success("Parceiro criado com sucesso.");
       }
       await onSaved();
@@ -360,429 +458,600 @@ export function PartnerFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
-      <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-4xl overflow-y-auto">
-        <DialogHeader className="pr-8">
-          <DialogTitle className="flex items-center gap-2">
-            <UserRoundPlus className="size-5 text-primary" />
-            {partner ? "Editar parceiro" : "Novo parceiro"}
-          </DialogTitle>
-          <DialogDescription>
-            Campos marcados com * são obrigatórios. O responsável será quem criou o cadastro.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
+        <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-4xl overflow-y-auto">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="flex items-center gap-2">
+              <UserRoundPlus className="size-5 text-primary" />
+              {partner ? "Editar parceiro" : "Novo parceiro"}
+            </DialogTitle>
+            <DialogDescription>
+              Campos marcados com * são obrigatórios. O responsável será quem criou o cadastro.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-6">
-          <section className="space-y-4 rounded-xl border border-border/60 p-4">
-            <h3 className="font-display text-sm font-semibold">Identificação</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <RequiredLabel>Categoria</RequiredLabel>
-                <Select
-                  value={form.category}
-                  onValueChange={(value) => update("category", value as PartnerCategory)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PARTNER_CATEGORIES.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <RequiredLabel>Tipo de pessoa</RequiredLabel>
-                <Select value={form.personType} onValueChange={handlePersonTypeChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PARTNER_PERSON_TYPES.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Field
-                id="partner-name"
-                label={form.personType === "pf" ? "Nome completo" : "Razão social"}
-                value={form.name}
-                onChange={(value) => update("name", value)}
-                error={fieldErrors.name}
-                className="sm:col-span-2"
-                autoComplete="name"
-                required
-              />
-              <Field
-                id="partner-tax-id"
-                label={form.personType === "pf" ? "CPF" : "CNPJ"}
-                value={form.taxId}
-                onChange={(value) =>
-                  update("taxId", maskTaxId(value, form.personType === "pf" ? "cpf" : "cnpj"))
-                }
-                error={fieldErrors.taxId}
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder={form.personType === "pf" ? "000.000.000-00" : "00.000.000/0000-00"}
-                maxLength={form.personType === "pf" ? 14 : 18}
-                required
-              />
-              {form.personType === "pf" ? (
-                <Field
-                  id="partner-rg"
-                  label="RG"
-                  value={form.rg}
-                  onChange={(value) => update("rg", value.slice(0, 30))}
-                  error={fieldErrors.rg}
-                  required
-                />
-              ) : (
-                <div />
-              )}
-            </div>
-          </section>
-
-          <section className="space-y-4 rounded-xl border border-border/60 p-4">
-            <h3 className="font-display text-sm font-semibold">Acesso e contato</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <RequiredLabel htmlFor="partner-email">E-mail</RequiredLabel>
-                <Input
-                  id="partner-email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="nome@exemplo.com"
-                  value={form.email}
-                  required
-                  aria-invalid={emailInvalid || Boolean(fieldErrors.email)}
-                  className={cn(
-                    (emailInvalid || fieldErrors.email) &&
-                      "border-destructive focus-visible:ring-destructive",
-                  )}
-                  onChange={(event) => update("email", event.target.value.trimStart())}
-                />
-                {emailInvalid || fieldErrors.email ? (
-                  <p className="text-xs text-destructive">
-                    {fieldErrors.email ?? "Informe um e-mail válido."}
-                  </p>
-                ) : null}
-              </div>
-              <Field
-                id="partner-password"
-                label={partner ? "Nova senha" : "Senha"}
-                type="password"
-                value={form.password}
-                onChange={(value) => update("password", value)}
-                error={fieldErrors.password}
-                optional={Boolean(partner)}
-                placeholder={
-                  partner ? "Deixe em branco para manter a atual" : "Mínimo 8 caracteres"
-                }
-                autoComplete={partner ? "new-password" : "new-password"}
-                required={!partner}
-              />
-              <Field
-                id="partner-phone"
-                label="Telefone"
-                value={form.phone}
-                onChange={(value) => update("phone", maskPhoneBr(value))}
-                error={fieldErrors.phone}
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="(00) 00000-0000"
-                maxLength={15}
-                required
-              />
-              <Field
-                id="partner-whatsapp"
-                label="WhatsApp"
-                value={form.whatsapp}
-                onChange={(value) => update("whatsapp", maskPhoneBr(value))}
-                error={fieldErrors.whatsapp}
-                inputMode="tel"
-                placeholder="(00) 00000-0000"
-                maxLength={15}
-                required
-              />
-            </div>
-          </section>
-
-          <section className="space-y-4 rounded-xl border border-border/60 p-4">
-            <h3 className="font-display text-sm font-semibold">Dados PIX</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <RequiredLabel>Tipo de chave</RequiredLabel>
-                <Select value={form.pixKeyType} onValueChange={handlePixTypeChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PARTNER_PIX_KEY_TYPES.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <RequiredLabel htmlFor="partner-pix-key">Chave PIX</RequiredLabel>
-                <Input
-                  id="partner-pix-key"
-                  value={form.pixKey}
-                  required
-                  inputMode={
-                    form.pixKeyType === "email"
-                      ? "email"
-                      : form.pixKeyType === "random"
-                        ? "text"
-                        : "numeric"
-                  }
-                  placeholder={
-                    form.pixKeyType === "cpf"
-                      ? "000.000.000-00"
-                      : form.pixKeyType === "phone"
-                        ? "(00) 00000-0000"
-                        : form.pixKeyType === "email"
-                          ? "nome@exemplo.com"
-                          : "Chave aleatória"
-                  }
-                  maxLength={
-                    form.pixKeyType === "cpf" ? 14 : form.pixKeyType === "phone" ? 15 : 180
-                  }
-                  aria-invalid={pixEmailInvalid || Boolean(fieldErrors.pixKey)}
-                  className={cn(
-                    (pixEmailInvalid || fieldErrors.pixKey) &&
-                      "border-destructive focus-visible:ring-destructive",
-                  )}
-                  onChange={(event) =>
-                    update("pixKey", maskPixKey(form.pixKeyType, event.target.value))
-                  }
-                />
-                {pixEmailInvalid || fieldErrors.pixKey ? (
-                  <p className="text-xs text-destructive">
-                    {fieldErrors.pixKey ?? "Informe uma chave PIX de e-mail válida."}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-4 rounded-xl border border-border/60 p-4">
-            <h3 className="flex items-center gap-2 font-display text-sm font-semibold">
-              <MapPin className="size-4 text-primary" /> Endereço
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2 sm:col-span-2">
-                <RequiredLabel htmlFor="partner-cep">CEP</RequiredLabel>
-                <div className="flex gap-2">
-                  <Input
-                    id="partner-cep"
-                    value={form.cep}
-                    onChange={(event) => update("cep", maskCep(event.target.value))}
-                    inputMode="numeric"
-                    placeholder="00000-000"
-                    maxLength={9}
-                    required
-                    aria-invalid={Boolean(fieldErrors.cep)}
-                    className={cn(
-                      fieldErrors.cep && "border-destructive focus-visible:ring-destructive",
-                    )}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={lookingUpCep}
-                    onClick={handleLookupCep}
+          <div className="space-y-6">
+            <section className="space-y-4 rounded-xl border border-border/60 p-4">
+              <h3 className="font-display text-sm font-semibold">Identificação</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <RequiredLabel>Categoria</RequiredLabel>
+                  <Select
+                    value={form.category}
+                    onValueChange={(value) => handleCategoryChange(value as PartnerCategory)}
                   >
-                    {lookingUpCep ? <Loader2 className="size-4 animate-spin" /> : "Buscar"}
-                  </Button>
-                </div>
-                {fieldErrors.cep ? (
-                  <p className="text-xs text-destructive">{fieldErrors.cep}</p>
-                ) : null}
-              </div>
-              <Field
-                id="partner-street"
-                label="Endereço"
-                value={form.street}
-                onChange={(value) => update("street", value)}
-                error={fieldErrors.street}
-                className="lg:col-span-2"
-                autoComplete="street-address"
-                required
-              />
-              <Field
-                id="partner-number"
-                label="Número"
-                value={form.number}
-                onChange={(value) => update("number", value)}
-                error={fieldErrors.number}
-                required
-              />
-              <Field
-                id="partner-complement"
-                label="Complemento"
-                value={form.complement}
-                onChange={(value) => update("complement", value)}
-                optional
-              />
-              <Field
-                id="partner-neighborhood"
-                label="Bairro"
-                value={form.neighborhood}
-                onChange={(value) => update("neighborhood", value)}
-                error={fieldErrors.neighborhood}
-                required
-              />
-              <Field
-                id="partner-city"
-                label="Cidade"
-                value={form.city}
-                onChange={(value) => update("city", value)}
-                error={fieldErrors.city}
-                required
-              />
-              <div className="space-y-2">
-                <RequiredLabel>Estado (UF)</RequiredLabel>
-                <Select
-                  value={form.state || undefined}
-                  onValueChange={(value) => update("state", value)}
-                >
-                  <SelectTrigger
-                    aria-invalid={Boolean(fieldErrors.state)}
-                    className={cn(
-                      fieldErrors.state && "border-destructive focus-visible:ring-destructive",
-                    )}
-                  >
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRAZIL_UFS.map((uf) => (
-                      <SelectItem key={uf.code} value={uf.code}>
-                        {uf.code} — {uf.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {fieldErrors.state ? (
-                  <p className="text-xs text-destructive">{fieldErrors.state}</p>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-4 rounded-xl border border-border/60 p-4">
-            <div>
-              <h3 className="font-display text-sm font-semibold">
-                Bancos de atuação
-                <span className="ml-0.5 text-destructive" aria-hidden>
-                  *
-                </span>
-              </h3>
-              <p className="text-xs text-muted-foreground">Selecione ao menos um banco.</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {PARTNER_BANKS.map((bank) => (
-                <label
-                  key={bank.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 p-3 text-sm"
-                >
-                  <Checkbox
-                    checked={form.bankIds.includes(bank.id)}
-                    onCheckedChange={() => toggleBank(bank.id)}
-                  />
-                  {bank.name}
-                </label>
-              ))}
-            </div>
-            {fieldErrors.banks ? (
-              <p className="text-xs text-destructive">{fieldErrors.banks}</p>
-            ) : null}
-          </section>
-
-          <section className="space-y-4 rounded-xl border border-border/60 p-4">
-            <div>
-              <h3 className="font-display text-sm font-semibold">
-                Menus e permissões
-                <span className="ml-0.5 text-destructive" aria-hidden>
-                  *
-                </span>
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Selecione ao menos um menu. Você só pode conceder acessos que também possui.
-              </p>
-            </div>
-            <div className="space-y-4">
-              {MENU_SECTIONS.map((section) => {
-                const items = grantableMenus.filter((item) => item.section === section.id);
-                if (items.length === 0) return null;
-                return (
-                  <div key={section.id} className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {section.label}
-                    </p>
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {items.map((item) => (
-                        <label
-                          key={item.id}
-                          className="flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 p-3 text-sm"
-                        >
-                          <Checkbox
-                            checked={form.menuIds.includes(item.id)}
-                            onCheckedChange={() => toggleMenu(item.id)}
-                          />
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PARTNER_CATEGORIES.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
                           {item.label}
-                        </label>
+                        </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <RequiredLabel>Tipo de pessoa</RequiredLabel>
+                  <Select value={form.personType} onValueChange={handlePersonTypeChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PARTNER_PERSON_TYPES.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.personType === "pj" ? (
+                  <>
+                    <div className="space-y-2 sm:col-span-2">
+                      <RequiredLabel htmlFor="partner-tax-id">CNPJ</RequiredLabel>
+                      <div className="flex gap-2">
+                        <Input
+                          id="partner-tax-id"
+                          value={form.taxId}
+                          onChange={(event) =>
+                            update("taxId", maskTaxId(event.target.value, "cnpj"))
+                          }
+                          aria-invalid={Boolean(fieldErrors.taxId)}
+                          className={cn(
+                            fieldErrors.taxId &&
+                              "border-destructive focus-visible:ring-destructive",
+                          )}
+                          inputMode="numeric"
+                          autoComplete="off"
+                          placeholder="00.000.000/0000-00"
+                          maxLength={18}
+                          required
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={lookingUpCnpj || !isCompleteCnpj(form.taxId)}
+                          onClick={handleLookupCnpj}
+                        >
+                          {lookingUpCnpj ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Building2 className="size-4" />
+                          )}
+                          Buscar
+                        </Button>
+                      </div>
+                      {fieldErrors.taxId ? (
+                        <p className="text-xs text-destructive">{fieldErrors.taxId}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          A busca preenche automaticamente os dados disponíveis da empresa.
+                        </p>
+                      )}
                     </div>
-                  </div>
-                );
-              })}
-              {fieldErrors.menus ? (
-                <p className="text-xs text-destructive">{fieldErrors.menus}</p>
-              ) : null}
-              {allowedMenuIds.includes("parceiros") ? (
-                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-                  <Checkbox
-                    checked={form.canCreatePartners}
-                    disabled={!form.menuIds.includes("parceiros")}
-                    onCheckedChange={(checked) => update("canCreatePartners", checked === true)}
-                  />
-                  <span>
-                    <span className="block font-medium">Cadastrar parceiros abaixo dele</span>
-                    <span className="block text-xs text-muted-foreground">
-                      O novo cadastro terá este parceiro como responsável fixo.
-                    </span>
-                  </span>
-                </label>
-              ) : null}
-            </div>
-          </section>
-        </div>
+                    <Field
+                      id="partner-name"
+                      label="Razão social"
+                      value={form.name}
+                      onChange={(value) => update("name", value)}
+                      error={fieldErrors.name}
+                      className="sm:col-span-2"
+                      autoComplete="organization"
+                      required
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Field
+                      id="partner-name"
+                      label="Nome completo"
+                      value={form.name}
+                      onChange={(value) => update("name", value)}
+                      error={fieldErrors.name}
+                      className="sm:col-span-2"
+                      autoComplete="name"
+                      required
+                    />
+                    <Field
+                      id="partner-tax-id"
+                      label="CPF"
+                      value={form.taxId}
+                      onChange={(value) => update("taxId", maskTaxId(value, "cpf"))}
+                      error={fieldErrors.taxId}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      required
+                    />
+                    <Field
+                      id="partner-rg"
+                      label="RG"
+                      value={form.rg}
+                      onChange={(value) => update("rg", value.slice(0, 30))}
+                      error={fieldErrors.rg}
+                      required
+                    />
+                  </>
+                )}
+              </div>
+            </section>
 
-        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => onOpenChange(false)}
-          >
-            Cancelar
-          </Button>
-          <Button type="button" disabled={saving} onClick={handleSubmit}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            {partner ? "Salvar alterações" : "Criar parceiro"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <section className="space-y-4 rounded-xl border border-border/60 p-4">
+              <h3 className="font-display text-sm font-semibold">Acesso e contato</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="partner-email">E-mail</RequiredLabel>
+                  <Input
+                    id="partner-email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="nome@exemplo.com"
+                    value={form.email}
+                    required
+                    aria-invalid={emailInvalid || Boolean(fieldErrors.email)}
+                    className={cn(
+                      (emailInvalid || fieldErrors.email) &&
+                        "border-destructive focus-visible:ring-destructive",
+                    )}
+                    onChange={(event) => update("email", event.target.value.trimStart())}
+                  />
+                  {emailInvalid || fieldErrors.email ? (
+                    <p className="text-xs text-destructive">
+                      {fieldErrors.email ?? "Informe um e-mail válido."}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="partner-password" optional={Boolean(partner)}>
+                    {partner ? "Nova senha numérica" : "Senha numérica"}
+                  </RequiredLabel>
+                  <div className="flex">
+                    <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 font-mono text-sm font-semibold text-primary">
+                      {partnerCategoryAlias(form.category)}
+                    </span>
+                    <Input
+                      id="partner-password"
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      value={form.password}
+                      onChange={(event) =>
+                        update("password", event.target.value.replace(/\D/g, "").slice(0, 4))
+                      }
+                      aria-invalid={Boolean(fieldErrors.password)}
+                      className={cn(
+                        "rounded-l-none",
+                        fieldErrors.password && "border-destructive focus-visible:ring-destructive",
+                      )}
+                      placeholder={partner ? "4 dígitos (se alterar)" : "4 dígitos"}
+                      maxLength={4}
+                      required={!partner || partner.category !== form.category}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Código de acesso final:{" "}
+                    <span className="font-mono font-medium text-foreground">
+                      {partnerCategoryAlias(form.category)}
+                      {form.password || "••••"}
+                    </span>
+                  </p>
+                  {fieldErrors.password ? (
+                    <p className="text-xs text-destructive">{fieldErrors.password}</p>
+                  ) : null}
+                </div>
+                <Field
+                  id="partner-phone"
+                  label="Telefone"
+                  value={form.phone}
+                  onChange={(value) => update("phone", maskPhoneBr(value))}
+                  error={fieldErrors.phone}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="(00) 00000-0000"
+                  maxLength={15}
+                  required
+                />
+                <Field
+                  id="partner-whatsapp"
+                  label="WhatsApp"
+                  value={form.whatsapp}
+                  onChange={(value) => update("whatsapp", maskPhoneBr(value))}
+                  error={fieldErrors.whatsapp}
+                  inputMode="tel"
+                  placeholder="(00) 00000-0000"
+                  maxLength={15}
+                  required
+                />
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-border/60 p-4">
+              <h3 className="font-display text-sm font-semibold">Dados PIX</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <RequiredLabel>Tipo de chave</RequiredLabel>
+                  <Select value={form.pixKeyType} onValueChange={handlePixTypeChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PARTNER_PIX_KEY_TYPES.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="partner-pix-key">Chave PIX</RequiredLabel>
+                  <Input
+                    id="partner-pix-key"
+                    value={form.pixKey}
+                    required
+                    inputMode={
+                      form.pixKeyType === "email"
+                        ? "email"
+                        : form.pixKeyType === "random"
+                          ? "text"
+                          : "numeric"
+                    }
+                    placeholder={
+                      form.pixKeyType === "cpf"
+                        ? "000.000.000-00"
+                        : form.pixKeyType === "phone"
+                          ? "(00) 00000-0000"
+                          : form.pixKeyType === "email"
+                            ? "nome@exemplo.com"
+                            : "Chave aleatória"
+                    }
+                    maxLength={
+                      form.pixKeyType === "cpf" ? 14 : form.pixKeyType === "phone" ? 15 : 180
+                    }
+                    aria-invalid={pixEmailInvalid || Boolean(fieldErrors.pixKey)}
+                    className={cn(
+                      (pixEmailInvalid || fieldErrors.pixKey) &&
+                        "border-destructive focus-visible:ring-destructive",
+                    )}
+                    onChange={(event) =>
+                      update("pixKey", maskPixKey(form.pixKeyType, event.target.value))
+                    }
+                  />
+                  {pixEmailInvalid || fieldErrors.pixKey ? (
+                    <p className="text-xs text-destructive">
+                      {fieldErrors.pixKey ?? "Informe uma chave PIX de e-mail válida."}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-border/60 p-4">
+              <h3 className="flex items-center gap-2 font-display text-sm font-semibold">
+                <MapPin className="size-4 text-primary" /> Endereço
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <RequiredLabel htmlFor="partner-cep">CEP</RequiredLabel>
+                  <div className="flex gap-2">
+                    <Input
+                      id="partner-cep"
+                      value={form.cep}
+                      onChange={(event) => update("cep", maskCep(event.target.value))}
+                      inputMode="numeric"
+                      placeholder="00000-000"
+                      maxLength={9}
+                      required
+                      aria-invalid={Boolean(fieldErrors.cep)}
+                      className={cn(
+                        fieldErrors.cep && "border-destructive focus-visible:ring-destructive",
+                      )}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={lookingUpCep}
+                      onClick={handleLookupCep}
+                    >
+                      {lookingUpCep ? <Loader2 className="size-4 animate-spin" /> : "Buscar"}
+                    </Button>
+                  </div>
+                  {fieldErrors.cep ? (
+                    <p className="text-xs text-destructive">{fieldErrors.cep}</p>
+                  ) : null}
+                </div>
+                <Field
+                  id="partner-street"
+                  label="Endereço"
+                  value={form.street}
+                  onChange={(value) => update("street", value)}
+                  error={fieldErrors.street}
+                  className="lg:col-span-2"
+                  autoComplete="street-address"
+                  required
+                />
+                <Field
+                  id="partner-number"
+                  label="Número"
+                  value={form.number}
+                  onChange={(value) => update("number", value)}
+                  error={fieldErrors.number}
+                  required
+                />
+                <Field
+                  id="partner-complement"
+                  label="Complemento"
+                  value={form.complement}
+                  onChange={(value) => update("complement", value)}
+                  optional
+                />
+                <Field
+                  id="partner-neighborhood"
+                  label="Bairro"
+                  value={form.neighborhood}
+                  onChange={(value) => update("neighborhood", value)}
+                  error={fieldErrors.neighborhood}
+                  required
+                />
+                <Field
+                  id="partner-city"
+                  label="Cidade"
+                  value={form.city}
+                  onChange={(value) => update("city", value)}
+                  error={fieldErrors.city}
+                  required
+                />
+                <div className="space-y-2">
+                  <RequiredLabel>Estado (UF)</RequiredLabel>
+                  <Select
+                    value={form.state || undefined}
+                    onValueChange={(value) => update("state", value)}
+                  >
+                    <SelectTrigger
+                      aria-invalid={Boolean(fieldErrors.state)}
+                      className={cn(
+                        fieldErrors.state && "border-destructive focus-visible:ring-destructive",
+                      )}
+                    >
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BRAZIL_UFS.map((uf) => (
+                        <SelectItem key={uf.code} value={uf.code}>
+                          {uf.code} — {uf.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.state ? (
+                    <p className="text-xs text-destructive">{fieldErrors.state}</p>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-border/60 p-4">
+              <div>
+                <h3 className="font-display text-sm font-semibold">
+                  Bancos de atuação
+                  <span className="ml-0.5 text-destructive" aria-hidden>
+                    *
+                  </span>
+                </h3>
+                <p className="text-xs text-muted-foreground">Selecione ao menos um banco.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {PARTNER_BANKS.map((bank) => (
+                  <label
+                    key={bank.id}
+                    className="flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 p-3 text-sm"
+                  >
+                    <Checkbox
+                      checked={form.bankIds.includes(bank.id)}
+                      onCheckedChange={() => toggleBank(bank.id)}
+                    />
+                    {bank.name}
+                  </label>
+                ))}
+              </div>
+              {fieldErrors.banks ? (
+                <p className="text-xs text-destructive">{fieldErrors.banks}</p>
+              ) : null}
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-border/60 p-4">
+              <div>
+                <h3 className="font-display text-sm font-semibold">
+                  Seções, menus e permissões
+                  <span className="ml-0.5 text-destructive" aria-hidden>
+                    *
+                  </span>
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Selecione Parceiros, Produção própria ou as duas seções. Depois escolha os
+                  submenus que ficarão disponíveis.
+                </p>
+              </div>
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {MENU_SECTIONS.map((section) => {
+                    const availableItems = grantableMenus.filter(
+                      (item) => item.section === section.id,
+                    );
+                    if (availableItems.length === 0) return null;
+                    const selected = selectedSections.includes(section.id);
+                    return (
+                      <label
+                        key={section.id}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-3 rounded-xl border p-4 text-sm transition-colors",
+                          selected
+                            ? "border-primary/50 bg-primary/10"
+                            : "border-border/60 hover:border-primary/30",
+                        )}
+                      >
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={() => toggleSection(section.id)}
+                        />
+                        <span>
+                          <span className="block font-semibold">{section.label}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {availableItems.length}{" "}
+                            {availableItems.length === 1
+                              ? "submenu disponível"
+                              : "submenus disponíveis"}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {MENU_SECTIONS.map((section) => {
+                  const items = grantableMenus.filter((item) => item.section === section.id);
+                  if (items.length === 0 || !selectedSections.includes(section.id)) return null;
+                  return (
+                    <div
+                      key={section.id}
+                      className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">{section.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Selecione os menus desta seção.
+                        </p>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {items.map((item) => (
+                          <label
+                            key={item.id}
+                            className="flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 p-3 text-sm"
+                          >
+                            <Checkbox
+                              checked={form.menuIds.includes(item.id)}
+                              onCheckedChange={() => toggleMenu(item.id)}
+                            />
+                            {item.label}
+                          </label>
+                        ))}
+                      </div>
+                      {section.id === "parceiros" && allowedMenuIds.includes("parceiros") ? (
+                        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                          <Checkbox
+                            checked={form.canCreatePartners}
+                            disabled={!form.menuIds.includes("parceiros")}
+                            onCheckedChange={(checked) =>
+                              update("canCreatePartners", checked === true)
+                            }
+                          />
+                          <span>
+                            <span className="block font-medium">
+                              Cadastrar parceiros abaixo dele
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              O novo cadastro terá este parceiro como responsável fixo.
+                            </span>
+                          </span>
+                        </label>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {fieldErrors.menus ? (
+                  <p className="text-xs text-destructive">{fieldErrors.menus}</p>
+                ) : null}
+              </div>
+            </section>
+          </div>
+
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={() => onOpenChange(false)}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" disabled={saving} onClick={handleSubmit}>
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              {partner ? "Salvar alterações" : "Criar parceiro"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(generatedAccessCode)}
+        onOpenChange={(next) => {
+          if (!next) setGeneratedAccessCode(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="size-5 text-primary" />
+              Código de acesso gerado
+            </DialogTitle>
+            <DialogDescription>
+              Copie e envie este código ao parceiro. Por segurança, ele não será exibido novamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={generatedAccessCode ?? ""}
+              className="font-mono text-base font-semibold tracking-wider"
+            />
+            <Button
+              type="button"
+              onClick={async () => {
+                if (!generatedAccessCode) return;
+                try {
+                  await navigator.clipboard.writeText(generatedAccessCode);
+                  toast.success("Código copiado.");
+                } catch {
+                  toast.error("Não foi possível copiar automaticamente. Selecione o código.");
+                }
+              }}
+            >
+              <Copy className="size-4" />
+              Copiar
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={() => setGeneratedAccessCode(null)}>
+              Concluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

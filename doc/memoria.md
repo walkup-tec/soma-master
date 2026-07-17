@@ -345,3 +345,27 @@
 - Pendente: commit/push somente quando solicitado.
 - Keywords: IA global, Sparkles, toggle IA, Inbox WhatsApp.
 
+## 2026-07-17 15:33 — Parceiros: seções, senha com alias e Corban
+- Permissões agora começam pela seleção independente de `Parceiros` e/ou `Produção própria`; os submenus aparecem conforme as seções marcadas.
+- Senha de parceiro = 4 números; o backend gera e hasheia o código completo com alias: `SB`, `GE`, `SE`, `CN` e `AE`.
+- O código completo é exibido uma única vez após criar/trocar senha, com botão para copiar. Troca de categoria exige nova senha.
+- Nova categoria `corban`/`cat-corban`; migration idempotente atualiza o check do PostgreSQL.
+- Build, ESLint e HTTP local 200 validados. Commit/push pendentes.
+- LOG: `doc/LOG-2026-07-17__153300__parceiros-secoes-alias-senha-corban.md`.
+- Keywords: partner sections, menu permissions, corban, CN, senha 4 dígitos, partnerCategoryAlias.
+
+## 2026-07-17 15:50 — Histórico só com bloqueio prévio
+- Item **Histórico** do dropdown de parceiros só aparece quando `hasBlockHistory` (exists em `crm.partner_events` com `action='blocked'`).
+- Campo novo em `PartnerRecord`; calculado na listagem e no `findVisiblePartner`.
+- Build + ESLint + HTTP local 200 validados. Commit/push pendentes.
+- LOG: `doc/LOG-2026-07-17__155000__historico-parceiro-somente-com-bloqueio.md`.
+- Keywords: hasBlockHistory, partner_events blocked, histórico condicional.
+
+## 2026-07-17 15:43 — Autopreenchimento PJ pela BrasilAPI
+- No formulário PJ, o CNPJ agora antecede a razão social e consulta a BrasilAPI por uma server function autenticada.
+- Adapter isolado com timeout, uma repetição para falhas transitórias e contrato normalizado.
+- Preenche razão social, contato e endereço sem apagar campos quando a API não possui o dado; situação não ativa gera aviso.
+- Build client/SSR, ESLint, endpoint oficial e HTTP local validados. Commit/push pendentes.
+- LOG: `doc/LOG-2026-07-17__154300__integracao-brasilapi-cnpj-parceiros.md`.
+- Keywords: BrasilAPI, CNPJ, PJ, lookupPartnerCnpjFn, brasil-api-cnpj.adapter.
+

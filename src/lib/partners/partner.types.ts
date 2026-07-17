@@ -1,6 +1,6 @@
 import type { MenuItemId } from "@/lib/config/menu-items";
 
-export type PartnerCategory = "substabelecido" | "gerente" | "suporte" | "atendente";
+export type PartnerCategory = "substabelecido" | "gerente" | "suporte" | "corban" | "atendente";
 export type PartnerPersonType = "pf" | "pj";
 export type PartnerStatus = "active" | "inactive" | "blocked";
 export type PartnerPixKeyType = "cpf" | "phone" | "email" | "random";
@@ -29,6 +29,8 @@ export type PartnerRecord = {
   number: string;
   status: PartnerStatus;
   blockedReason: string | null;
+  /** true quando já existe evento de bloqueio no histórico. */
+  hasBlockHistory: boolean;
   canCreatePartners: boolean;
   hasProduction: boolean;
   menuIds: MenuItemId[];
@@ -78,6 +80,12 @@ export type PartnerUpsertInput = {
   menuIds: MenuItemId[];
   canCreatePartners: boolean;
   bankIds: string[];
+};
+
+export type PartnerSaveResult = {
+  partner: PartnerRecord;
+  /** Código temporário exibido uma única vez após criação/troca de senha. */
+  accessCode: string | null;
 };
 
 export type PartnerEventAction =

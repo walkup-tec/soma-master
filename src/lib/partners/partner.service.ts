@@ -5,7 +5,7 @@ import { isValidBrazilUf } from "@/lib/geo/brazil-ufs";
 import { isCompleteCep } from "@/lib/masks/br-cep";
 import { isCompletePhoneBr } from "@/lib/masks/br-phone";
 import { isFilledValidEmail } from "@/lib/masks/email";
-import { PARTNER_BANKS } from "@/lib/partners/partner.constants";
+import { PARTNER_BANKS, partnerCategoryAlias } from "@/lib/partners/partner.constants";
 import {
   changePartnerStatus,
   findVisiblePartner,
@@ -22,6 +22,7 @@ import type {
   PartnerListResult,
   PartnerPixKeyType,
   PartnerRecord,
+  PartnerSaveResult,
   PartnerStatus,
   PartnerUpsertInput,
 } from "@/lib/partners/partner.types";
@@ -34,7 +35,7 @@ export type PartnerActor = {
   menuIds: MenuItemId[];
 };
 
-const CATEGORY_VALUES = new Set(["substabelecido", "gerente", "suporte", "atendente"]);
+const CATEGORY_VALUES = new Set(["substabelecido", "gerente", "suporte", "corban", "atendente"]);
 const PERSON_TYPE_VALUES = new Set(["pf", "pj"]);
 const PIX_KEY_TYPE_VALUES = new Set(["cpf", "phone", "email", "random"]);
 const VALID_MENU_IDS = new Set<MenuItemId>(ALL_MENU_ITEM_IDS);
@@ -94,6 +95,13 @@ function normalizePixKey(type: PartnerPixKeyType, raw: string): string {
   return cleanText(raw, 180);
 }
 
+function buildPartnerAccessCode(
+  category: PartnerRecord["category"],
+  passwordDigits: string,
+): string {
+  return `${partnerCategoryAlias(category)}${passwordDigits}`;
+}
+
 function assertValidPixKey(type: PartnerPixKeyType, pixKey: string): void {
   if (type === "cpf") {
     if (!isValidCpf(pixKey)) throw new Error("Informe uma chave PIX de CPF válida.");
@@ -130,7 +138,7 @@ async function assertActorCanCreate(actor: PartnerActor): Promise<void> {
 function validateAndNormalizeInput(
   actor: PartnerActor,
   raw: PartnerUpsertInput,
-  options: { creating: boolean },
+  options: { creating: boolean; categoryChanged?: boolean },
 ): PartnerUpsertInput {
   if (!CATEGORY_VALUES.has(raw.category)) throw new Error("Selecione uma categoria válida.");
   if (!PERSON_TYPE_VALUES.has(raw.personType)) {
@@ -154,6 +162,7 @@ function validateAndNormalizeInput(
   const number = cleanText(raw.number, 30);
   const menuIds = normalizeMenuIds(raw.menuIds);
   const bankIds = [...new Set(raw.bankIds)].filter((id) => VALID_BANK_IDS.has(id));
+  const password = String(raw.password ?? "").trim();
 
   if (name.length < 3) throw new Error("Informe o nome completo ou razão social.");
   if (!isFilledValidEmail(email)) throw new Error("Informe um e-mail válido.");
@@ -171,11 +180,14 @@ function validateAndNormalizeInput(
   if (!isValidBrazilUf(state)) throw new Error("Selecione um estado (UF) válido.");
   if (bankIds.length === 0) throw new Error("Selecione ao menos um banco de atuação.");
   if (menuIds.length === 0) throw new Error("Selecione ao menos um menu de acesso.");
-  if (options.creating && (!raw.password || raw.password.length < 8)) {
-    throw new Error("A senha deve ter ao menos 8 caracteres.");
+  if (options.creating && !/^\d{4}$/.test(password)) {
+    throw new Error("Informe uma senha com exatamente 4 dígitos numéricos.");
   }
-  if (!options.creating && raw.password && raw.password.length < 8) {
-    throw new Error("A nova senha deve ter ao menos 8 caracteres.");
+  if (!options.creating && raw.password && !/^\d{4}$/.test(password)) {
+    throw new Error("A nova senha deve ter exatamente 4 dígitos numéricos.");
+  }
+  if (options.categoryChanged && !/^\d{4}$/.test(password)) {
+    throw new Error("Ao alterar a categoria, informe uma nova senha de 4 dígitos.");
   }
   if (!menuIds.includes("parceiros") && raw.canCreatePartners) {
     throw new Error("Para cadastrar filhos, o parceiro precisa ter acesso ao menu Parceiros.");
@@ -200,6 +212,7 @@ function validateAndNormalizeInput(
     number,
     menuIds,
     bankIds,
+    password: password || undefined,
   };
 }
 
@@ -226,11 +239,12 @@ export async function listPartners(
 export async function createPartner(
   actor: PartnerActor,
   raw: PartnerUpsertInput,
-): Promise<PartnerRecord> {
+): Promise<PartnerSaveResult> {
   await assertActorCanCreate(actor);
   const data = validateAndNormalizeInput(actor, raw, { creating: true });
   await Promise.all([assertUniqueEmail(data.email), assertUniqueTaxId(data.taxId)]);
-  const { saltB64, hashB64 } = await hashPassword(data.password!);
+  const accessCode = buildPartnerAccessCode(data.category, data.password!);
+  const { saltB64, hashB64 } = await hashPassword(accessCode);
   const userId = `partner-${crypto.randomUUID()}`;
   await insertPartner({
     userId,
@@ -242,17 +256,20 @@ export async function createPartner(
   });
   const created = await findVisiblePartner(actor.userId, actor.isMaster, userId);
   if (!created) throw new Error("Parceiro criado, mas não foi possível recarregar o cadastro.");
-  return created;
+  return { partner: created, accessCode };
 }
 
 export async function editPartner(
   actor: PartnerActor,
   targetUserId: string,
   raw: PartnerUpsertInput,
-): Promise<PartnerRecord> {
+): Promise<PartnerSaveResult> {
   const current = await findVisiblePartner(actor.userId, actor.isMaster, targetUserId);
   if (!current) throw new Error("Parceiro não encontrado ou fora da sua hierarquia.");
-  const data = validateAndNormalizeInput(actor, raw, { creating: false });
+  const data = validateAndNormalizeInput(actor, raw, {
+    creating: false,
+    categoryChanged: current.category !== raw.category,
+  });
   await Promise.all([
     assertUniqueEmail(data.email, targetUserId),
     assertUniqueTaxId(data.taxId, targetUserId),
@@ -260,8 +277,10 @@ export async function editPartner(
 
   let passwordSaltB64: string | undefined;
   let passwordHashB64: string | undefined;
+  let accessCode: string | null = null;
   if (data.password) {
-    const hashed = await hashPassword(data.password);
+    accessCode = buildPartnerAccessCode(data.category, data.password);
+    const hashed = await hashPassword(accessCode);
     passwordSaltB64 = hashed.saltB64;
     passwordHashB64 = hashed.hashB64;
   }
@@ -276,7 +295,7 @@ export async function editPartner(
   });
   const updated = await findVisiblePartner(actor.userId, actor.isMaster, targetUserId);
   if (!updated) throw new Error("Parceiro atualizado, mas não foi possível recarregar o cadastro.");
-  return updated;
+  return { partner: updated, accessCode };
 }
 
 export async function setPartnerStatus(

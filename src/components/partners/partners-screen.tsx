@@ -364,9 +364,11 @@ export function PartnersScreen({ initialData }: { initialData: PartnerListResult
                             <DropdownMenuItem onClick={() => openEdit(partner)}>
                               <Pencil className="size-4" /> Editar
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void openEvents(partner)}>
-                              <History className="size-4" /> Histórico
-                            </DropdownMenuItem>
+                            {partner.hasBlockHistory ? (
+                              <DropdownMenuItem onClick={() => void openEvents(partner)}>
+                                <History className="size-4" /> Histórico
+                              </DropdownMenuItem>
+                            ) : null}
                             <DropdownMenuSeparator />
                             {partner.status !== "active" ? (
                               <DropdownMenuItem

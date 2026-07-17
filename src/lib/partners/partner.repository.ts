@@ -33,6 +33,7 @@ type PartnerRow = {
   number: string;
   status: PartnerStatus;
   blocked_reason: string | null;
+  has_block_history: boolean;
   can_create_partners: boolean;
   has_production: boolean;
   menu_ids: string[];
@@ -78,6 +79,7 @@ function mapPartner(row: PartnerRow): PartnerRecord {
     number: row.number,
     status: row.status,
     blockedReason: row.blocked_reason,
+    hasBlockHistory: row.has_block_history,
     canCreatePartners: row.can_create_partners,
     hasProduction: row.has_production,
     menuIds: row.menu_ids as MenuItemId[],
@@ -201,6 +203,11 @@ export async function listPartnersForActor(
         p.number,
         p.status,
         p.blocked_reason,
+        exists (
+          select 1 from crm.partner_events blocked_event
+          where blocked_event.partner_user_id = p.user_id
+            and blocked_event.action = 'blocked'
+        ) as has_block_history,
         p.can_create_partners,
         p.has_production,
         coalesce(
@@ -296,7 +303,13 @@ export async function findVisiblePartner(
       p.user_id, p.parent_user_id, parent_user.name as parent_name, u.name, u.email,
       p.partner_category, p.person_type, p.tax_id, p.rg, p.phone, p.whatsapp,
       p.pix_key_type, p.pix_key, p.cep, p.street, p.neighborhood, p.city, p.state,
-      p.complement, p.number, p.status, p.blocked_reason, p.can_create_partners,
+      p.complement, p.number, p.status, p.blocked_reason,
+      exists (
+        select 1 from crm.partner_events blocked_event
+        where blocked_event.partner_user_id = p.user_id
+          and blocked_event.action = 'blocked'
+      ) as has_block_history,
+      p.can_create_partners,
       p.has_production,
       coalesce((select array_agg(m.menu_id order by m.menu_id)
                 from crm.user_menu_permissions m where m.user_id = p.user_id), '{}') as menu_ids,

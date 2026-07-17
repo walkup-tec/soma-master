@@ -7,6 +7,7 @@ const PARTNER_CATEGORIES = [
   ["cat-substabelecido", "Substabelecido"],
   ["cat-gerente", "Gerente"],
   ["cat-suporte", "Suporte"],
+  ["cat-corban", "Corban"],
   ["cat-atendente", "Atendente"],
 ] as const;
 
@@ -28,7 +29,7 @@ export async function ensurePartnerSchema(sql: Sql): Promise<void> {
         user_id text primary key references crm.users(id) on delete cascade,
         parent_user_id text null references crm.users(id) on delete restrict,
         partner_category text not null default 'atendente'
-          check (partner_category in ('substabelecido', 'gerente', 'suporte', 'atendente')),
+          check (partner_category in ('substabelecido', 'gerente', 'suporte', 'corban', 'atendente')),
         person_type text not null default 'pf'
           check (person_type in ('pf', 'pj')),
         tax_id text null,
@@ -62,6 +63,35 @@ export async function ensurePartnerSchema(sql: Sql): Promise<void> {
           or (blocked_reason is not null and length(trim(blocked_reason)) > 0)
         )
       )
+    `;
+
+    await tx`
+      do $migration$
+      begin
+        if exists (
+          select 1
+          from pg_constraint
+          where conname = 'partner_profiles_partner_category_check'
+            and conrelid = 'crm.partner_profiles'::regclass
+            and pg_get_constraintdef(oid) not like '%corban%'
+        ) then
+          alter table crm.partner_profiles
+          drop constraint partner_profiles_partner_category_check;
+          alter table crm.partner_profiles
+          add constraint partner_profiles_partner_category_check
+          check (partner_category in ('substabelecido', 'gerente', 'suporte', 'corban', 'atendente'));
+        elsif not exists (
+          select 1
+          from pg_constraint
+          where conname = 'partner_profiles_partner_category_check'
+            and conrelid = 'crm.partner_profiles'::regclass
+        ) then
+          alter table crm.partner_profiles
+          add constraint partner_profiles_partner_category_check
+          check (partner_category in ('substabelecido', 'gerente', 'suporte', 'corban', 'atendente'));
+        end if;
+      end
+      $migration$
     `;
 
     await tx`
@@ -134,6 +164,7 @@ export async function ensurePartnerSchema(sql: Sql): Promise<void> {
           when u.role = 'master' then 'substabelecido'
           when lower(coalesce(c.name, '')) like '%gerente%' then 'gerente'
           when lower(coalesce(c.name, '')) like '%suporte%' then 'suporte'
+          when lower(coalesce(c.name, '')) like '%corban%' then 'corban'
           when lower(coalesce(c.name, '')) like '%substabelecido%' then 'substabelecido'
           else 'atendente'
         end,
