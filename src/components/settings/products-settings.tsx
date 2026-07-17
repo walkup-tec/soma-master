@@ -40,9 +40,12 @@ export function ProductsSettings({ settings, onChange }: Props) {
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
   const productsRef = useRef(products);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const colorEditingRef = useRef(false);
   productsRef.current = products;
 
   useEffect(() => {
+    // Não sobrescrever enquanto o usuário arrasta o color picker
+    if (colorEditingRef.current) return;
     setProducts(settings.products);
     productsRef.current = settings.products;
     setSelectedId((current) => {
@@ -101,6 +104,24 @@ export function ProductsSettings({ settings, onChange }: Props) {
     if (!selected) return;
     const next = normalizeProductFields({ ...selected, ...patch });
     const nextProducts = products.map((product) => (product.id === selected.id ? next : product));
+    void persistProducts(nextProducts, { quiet: true });
+  };
+
+  /** Só atualiza UI — não salva (evita corrida no color picker ao arrastar). */
+  const patchSelectedLocal = (patch: Partial<ProductConfig>) => {
+    if (!selected) return;
+    setProducts((prev) =>
+      prev.map((product) =>
+        product.id === selected.id ? { ...product, ...patch } : product,
+      ),
+    );
+  };
+
+  const persistSelectedQuiet = () => {
+    if (!selectedId) return;
+    const nextProducts = productsRef.current.map((product) =>
+      product.id === selectedId ? normalizeProductFields(product) : product,
+    );
     void persistProducts(nextProducts, { quiet: true });
   };
 
@@ -297,8 +318,20 @@ export function ProductsSettings({ settings, onChange }: Props) {
                     id="product-color"
                     type="color"
                     value={normalizeStatusColor(selected.color, DEFAULT_STATUS_COLOR)}
+                    onFocus={() => {
+                      colorEditingRef.current = true;
+                    }}
+                    onInput={(event) => {
+                      colorEditingRef.current = true;
+                      patchSelectedLocal({ color: event.currentTarget.value });
+                    }}
                     onChange={(event) => {
-                      updateSelected({ color: event.target.value });
+                      colorEditingRef.current = true;
+                      patchSelectedLocal({ color: event.currentTarget.value });
+                    }}
+                    onBlur={() => {
+                      colorEditingRef.current = false;
+                      persistSelectedQuiet();
                     }}
                     className="h-9 w-9 shrink-0 cursor-pointer appearance-none border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-0"
                     aria-label="Cor da tag do produto"
