@@ -1,3 +1,7 @@
+## 2026-07-17 20:40 — Deploy pendências (SW / produtos / push base64)
+- Push `main`: `43139cd` — `[395e9dc] fix: SW fallback deploy, lista produtos e push base64 puro`
+- LOG: `doc/LOG-2026-07-17__204000__deploy-pendencias-sw-produtos-push.md`.
+
 ## 2026-07-17 20:35 — Push comunidade: Owned media (base64 puro)
 - Erro Evolution 400 `Owned media must be a url or base64`: data URI rejeitada pelo validador.
 - Espelho WABA: base64 puro → data URI → URL interna/pública; fallback texto se imagem falhar.
