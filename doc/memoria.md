@@ -1,3 +1,11 @@
+## 2026-07-17 18:20 — Modal de deploy restrito à produção
+- Ativa somente no host exato `app.somaconecta.com.br`; local, IP, preview e outros domínios ficam sem modal/service worker.
+- Guardas internas impedem chamada manual fora de produção.
+- Exige 2 falhas consecutivas (confirmação em 2s) antes do overlay; oscilação isolada não interrompe a UI.
+- Shell em cache mantém o usuário no sistema durante o reinício; 3 probes estáveis ou novo `serverBootId` recarregam a página.
+- Prettier, ESLint e build client+SSR OK. LOG: `doc/LOG-2026-07-17__182000__modal-deploy-somente-producao.md`.
+- Keywords: modal produção, deploy, redeploy, health consecutivo, service worker.
+
 ## 2026-07-17 18:12 — Modal de deploy alinhado à paleta SOMA
 - Removidas cores/efeitos herdados da DRAX: roxo, ciano, verde, glow e gradientes multicoloridos.
 - Modal usa somente magenta `#be1c6a`, lima `#ecf759`, azul `#2775e5` e neutros SOMA.

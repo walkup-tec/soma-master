@@ -2,6 +2,8 @@
  * Resiliência de deploy (modelo WABA index.html):
  * - Vigia /api/health em segundo plano; ao detectar queda (502/504, JSON do
  *   Traefik "bad-gateway" ou rede), mostra o overlay "ATUALIZANDO O SISTEMA".
+ * - Só opera no host oficial de produção e exige duas falhas consecutivas,
+ *   evitando ativação local ou por oscilação isolada de rede.
  * - Segue sondando a cada 2s; com 3 sondas estáveis (ou drift de serverBootId,
  *   que indica que o novo deploy subiu), fecha o modal e recarrega a tela.
  * - Registra o service worker que preserva a shell do app em navegações
@@ -12,22 +14,23 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   var POLL_MS = 2000;
   var WATCH_MS = 8000;
   var STABLE_PROBES_REQUIRED = 3;
+  var FAILURE_PROBES_REQUIRED = 2;
   var COMPLETE_RELOAD_DELAY_MS = 600;
   var LONG_WAIT_MS = 120000;
   var OVERLAY_ID = "soma-deploy-overlay";
 
   var pollTimer = null;
   var watchTimer = null;
+  var confirmFailureTimer = null;
   var recoveryActive = false;
   var pollStartedAt = 0;
   var stableStreak = 0;
+  var failureStreak = 0;
   var baselineBootId = "";
 
   function isProductionHost() {
     var host = String(window.location.hostname || "").toLowerCase();
-    if (!host || host === "localhost" || host === "127.0.0.1" || host === "[::1]") return false;
-    if (/^(192\\.168\\.|10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.)/.test(host)) return false;
-    return host === "somaconecta.com.br" || host.indexOf("somaconecta.com.br") !== -1;
+    return host === "app.somaconecta.com.br";
   }
 
   function ensureStyles() {
@@ -86,6 +89,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   }
 
   function showOverlay(message, phase) {
+    if (!isProductionHost()) return;
     var el = ensureOverlay();
     if (!el) return;
     var msgEl = document.getElementById("soma-deploy-message");
@@ -151,20 +155,41 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   }
 
   function startRecovery() {
+    if (!isProductionHost()) return;
     if (recoveryActive) return;
+    if (confirmFailureTimer) {
+      window.clearTimeout(confirmFailureTimer);
+      confirmFailureTimer = null;
+    }
     recoveryActive = true;
     pollStartedAt = Date.now();
     stableStreak = 0;
     void pollUntilReady();
   }
 
-  async function watchInBackground() {
-    if (recoveryActive) return;
-    var probe = await probeHealth();
-    if (!probe.stable) {
+  function confirmProductionDeployFailure() {
+    if (!isProductionHost() || recoveryActive) return;
+    failureStreak += 1;
+    if (failureStreak >= FAILURE_PROBES_REQUIRED) {
       startRecovery();
       return;
     }
+    if (!confirmFailureTimer) {
+      confirmFailureTimer = window.setTimeout(function () {
+        confirmFailureTimer = null;
+        void watchInBackground();
+      }, POLL_MS);
+    }
+  }
+
+  async function watchInBackground() {
+    if (!isProductionHost() || recoveryActive) return;
+    var probe = await probeHealth();
+    if (!probe.stable) {
+      confirmProductionDeployFailure();
+      return;
+    }
+    failureStreak = 0;
     if (!baselineBootId && probe.bootId) {
       baselineBootId = probe.bootId;
       return;
@@ -177,13 +202,13 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     }
   }
 
+  if (!isProductionHost()) return;
+
   window.somaDeployResilience = {
     show: showOverlay,
     hide: hideOverlay,
     startRecovery: startRecovery,
   };
-
-  if (!isProductionHost()) return;
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
@@ -194,7 +219,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   document.addEventListener("DOMContentLoaded", function () {
     void probeHealth().then(function (probe) {
       if (probe.stable && probe.bootId) baselineBootId = probe.bootId;
-      if (!probe.stable) startRecovery();
+      if (!probe.stable) confirmProductionDeployFailure();
     });
     watchTimer = window.setInterval(function () {
       void watchInBackground();
