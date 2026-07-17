@@ -7,10 +7,16 @@ export type WelcomeUserMailInput = {
   name: string;
   email: string;
   password: string;
-  categoryName: string;
-  role: "master" | "user";
-  userId: string;
-  createdAt: string;
+  /** URL de acesso; se omitida, usa APP_URL / produção Soma. */
+  loginUrl?: string;
+  /** @deprecated Mantido por compatibilidade; o template atual não exibe categoria. */
+  categoryName?: string;
+  /** @deprecated Mantido por compatibilidade; o template atual não exibe perfil. */
+  role?: "master" | "user";
+  /** @deprecated Mantido por compatibilidade; o template atual não exibe ID. */
+  userId?: string;
+  /** @deprecated Mantido por compatibilidade; o template atual não exibe data. */
+  createdAt?: string;
 };
 
 export type MailSendResult =
@@ -18,8 +24,14 @@ export type MailSendResult =
   | { sent: false; skipped: true; reason: string }
   | { sent: false; skipped: false; error: string };
 
-function roleLabel(role: "master" | "user"): string {
-  return role === "master" ? "Master" : "Usuário";
+function resolveLoginUrl(explicit?: string): string {
+  if (explicit?.trim()) return explicit.trim().replace(/\/$/, "");
+  const config = getMailConfig();
+  const fromEnv = config.appUrl.trim();
+  if (fromEnv && !fromEnv.includes("localhost") && !fromEnv.includes("127.0.0.1")) {
+    return fromEnv;
+  }
+  return "https://app.somaconecta.com.br";
 }
 
 export async function sendWelcomeUserEmail(input: WelcomeUserMailInput): Promise<MailSendResult> {
@@ -27,16 +39,10 @@ export async function sendWelcomeUserEmail(input: WelcomeUserMailInput): Promise
     return { sent: false, skipped: true, reason: "MAIL_MODE não está como smtp." };
   }
 
-  const config = getMailConfig();
-  const loginUrl = `${config.appUrl}/login`;
+  const loginUrl = resolveLoginUrl(input.loginUrl);
   const content = buildWelcomeEmail({
-    name: input.name,
-    email: input.email,
-    password: input.password,
-    categoryName: input.categoryName,
-    roleLabel: roleLabel(input.role),
-    userId: input.userId,
-    createdAt: input.createdAt,
+    usuario: input.email,
+    senha: input.password,
     loginUrl,
   });
 
@@ -66,10 +72,10 @@ export async function sendTemporaryPasswordEmail(input: {
     return { sent: false, skipped: true, reason: "MAIL_MODE não está como smtp." };
   }
 
-  const config = getMailConfig();
+  const loginUrl = resolveLoginUrl();
   const content = buildTemporaryPasswordEmail({
     ...input,
-    loginUrl: `${config.appUrl}/login`,
+    loginUrl: `${loginUrl}/login`,
   });
 
   try {

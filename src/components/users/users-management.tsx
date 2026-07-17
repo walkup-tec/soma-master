@@ -66,7 +66,10 @@ export function UsersManagement({ initialUsers }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<PublicUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PublicUser | null>(null);
-  const [passwordDialog, setPasswordDialog] = useState<{ userName: string; password: string } | null>(null);
+  const [passwordDialog, setPasswordDialog] = useState<{
+    userName: string;
+    password: string;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [email, setEmail] = useState("");
@@ -108,9 +111,18 @@ export function UsersManagement({ initialUsers }: Props) {
       await refreshUsers();
       setCreateOpen(false);
       resetCreateForm();
-      if (result.mail.sent) {
-        toast.success("Usuário criado e e-mail de boas-vindas enviado.");
-      } else if (result.mail.skipped) {
+      const mailOk = result.mail.sent;
+      const mailSkipped = result.mail.skipped;
+      const wa = result.whatsapp;
+      if (mailOk && wa.sent) {
+        toast.success("Usuário criado. Boas-vindas enviadas por e-mail e WhatsApp.");
+      } else if (mailOk) {
+        toast.success(
+          wa.skipped
+            ? "Usuário criado e e-mail de boas-vindas enviado."
+            : `Usuário criado e e-mail enviado. WhatsApp falhou: ${wa.error}`,
+        );
+      } else if (mailSkipped) {
         toast.success("Usuário criado. E-mail desativado (MAIL_MODE).");
       } else {
         toast.warning(`Usuário criado, mas o e-mail falhou: ${result.mail.error}`);
@@ -302,7 +314,12 @@ export function UsersManagement({ initialUsers }: Props) {
             </div>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setCreateOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setCreateOpen(false)}
+            >
               Cancelar
             </Button>
             <Button
@@ -401,7 +418,12 @@ export function UsersManagement({ initialUsers }: Props) {
               </div>
             ) : null}
             <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={closeEdit}>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={closeEdit}
+              >
                 Cancelar
               </Button>
               <Button
@@ -417,30 +439,40 @@ export function UsersManagement({ initialUsers }: Props) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir usuário</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir <strong>{deleteTarget?.name}</strong>? Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir <strong>{deleteTarget?.name}</strong>? Esta ação não
+              pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={Boolean(passwordDialog)} onOpenChange={(open) => !open && setPasswordDialog(null)}>
+      <Dialog
+        open={Boolean(passwordDialog)}
+        onOpenChange={(open) => !open && setPasswordDialog(null)}
+      >
         <DialogContent className="w-[calc(100vw-2rem)] max-w-lg">
           <DialogHeader>
             <DialogTitle>Nova senha gerada</DialogTitle>
             <DialogDescription>
-              Senha temporária para <strong>{passwordDialog?.userName}</strong>. Se o e-mail foi enviado, o usuário já
-              recebeu; use esta cópia como reserva.
+              Senha temporária para <strong>{passwordDialog?.userName}</strong>. Se o e-mail foi
+              enviado, o usuário já recebeu; use esta cópia como reserva.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 font-mono text-sm">

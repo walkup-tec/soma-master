@@ -14,6 +14,7 @@ const ENV_KEYS = [
   "SMTP_SECURE",
   "SMTP_USER",
   "SMTP_PASS",
+  "SMP_PASS",
   "APP_URL",
   "PUBLIC_APP_URL",
   // Chat WhatsApp + IA (Evolution compartilhada do WABA; instância soma-*)

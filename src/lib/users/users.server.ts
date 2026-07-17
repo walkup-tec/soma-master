@@ -3,10 +3,8 @@ import { getSession } from "@tanstack/react-start/server";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
 import { hashPassword, generateTemporaryPassword } from "@/lib/auth/password";
 import { sessionConfig } from "@/lib/auth/session-config";
-import {
-  sendTemporaryPasswordEmail,
-  sendWelcomeUserEmail,
-} from "@/lib/mail/mail.service";
+import { sendTemporaryPasswordEmail } from "@/lib/mail/mail.service";
+import { notifyWelcomeChannels } from "@/lib/mail/welcome-notify.service";
 import {
   createUser,
   deleteUserById,
@@ -21,7 +19,7 @@ function requireMasterSession() {
   return getSession(sessionConfig).then((session) => {
     const user = session.data;
     if (!user?.userId || user.role !== "master") {
-      throw new Error("Apenas usuários master podem gerenciar usuários.");
+      throw new Error("Apenas usu?rios master podem gerenciar usu?rios.");
     }
     return user;
   });
@@ -30,7 +28,7 @@ function requireMasterSession() {
 function normalizeEmail(value: string): string {
   const email = value.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("Informe um e-mail válido.");
+    throw new Error("Informe um e-mail v?lido.");
   }
   return email;
 }
@@ -40,13 +38,13 @@ async function assertCategoryId(categoryId: string): Promise<string> {
   const settings = await loadSystemSettingsFromDisk();
   const validIds = new Set(settings.categories.map((category) => category.id));
   if (!id || !validIds.has(id)) {
-    throw new Error("Selecione uma categoria de usuário válida.");
+    throw new Error("Selecione uma categoria de usu?rio v?lida.");
   }
   return id;
 }
 
 const createUserSchema = (data: unknown) => {
-  if (!data || typeof data !== "object") throw new Error("Dados inválidos.");
+  if (!data || typeof data !== "object") throw new Error("Dados inv?lidos.");
   const { email, password, name, categoryId } = data as {
     email?: string;
     password?: string;
@@ -55,7 +53,7 @@ const createUserSchema = (data: unknown) => {
   };
   if (!name?.trim()) throw new Error("Informe o nome completo.");
   if (!password || password.length < 6) throw new Error("A senha deve ter ao menos 6 caracteres.");
-  if (!categoryId?.trim()) throw new Error("Selecione uma categoria de usuário.");
+  if (!categoryId?.trim()) throw new Error("Selecione uma categoria de usu?rio.");
   return {
     email: normalizeEmail(email ?? ""),
     password,
@@ -65,14 +63,14 @@ const createUserSchema = (data: unknown) => {
 };
 
 const userIdSchema = (data: unknown) => {
-  if (!data || typeof data !== "object") throw new Error("Dados inválidos.");
+  if (!data || typeof data !== "object") throw new Error("Dados inv?lidos.");
   const { userId } = data as { userId?: string };
-  if (!userId?.trim()) throw new Error("Usuário inválido.");
+  if (!userId?.trim()) throw new Error("Usu?rio inv?lido.");
   return { userId: userId.trim() };
 };
 
 const updateUserSchema = (data: unknown) => {
-  if (!data || typeof data !== "object") throw new Error("Dados inválidos.");
+  if (!data || typeof data !== "object") throw new Error("Dados inv?lidos.");
   const { userId, email, password, name, categoryId } = data as {
     userId?: string;
     email?: string;
@@ -80,9 +78,9 @@ const updateUserSchema = (data: unknown) => {
     name?: string;
     categoryId?: string;
   };
-  if (!userId?.trim()) throw new Error("Usuário inválido.");
+  if (!userId?.trim()) throw new Error("Usu?rio inv?lido.");
   if (!name?.trim()) throw new Error("Informe o nome completo.");
-  if (!categoryId?.trim()) throw new Error("Selecione uma categoria de usuário.");
+  if (!categoryId?.trim()) throw new Error("Selecione uma categoria de usu?rio.");
   const normalizedEmail = normalizeEmail(email ?? "");
   return {
     userId: userId.trim(),
@@ -103,9 +101,6 @@ export const createUserFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireMasterSession();
     const categoryId = await assertCategoryId(data.categoryId);
-    const settings = await loadSystemSettingsFromDisk();
-    const categoryName =
-      settings.categories.find((category) => category.id === categoryId)?.name ?? categoryId;
     const { saltB64, hashB64 } = await hashPassword(data.password);
     const user: StoredUser = {
       id: `user-${crypto.randomUUID().slice(0, 8)}`,
@@ -118,16 +113,12 @@ export const createUserFn = createServerFn({ method: "POST" })
       createdAt: new Date().toISOString(),
     };
     const created = await createUser(user);
-    const mail = await sendWelcomeUserEmail({
+    const welcome = await notifyWelcomeChannels({
       name: created.name,
       email: created.email,
       password: data.password,
-      categoryName,
-      role: created.role,
-      userId: created.id,
-      createdAt: created.createdAt,
     });
-    return { user: created, mail };
+    return { user: created, mail: welcome.mail, whatsapp: welcome.whatsapp, welcome };
   });
 
 export const deleteUserFn = createServerFn({ method: "POST" })
@@ -156,7 +147,7 @@ export const resendPasswordFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireMasterSession();
     const existing = await findUserById(data.userId);
-    if (!existing) throw new Error("Usuário não encontrado.");
+    if (!existing) throw new Error("Usu?rio n?o encontrado.");
     const temporaryPassword = generateTemporaryPassword();
     const { saltB64, hashB64 } = await hashPassword(temporaryPassword);
     await updateUserPassword(data.userId, saltB64, hashB64);
@@ -169,7 +160,7 @@ export const resendPasswordFn = createServerFn({ method: "POST" })
       mail.sent === true
         ? "Nova senha gerada e enviada por e-mail."
         : mail.skipped
-          ? "Nova senha gerada. E-mail desativado — copie e envie ao usuário."
+          ? "Nova senha gerada. E-mail desativado ��� copie e envie ao usu?rio."
           : `Nova senha gerada, mas o e-mail falhou: ${mail.error}`;
     return {
       temporaryPassword,

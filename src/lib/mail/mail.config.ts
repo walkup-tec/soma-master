@@ -41,7 +41,8 @@ export function getMailConfig(): MailConfig {
       port: Number.isFinite(port) && port > 0 ? port : 465,
       secure: parseBool(process.env.SMTP_SECURE, true),
       user: (process.env.SMTP_USER ?? "").trim(),
-      pass: (process.env.SMTP_PASS ?? "").trim(),
+      // SMP_PASS = typo comum no painel; aceitar como fallback sem logar o valor.
+      pass: (process.env.SMTP_PASS ?? process.env.SMP_PASS ?? "").trim(),
     },
   };
 }

@@ -489,7 +489,23 @@ export function PartnerFormDialog({
       } else {
         const result = await createPartner({ data });
         setGeneratedAccessCode(result.accessCode);
-        toast.success("Parceiro criado com sucesso.");
+        const mailOk = result.mail?.sent;
+        const waOk = result.whatsapp?.sent;
+        if (mailOk && waOk) {
+          toast.success("Parceiro criado. Boas-vindas enviadas por e-mail e WhatsApp.");
+        } else if (mailOk) {
+          toast.success(
+            result.whatsapp?.skipped
+              ? "Parceiro criado e e-mail de boas-vindas enviado."
+              : `Parceiro criado e e-mail enviado. WhatsApp: ${result.whatsapp?.error ?? "falhou"}`,
+          );
+        } else if (result.mail?.skipped) {
+          toast.success("Parceiro criado. E-mail desativado (MAIL_MODE).");
+        } else if (result.mail && !result.mail.sent && !result.mail.skipped) {
+          toast.warning(`Parceiro criado, mas o e-mail falhou: ${result.mail.error}`);
+        } else {
+          toast.success("Parceiro criado com sucesso.");
+        }
       }
       await onSaved();
       onOpenChange(false);

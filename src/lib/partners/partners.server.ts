@@ -23,6 +23,7 @@ import type {
 } from "@/lib/partners/partner.types";
 import { lookupBrazilApiCnpj } from "@/lib/partners/brasil-api-cnpj.adapter";
 import { lookupViaCep } from "@/lib/partners/viacep.adapter";
+import { notifyWelcomeChannels } from "@/lib/mail/welcome-notify.service";
 
 async function requirePartnerActor(): Promise<PartnerActor> {
   const session = await getSession<SessionData>(sessionConfig);
@@ -156,7 +157,13 @@ export const createPartnerFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const created = await createPartner(await requirePartnerActor(), data);
     invalidateAuthEnrichCache();
-    return created;
+    const welcome = await notifyWelcomeChannels({
+      name: created.partner.name,
+      email: created.partner.email,
+      password: created.accessCode,
+      whatsapp: created.partner.whatsapp,
+    });
+    return { ...created, mail: welcome.mail, whatsapp: welcome.whatsapp, welcome };
   });
 
 export const updatePartnerFn = createServerFn({ method: "POST" })

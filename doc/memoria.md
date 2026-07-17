@@ -1,3 +1,11 @@
+## 2026-07-17 17:45 — Boas-vindas e-mail + WhatsApp (usuário/parceiro)
+- Template Soma Promotora (Usuário=e-mail, Senha=senha ou código GE1234); HTML + WhatsApp (`*negrito*`).
+- `notifyWelcomeChannels` após `createUserFn` e `createPartnerFn`; canais em paralelo; falha não desfaz cadastro.
+- SMTP Easypanel (`SMTP_PASS`, fallback `SMP_PASS`); WA via Evolution `soma-crm` + DDI 55.
+- Usuário interno sem WhatsApp → só e-mail. Toast informa status dos canais.
+- Build OK. LOG: `doc/LOG-2026-07-17__174500__boas-vindas-email-whatsapp-usuario-parceiro.md`.
+- Keywords: boas-vindas, SMTP, WhatsApp Evolution, parceiro, usuário.
+
 ## 2026-07-17 17:29 — Código de acesso do parceiro gerado pelo sistema + copiar
 - Sistema gera os 4 dígitos sozinho (`crypto.getRandomValues`): ao abrir novo cadastro e ao definir/trocar categoria (alias muda junto).
 - Campo readOnly com prefixo do alias; botões RefreshCw (gerar novo) e Copy (copia código completo, ex. GE1234, com toast).
