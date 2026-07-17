@@ -1,4 +1,11 @@
-﻿## 2026-07-16 — Login ENOTFOUND + UI login
+﻿## 2026-07-17 — Heal Traefik Soma permanente
+
+- Estudo: agente Traefik + REGISTRY (`BACKEND-OVERLAY-502`, `LOGIN-30180-PUBLISH`, thrash).
+- Causa Soma: Redeploy Easypanel reescreve overlay + Host com `/` + some `:30300`.
+- Fix: ``scripts/heal-soma-gestao-vps.sh install`` (watch + timer 45s). REGISTRY ``SOMA-EASYPANEL-REWRITE``.
+- Keywords: heal-soma, 404, 502, hostgw, 30300, easypanel rewrite
+
+## 2026-07-16 — Login ENOTFOUND + UI login
 
 - Login OK na URL; falha DB: `db.*.supabase.co` so AAAA (IPv6); Docker ENOTFOUND.
 - Fix VPS: `fix-soma-supabase-socat-vps.sh` + `DATABASE_URL=...@172.17.0.1:6543` + `DATABASE_SSL_INSECURE=true`
