@@ -124,11 +124,13 @@ export function ProductsSettings({ settings, onChange }: Props) {
   /** Só atualiza UI — não salva (evita corrida no color picker ao arrastar). */
   const patchSelectedLocal = (patch: Partial<ProductConfig>) => {
     if (!selected) return;
-    setProducts((prev) =>
-      prev.map((product) =>
+    setProducts((prev) => {
+      const next = prev.map((product) =>
         product.id === selected.id ? { ...product, ...patch } : product,
-      ),
-    );
+      );
+      productsRef.current = next;
+      return next;
+    });
   };
 
   const persistSelectedQuiet = () => {
