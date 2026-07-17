@@ -383,12 +383,14 @@ export async function evolutionSendText(input: {
   assertSomaOwnedInstance(instance);
   const number = input.phone.replace(/\D+/g, "");
 
+  // 12s — chat humano não pode travar 45s; falha rápida + toast no CRM
   const result = await evolutionFetch(`/message/sendText/${encodeURIComponent(instance)}`, {
     method: "POST",
     body: JSON.stringify({
       number,
       text: input.text,
     }),
+    signal: AbortSignal.timeout(12_000),
   });
 
   if (!result.ok) {

@@ -349,10 +349,15 @@ export async function joinConversationAsAgent(input: {
   userName: string;
 }): Promise<ChatConversation> {
   const before = await getConversation(input.conversationId);
+  if (!before) throw new Error("Conversa não encontrada.");
+
   const alreadyAgent =
-    before &&
-    before.assignedUserId === input.userId &&
-    before.aiEnabled === false;
+    before.assignedUserId === input.userId && before.aiEnabled === false;
+
+  // Já é o atendente com IA pausada — não regrava nem gera mensagem de sistema
+  if (alreadyAgent) {
+    return before;
+  }
 
   if (isDatabaseEnabled()) {
     await withChatDb(
@@ -382,15 +387,13 @@ export async function joinConversationAsAgent(input: {
     await writeJsonFile(CONV_FILE, next);
   }
 
-  if (!alreadyAgent) {
-    await appendMessage({
-      conversationId: input.conversationId,
-      direction: "outbound",
-      body: `${input.userName} entrou no atendimento. A IA foi pausada nesta conversa.`,
-      senderType: "system",
-      senderName: "Sistema",
-    });
-  }
+  await appendMessage({
+    conversationId: input.conversationId,
+    direction: "outbound",
+    body: `${input.userName} entrou no atendimento. A IA foi pausada nesta conversa.`,
+    senderType: "system",
+    senderName: "Sistema",
+  });
 
   const conv = await getConversation(input.conversationId);
   if (!conv) throw new Error("Conversa não encontrada.");

@@ -156,17 +156,65 @@ export function ChatInboxScreen({
 
   async function handleSend() {
     if (!selectedId || !text.trim()) return;
+    const body = text.trim();
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    const optimistic: ChatMessage = {
+      id: tempId,
+      conversationId: selectedId,
+      direction: "outbound",
+      body,
+      senderType: "agent",
+      senderUserId: userId,
+      senderName: active?.assignedUserName ?? "Você",
+      waMessageId: null,
+      createdAt: now,
+    };
+
+    // Feedback imediato — não espera Evolution / reload do thread
+    setText("");
+    setMessages((prev) => [...prev, optimistic]);
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedId
+          ? {
+              ...c,
+              lastMessageAt: now,
+              lastMessagePreview: body.slice(0, 120),
+              assignedUserId: c.assignedUserId ?? userId,
+              aiEnabled: false,
+            }
+          : c,
+      ),
+    );
+    if (active?.id === selectedId) {
+      setActive({
+        ...active,
+        lastMessageAt: now,
+        lastMessagePreview: body.slice(0, 120),
+        assignedUserId: active.assignedUserId ?? userId,
+        aiEnabled: false,
+      });
+    }
+
     setSending(true);
     try {
-      const result = await sendMessage({ data: { conversationId: selectedId, text: text.trim() } });
-      setText("");
+      const result = await sendMessage({ data: { conversationId: selectedId, text: body } });
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? result.message : m)));
+      if (result.conversation) {
+        setActive(result.conversation);
+        setConversations((prev) =>
+          prev.map((c) => (c.id === result.conversation.id ? { ...c, ...result.conversation } : c)),
+        );
+      }
       if (!result.evolution.ok) {
         toast.message("Mensagem salva no CRM", {
           description: result.evolution.error ?? "Evolution não enviou (confira conexão).",
         });
       }
-      await openConversation(selectedId);
     } catch (error) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setText(body);
       toast.error(error instanceof Error ? error.message : "Falha ao enviar");
     } finally {
       setSending(false);
@@ -469,9 +517,14 @@ export function ChatInboxScreen({
                   <Button
                     className="cursor-pointer"
                     onClick={() => void handleSend()}
-                    disabled={sending || !text.trim()}
+                    disabled={!text.trim()}
+                    aria-busy={sending}
                   >
-                    {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                    {sending && !text.trim() ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-4" />
+                    )}
                   </Button>
                 </div>
               )}

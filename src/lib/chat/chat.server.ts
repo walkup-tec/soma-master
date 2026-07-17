@@ -135,14 +135,11 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await requireChatUser();
     // Enviar mensagem = entrar no atendimento (pausa IA desta conversa)
-    await joinConversationAsAgent({
+    const conversation = await joinConversationAsAgent({
       conversationId: data.conversationId,
       userId: user.userId,
       userName: user.name || user.email || "Atendente",
     });
-
-    const conversation = await getConversation(data.conversationId);
-    if (!conversation) throw new Error("Conversa não encontrada.");
 
     const message = await appendMessage({
       conversationId: data.conversationId,
@@ -153,8 +150,9 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
       senderName: user.name || user.email || "Atendente",
     });
 
+    // Evolution é a parte lenta — timeout curto; UI já mostra otimista no cliente
     const send = await evolutionSendText({ phone: conversation.phone, text: data.text });
-    return { message, evolution: send };
+    return { message, conversation, evolution: send };
   });
 
 export const addChatAttendanceNoteFn = createServerFn({ method: "POST" })
