@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import {
-  BotOff,
   Check,
   ExternalLink,
   FileText,
@@ -103,6 +102,7 @@ export function ChatInboxScreen({
   const [composer, setComposer] = useState<ComposerMode>("reply");
   const [aiGlobalEnabled, setAiGlobalEnabled] = useState(bootstrap.aiSettings.aiGlobalEnabled);
   const [togglingAiGlobal, setTogglingAiGlobal] = useState(false);
+  const [togglingConversationId, setTogglingConversationId] = useState<string | null>(null);
   // Nome/WhatsApp digitados no formulário Vincular ao CRM — o cabeçalho Contato espelha
   const [contactDraft, setContactDraft] = useState<{ name: string; phone: string }>({
     name: "",
@@ -153,6 +153,29 @@ export function ChatInboxScreen({
   async function refreshList() {
     const next = await listConversations();
     setConversations(next);
+  }
+
+  async function toggleConversationAi(conversation: ChatConversation) {
+    if (togglingConversationId) return;
+    setTogglingConversationId(conversation.id);
+    try {
+      const next = await setConvAi({
+        data: {
+          conversationId: conversation.id,
+          aiEnabled: !conversation.aiEnabled,
+        },
+      });
+      if (!next) throw new Error("Conversa não encontrada.");
+      setConversations((current) =>
+        current.map((item) => (item.id === next.id ? { ...item, ...next } : item)),
+      );
+      if (active?.id === next.id) setActive((current) => (current ? { ...current, ...next } : next));
+      toast.success(next.aiEnabled ? "IA ativada nesta conversa" : "IA pausada nesta conversa");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao alterar IA");
+    } finally {
+      setTogglingConversationId(null);
+    }
   }
 
   async function handleAttachMedia(message: ChatMessage) {
@@ -531,46 +554,110 @@ export function ChatInboxScreen({
                 ) : null}
               </div>
             ) : (
-              filtered.map((conv) => (
-                <button
-                  key={conv.id}
-                  type="button"
-                  onClick={() => void openConversation(conv.id)}
-                  className={cn(
-                    "w-full cursor-pointer rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted",
-                    selectedId === conv.id &&
-                      "border-primary bg-transparent hover:bg-transparent dark:border-primary dark:bg-transparent",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {conv.clientName || conv.contactName || conv.phone}
-                    </span>
-                    {conv.unreadCount > 0 ? (
-                      <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                        {conv.unreadCount}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    {conv.clientStatusLabel ? (
-                      <StatusBadge
-                        label={conv.clientStatusLabel}
-                        color={conv.clientStatusColor ?? "#64748b"}
-                        className="origin-left scale-90"
-                      />
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">
-                        {conv.assignedUserName ? conv.assignedUserName : "Não atribuído"}
-                      </span>
+              filtered.map((conv) => {
+                const linkedProducts = products.filter((product) =>
+                  (conv.clientProductIds ?? []).includes(product.id),
+                );
+                return (
+                  <div
+                    key={conv.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-current={selectedId === conv.id ? "true" : undefined}
+                    aria-label={`Abrir conversa com ${conv.clientName || conv.contactName || conv.phone}`}
+                    onClick={() => void openConversation(conv.id)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        void openConversation(conv.id);
+                      }
+                    }}
+                    className={cn(
+                      "w-full cursor-pointer space-y-2.5 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      selectedId === conv.id &&
+                        "border-primary bg-transparent hover:bg-transparent dark:border-primary dark:bg-transparent",
                     )}
-                    {!conv.aiEnabled ? <BotOff className="size-3 text-muted-foreground" /> : null}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                        {conv.clientName || conv.contactName || conv.phone}
+                      </span>
+                      {conv.unreadCount > 0 ? (
+                        <span className="shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                          {conv.unreadCount}
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        aria-pressed={conv.aiEnabled}
+                        aria-label={
+                          conv.aiEnabled
+                            ? "Pausar IA nesta conversa"
+                            : "Ativar IA nesta conversa"
+                        }
+                        title={
+                          conv.aiEnabled
+                            ? "IA ativa — clique para pausar"
+                            : "IA pausada — clique para ativar"
+                        }
+                        disabled={togglingConversationId === conv.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void toggleConversationAi(conv);
+                        }}
+                        className={cn(
+                          "grid size-7 shrink-0 cursor-pointer place-items-center rounded-lg border transition-colors disabled:cursor-wait disabled:opacity-60",
+                          conv.aiEnabled
+                            ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                            : "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                        )}
+                      >
+                        {togglingConversationId === conv.id ? (
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Sparkles className="size-3.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Produto
+                      </p>
+                      {linkedProducts.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {linkedProducts.map((product) => (
+                            <StatusBadge
+                              key={product.id}
+                              label={product.name}
+                              color={product.color}
+                              className="max-w-full text-[10px]"
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Não definido</p>
+                      )}
+                    </div>
+
+                    <div className="border-t border-border/60 pt-2.5">
+                      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Status
+                      </p>
+                      {conv.clientStatusLabel ? (
+                        <StatusBadge
+                          label={conv.clientStatusLabel}
+                          color={conv.clientStatusColor ?? "#64748b"}
+                          className="max-w-full text-[10px]"
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Sem status</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    {conv.lastMessagePreview ?? "—"}
-                  </p>
-                </button>
-              ))
+                );
+              })
             )}
           </div>
         </ScrollArea>
@@ -625,21 +712,16 @@ export function ChatInboxScreen({
                   active?.aiEnabled ? "Pausar IA nesta conversa" : "Ativar IA nesta conversa"
                 }
                 title={active?.aiEnabled ? "Pausar IA nesta conversa" : "Ativar IA nesta conversa"}
-                onClick={async () => {
-                  try {
-                    const next = await setConvAi({
-                      data: { conversationId: selectedId, aiEnabled: !active?.aiEnabled },
-                    });
-                    setActive(next);
-                    toast.success(
-                      next?.aiEnabled ? "IA reativada nesta conversa" : "IA pausada nesta conversa",
-                    );
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Falha ao alterar IA");
-                  }
+                disabled={!active || togglingConversationId === active.id}
+                onClick={() => {
+                  if (active) void toggleConversationAi(active);
                 }}
               >
-                <Sparkles className="size-4" />
+                {active && togglingConversationId === active.id ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
               </Button>
             </header>
 

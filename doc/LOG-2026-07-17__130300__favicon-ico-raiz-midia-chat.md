@@ -27,6 +27,14 @@ Para respostas que não são HTML (imagem/PDF direto), o navegador ignora as tag
 2. Abrir uma imagem do chat em nova aba — favicon Soma na aba.
 3. Se ainda aparecer o antigo, é cache do navegador (favicon é cacheado forte): Ctrl+F5 ou abrir aba anônima.
 
+## Status do deploy (13:35)
+
+- Commit `708b389` (`[0d82281] fix: favicon.ico raiz…`) pushed em `origin/main` 13:06 (BRT).
+- Produção continuou servindo o `.ico` antigo (20.373 bytes, Last-Modified 15:58 UTC = build do commit anterior) por 30+ min.
+- O push anterior (15:52 UTC) foi publicado em ~6 min ⇒ o auto-deploy deste push não disparou ou o build falhou no Easypanel.
+- Sem acesso ao painel/SSH desta máquina; falta apenas **Redeploy no Easypanel** (`soma-promotora/gestao-interno`).
+- Validação pós-redeploy: `curl -sI https://app.somaconecta.com.br/favicon.ico` → `Content-Length: 8829`.
+
 ## Palavras-chave
 
 favicon.ico, aba imagem, /api/chat/media, PNG-in-ICO, ícone raiz

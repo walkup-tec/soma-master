@@ -1,3 +1,10 @@
+## 2026-07-17 13:38 — Card do chat reorganizado
+- Card agora mostra contato + ícone `Sparkles` para ativar/pausar IA, todos os produtos, divisor fino e status.
+- Removidos atendente atribuído e prévia da mensagem; espaçamento e foco por teclado refinados.
+- Toggle centralizado e sincroniza lista/cabeçalho; build client+SSR OK.
+- LOG: `doc/LOG-2026-07-17__133800__chat-card-contato-produtos-status-ia.md`.
+- Keywords: chat card, produtos, status, Sparkles IA.
+
 ## 2026-07-17 13:03 — Favicon errado ao abrir mídia do chat
 - Navegador usa `GET /favicon.ico` em respostas não-HTML; o `.ico` na raiz era legado.
 - Novo `scripts/build-favicon-ico.mjs` regenera `public/favicon.ico` (PNG-in-ICO 16/32/48 do ícone Soma).
