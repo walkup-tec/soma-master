@@ -196,9 +196,6 @@ export function ChatContactPanel({
                       aria-hidden
                     />
                     {item.name}
-                    {item.tag ? (
-                      <span className="text-xs text-muted-foreground">({item.tag})</span>
-                    ) : null}
                   </span>
                 </SelectItem>
               ))}

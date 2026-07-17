@@ -242,7 +242,8 @@ export function normalizeProductFields(
   const requiredSet = new Set(requiredFieldIds);
   const availableFieldIds = ALL_CLIENT_FIELD_IDS.filter((id) => !requiredSet.has(id));
   const name = String(product.name ?? "").trim();
-  const tag = String(product.tag ?? "").trim();
+  // Tag segue o nome do produto (sem campo separado na UI)
+  const tag = name || String(product.tag ?? "").trim();
   return {
     ...product,
     name,
@@ -253,9 +254,9 @@ export function normalizeProductFields(
   };
 }
 
-/** Texto exibido na tag colorida (tag curta ou nome completo). */
+/** Texto exibido na tag colorida — sempre o nome do produto. */
 export function resolveProductTagLabel(
   product: Pick<import("@/lib/config/settings-types").ProductConfig, "name" | "tag">,
 ): string {
-  return product.tag.trim() || product.name.trim() || "Produto";
+  return product.name.trim() || product.tag.trim() || "Produto";
 }

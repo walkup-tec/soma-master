@@ -277,43 +277,27 @@ export function ProductsSettings({ settings, onChange }: Props) {
                 value={selected.name}
                 onChange={(e) => {
                   const nextProducts = products.map((product) =>
-                    product.id === selected.id ? { ...product, name: e.target.value } : product,
+                    product.id === selected.id
+                      ? { ...product, name: e.target.value, tag: e.target.value }
+                      : product,
                   );
                   setProducts(nextProducts);
                 }}
                 onBlur={() => {
                   if (!selected) return;
-                  void persistProducts(products, { quiet: true });
+                  void persistProducts(
+                    products.map((p) => (p.id === selected.id ? normalizeProductFields(p) : p)),
+                    { quiet: true },
+                  );
                 }}
                 placeholder="Ex.: Empréstimo CLT, FGTS, Cartão consignado"
               />
             </div>
 
             <div className="flex flex-wrap items-end gap-4">
-              <div className="space-y-2 w-full max-w-[12rem]">
-                <Label htmlFor="product-tag">Tag</Label>
-                <Input
-                  id="product-tag"
-                  value={selected.tag}
-                  onChange={(e) => {
-                    const nextProducts = products.map((product) =>
-                      product.id === selected.id ? { ...product, tag: e.target.value } : product,
-                    );
-                    setProducts(nextProducts);
-                  }}
-                  onBlur={() => {
-                    if (!selected) return;
-                    void persistProducts(
-                      products.map((p) => (p.id === selected.id ? normalizeProductFields(p) : p)),
-                      { quiet: true },
-                    );
-                  }}
-                  placeholder="Ex.: CLT"
-                />
-              </div>
               <div className="space-y-2">
-                <Label htmlFor="product-color">Cor</Label>
-                <div className="flex items-center gap-2">
+                <Label htmlFor="product-color">Cor da tag</Label>
+                <div className="flex items-center gap-3">
                   <input
                     id="product-color"
                     type="color"
@@ -325,18 +309,21 @@ export function ProductsSettings({ settings, onChange }: Props) {
                     aria-label="Cor da tag do produto"
                     title="Cor da tag"
                   />
-                  <StatusBadge
-                    label={resolveProductTagLabel(selected)}
-                    color={selected.color}
-                  />
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-muted-foreground">Prévia da tag</p>
+                    <StatusBadge
+                      label={resolveProductTagLabel(selected)}
+                      color={selected.color}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-              A <strong className="text-foreground">tag</strong> e a{" "}
-              <strong className="text-foreground">cor</strong> aparecem nas listagens (como o status
-              de atendimento). Se a tag estiver vazia, usa o nome do produto.
+              A tag usa o <strong className="text-foreground">nome do produto</strong>. Escolha só a{" "}
+              <strong className="text-foreground">cor</strong> — o mesmo padrão dos status de
+              atendimento.
             </div>
 
             <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">

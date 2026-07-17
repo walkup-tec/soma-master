@@ -12,7 +12,7 @@ export type UserCategory = {
 export type ProductConfig = {
   id: string;
   name: string;
-  /** Texto curto da tag na listagem (ex.: CLT). Se vazio, usa o nome. */
+  /** Espelha o nome (persistência); a UI usa só o nome como texto da tag. */
   tag: string;
   /** Hex #rrggbb — cor da tag (mesmo padrão dos status). */
   color: string;

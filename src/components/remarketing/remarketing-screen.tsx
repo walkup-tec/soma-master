@@ -84,7 +84,7 @@ export function RemarketingScreen({ initialFilter, initialItems }: Props) {
   const productMeta = (productId: string) => {
     const product = settings.products.find((item) => item.id === productId);
     return {
-      label: product ? (product.tag.trim() || product.name) : productId,
+      label: product?.name.trim() || productId,
       color: product?.color ?? "#64748b",
     };
   };
