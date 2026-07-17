@@ -207,19 +207,21 @@ export function ProductsSettings({ settings, onChange }: Props) {
                   onClick={() => setSelectedId(product.id)}
                   className="min-w-0 flex-1 rounded-md px-1 py-1 text-left text-sm"
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex flex-col items-start gap-1">
                     <StatusBadge
                       label={resolveProductTagLabel(product)}
                       color={product.color}
-                      className="max-w-[9rem] truncate"
+                      className="max-w-full"
                     />
-                    <span className={`truncate ${isSelected ? "font-medium" : ""}`}>
+                    <span
+                      className={`w-full break-words ${isSelected ? "font-medium" : "font-normal"}`}
+                    >
                       {product.name || "Sem nome"}
                     </span>
-                  </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {product.requiredFieldIds.length} obrigatório(s) · {product.availableFieldIds.length}{" "}
-                    disponível(is)
+                    <span className="text-xs text-muted-foreground">
+                      {product.requiredFieldIds.length} obrigatório(s) ·{" "}
+                      {product.availableFieldIds.length} disponível(is)
+                    </span>
                   </span>
                 </button>
               </div>
