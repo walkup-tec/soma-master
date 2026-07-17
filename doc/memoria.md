@@ -1,3 +1,10 @@
+## 2026-07-17 17:29 — Código de acesso do parceiro gerado pelo sistema + copiar
+- Sistema gera os 4 dígitos sozinho (`crypto.getRandomValues`): ao abrir novo cadastro e ao definir/trocar categoria (alias muda junto).
+- Campo readOnly com prefixo do alias; botões RefreshCw (gerar novo) e Copy (copia código completo, ex. GE1234, com toast).
+- Em edição, voltar à categoria original limpa o campo (mantém senha atual); gerar novo código troca a senha.
+- Build + lint OK. LOG: `doc/LOG-2026-07-17__172900__codigo-acesso-parceiro-gerado-automatico-copiar.md`.
+- Keywords: código acesso gerado, copiar código, alias SB GE SE CN AE, crypto random.
+
 ## 2026-07-17 15:15 — Máscaras e obrigatoriedade no formulário Parceiros
 - Máscaras em CPF/CNPJ, telefone, WhatsApp, CEP e chave PIX por tipo; UF via select.
 - E-mail obrigatório com validação de formato (`isFilledValidEmail`) e feedback visual.

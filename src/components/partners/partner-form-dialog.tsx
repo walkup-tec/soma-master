@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Building2, Copy, KeyRound, Loader2, MapPin, Save, UserRoundPlus } from "lucide-react";
+import {
+  Building2,
+  Copy,
+  KeyRound,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Save,
+  UserRoundPlus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -82,6 +91,13 @@ function emptyForm(allowedMenuIds: MenuItemId[]): PartnerFormState {
     canCreatePartners: false,
     bankIds: [],
   };
+}
+
+/** Gera os 4 dígitos do código de acesso com aleatoriedade criptográfica. */
+function generateAccessDigits(): string {
+  const buffer = new Uint32Array(1);
+  crypto.getRandomValues(buffer);
+  return String(buffer[0]! % 10_000).padStart(4, "0");
 }
 
 function sectionsFromMenuIds(menuIds: MenuItemId[]): MenuSectionId[] {
@@ -270,7 +286,9 @@ export function PartnerFormDialog({
 
   useEffect(() => {
     if (!open) return;
-    const nextForm = partner ? formFromPartner(partner) : emptyForm(allowedMenuIds);
+    const nextForm = partner
+      ? formFromPartner(partner)
+      : { ...emptyForm(allowedMenuIds), password: generateAccessDigits() };
     setForm(nextForm);
     setSelectedSections(sectionsFromMenuIds(nextForm.menuIds));
     setTouchedSubmit(false);
@@ -346,7 +364,32 @@ export function PartnerFormDialog({
   };
 
   const handleCategoryChange = (value: PartnerCategory) => {
-    update("category", value);
+    setForm((current) => ({
+      ...current,
+      category: value,
+      // Categoria definida ⇒ novo código; ao voltar à original (edição), mantém a senha atual.
+      password:
+        partner && value === partner.category
+          ? ""
+          : current.category === value
+            ? current.password
+            : generateAccessDigits(),
+    }));
+  };
+
+  const regenerateAccessCode = () => {
+    update("password", generateAccessDigits());
+  };
+
+  const copyAccessCode = async () => {
+    if (!form.password) return;
+    const code = `${partnerCategoryAlias(form.category)}${form.password}`;
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success(`Código ${code} copiado.`);
+    } catch {
+      toast.error("Não foi possível copiar automaticamente. Anote o código exibido.");
+    }
   };
 
   const handlePixTypeChange = (value: PartnerPixKeyType) => {
@@ -627,38 +670,65 @@ export function PartnerFormDialog({
                   ) : null}
                 </div>
                 <div className="space-y-2">
-                  <RequiredLabel htmlFor="partner-password" optional={Boolean(partner)}>
-                    {partner ? "Nova senha numérica" : "Senha numérica"}
+                  <RequiredLabel
+                    htmlFor="partner-password"
+                    optional={Boolean(partner) && partner.category === form.category}
+                  >
+                    Código de acesso
                   </RequiredLabel>
-                  <div className="flex">
-                    <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 font-mono text-sm font-semibold text-primary">
-                      {partnerCategoryAlias(form.category)}
-                    </span>
-                    <Input
-                      id="partner-password"
-                      type="password"
-                      inputMode="numeric"
-                      autoComplete="new-password"
-                      value={form.password}
-                      onChange={(event) =>
-                        update("password", event.target.value.replace(/\D/g, "").slice(0, 4))
-                      }
-                      aria-invalid={Boolean(fieldErrors.password)}
-                      className={cn(
-                        "rounded-l-none",
-                        fieldErrors.password && "border-destructive focus-visible:ring-destructive",
-                      )}
-                      placeholder={partner ? "4 dígitos (se alterar)" : "4 dígitos"}
-                      maxLength={4}
-                      required={!partner || partner.category !== form.category}
-                    />
+                  <div className="flex gap-2">
+                    <div className="flex flex-1">
+                      <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 font-mono text-sm font-semibold text-primary">
+                        {partnerCategoryAlias(form.category)}
+                      </span>
+                      <Input
+                        id="partner-password"
+                        readOnly
+                        value={form.password}
+                        aria-invalid={Boolean(fieldErrors.password)}
+                        className={cn(
+                          "rounded-l-none font-mono font-semibold tracking-widest",
+                          fieldErrors.password &&
+                            "border-destructive focus-visible:ring-destructive",
+                        )}
+                        placeholder={partner ? "Mantém a senha atual" : ""}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Gerar novo código"
+                      aria-label="Gerar novo código"
+                      onClick={regenerateAccessCode}
+                    >
+                      <RefreshCw className="size-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Copiar código"
+                      aria-label="Copiar código"
+                      disabled={!form.password}
+                      onClick={() => void copyAccessCode()}
+                    >
+                      <Copy className="size-4" />
+                    </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Código de acesso final:{" "}
-                    <span className="font-mono font-medium text-foreground">
-                      {partnerCategoryAlias(form.category)}
-                      {form.password || "••••"}
-                    </span>
+                    {form.password ? (
+                      <>
+                        Código gerado pelo sistema:{" "}
+                        <span className="font-mono font-medium text-foreground">
+                          {partnerCategoryAlias(form.category)}
+                          {form.password}
+                        </span>{" "}
+                        — copie e envie ao parceiro.
+                      </>
+                    ) : (
+                      "Senha atual mantida. Gere um novo código para trocá-la."
+                    )}
                   </p>
                   {fieldErrors.password ? (
                     <p className="text-xs text-destructive">{fieldErrors.password}</p>
