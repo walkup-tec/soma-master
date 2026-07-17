@@ -9,6 +9,7 @@ export type WelcomeUserMailInput = {
   password: string;
   /** URL de acesso; se omitida, usa APP_URL / produção Soma. */
   loginUrl?: string;
+  communityLink?: string;
   /** @deprecated Mantido por compatibilidade; o template atual não exibe categoria. */
   categoryName?: string;
   /** @deprecated Mantido por compatibilidade; o template atual não exibe perfil. */
@@ -44,6 +45,7 @@ export async function sendWelcomeUserEmail(input: WelcomeUserMailInput): Promise
     usuario: input.email,
     senha: input.password,
     loginUrl,
+    communityLink: input.communityLink,
   });
 
   try {

@@ -7,6 +7,7 @@ export type WelcomeWhatsAppInput = {
   senha: string;
   loginUrl: string;
   whatsapp: string;
+  communityLink?: string;
 };
 
 export type WhatsAppSendResult =
@@ -33,6 +34,7 @@ export async function sendWelcomeWhatsApp(
     usuario: input.usuario,
     senha: input.senha,
     loginUrl: input.loginUrl,
+    communityLink: input.communityLink,
   });
 
   try {

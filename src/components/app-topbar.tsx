@@ -2,6 +2,7 @@ import { useRouterState, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AgendaTopbarAlerts } from "@/components/agenda/agenda-topbar-alerts";
+import { PushTopbarBell } from "@/components/push/push-topbar-bell";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -27,6 +28,7 @@ const TITLES: Record<string, string> = {
   "/app/remarketing": "Remarketing",
   "/app/agenda": "Agenda & Follow-up",
   "/app/usuarios": "Usuários",
+  "/app/push": "Push",
   "/app/configuracoes": "Configurações",
 };
 
@@ -85,6 +87,7 @@ export function AppTopbar({ user }: { user: SessionData }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <PushTopbarBell />
         {sessionCanAccessMenu(user, "agenda") ? <AgendaTopbarAlerts /> : null}
         {sessionCanAccessMenu(user, "clientes") ? (
           <Button

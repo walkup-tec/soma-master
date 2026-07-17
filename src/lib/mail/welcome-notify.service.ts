@@ -1,6 +1,7 @@
 import { getMailConfig } from "@/lib/mail/mail.config";
 import { sendWelcomeUserEmail, type MailSendResult } from "@/lib/mail/mail.service";
 import { sendWelcomeWhatsApp, type WhatsAppSendResult } from "@/lib/mail/welcome-whatsapp.service";
+import { getPushCommunityConfig } from "@/lib/push/push-community.service";
 
 export type WelcomeNotifyInput = {
   name: string;
@@ -36,6 +37,7 @@ export async function notifyWelcomeChannels(
   const loginUrl = resolveLoginUrl();
   const usuario = input.email.trim().toLowerCase();
   const senha = input.password.trim();
+  const communityLink = getPushCommunityConfig().communityInviteLink;
 
   const [mail, whatsapp] = await Promise.all([
     sendWelcomeUserEmail({
@@ -43,6 +45,7 @@ export async function notifyWelcomeChannels(
       email: usuario,
       password: senha,
       loginUrl,
+      communityLink,
     }),
     input.whatsapp?.trim()
       ? sendWelcomeWhatsApp({
@@ -50,6 +53,7 @@ export async function notifyWelcomeChannels(
           senha,
           loginUrl,
           whatsapp: input.whatsapp,
+          communityLink,
         })
       : Promise.resolve({
           sent: false as const,

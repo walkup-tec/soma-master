@@ -7,6 +7,7 @@ export type MenuItemId =
   | "agenda"
   | "chat"
   | "usuarios"
+  | "push"
   | "configuracoes";
 
 /** Duas grandes seções do menu lateral. */
@@ -91,6 +92,13 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
     section: "producao-propria",
     group: "Gestão",
     path: "/app/usuarios",
+  },
+  {
+    id: "push",
+    label: "Push",
+    section: "producao-propria",
+    group: "Gestão",
+    path: "/app/push",
   },
   {
     id: "configuracoes",

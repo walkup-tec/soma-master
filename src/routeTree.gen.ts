@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppUsuariosRouteImport } from './routes/app/usuarios'
 import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
+import { Route as AppPushRouteImport } from './routes/app/push'
 import { Route as AppParceirosRouteImport } from './routes/app/parceiros'
 import { Route as AppKanbanRouteImport } from './routes/app/kanban'
 import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
@@ -26,6 +27,7 @@ import { Route as AppClientesNovoRouteImport } from './routes/app/clientes.novo'
 import { Route as AppChatIaRouteImport } from './routes/app/chat.ia'
 import { Route as ApiSettingsChatbotEvolutionRouteImport } from './routes/api/settings/chatbot/evolution'
 import { Route as ApiSettingsChatbotEducationRouteImport } from './routes/api/settings/chatbot/education'
+import { Route as ApiPushMediaMediaIdRouteImport } from './routes/api/push/media.$mediaId'
 import { Route as ApiChatMediaMediaIdRouteImport } from './routes/api/chat/media.$mediaId'
 
 const LoginRoute = LoginRouteImport.update({
@@ -56,6 +58,11 @@ const AppUsuariosRoute = AppUsuariosRouteImport.update({
 const AppRemarketingRoute = AppRemarketingRouteImport.update({
   id: '/remarketing',
   path: '/remarketing',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPushRoute = AppPushRouteImport.update({
+  id: '/push',
+  path: '/push',
   getParentRoute: () => AppRoute,
 } as any)
 const AppParceirosRoute = AppParceirosRouteImport.update({
@@ -115,6 +122,11 @@ const ApiSettingsChatbotEducationRoute =
     path: '/api/settings/chatbot/education',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPushMediaMediaIdRoute = ApiPushMediaMediaIdRouteImport.update({
+  id: '/api/push/media/$mediaId',
+  path: '/api/push/media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiChatMediaMediaIdRoute = ApiChatMediaMediaIdRouteImport.update({
   id: '/api/chat/media/$mediaId',
   path: '/api/chat/media/$mediaId',
@@ -132,12 +144,14 @@ export interface FileRoutesByFullPath {
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/parceiros': typeof AppParceirosRoute
+  '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
+  '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
   '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -151,12 +165,14 @@ export interface FileRoutesByTo {
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/parceiros': typeof AppParceirosRoute
+  '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
+  '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
   '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -172,12 +188,14 @@ export interface FileRoutesById {
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/parceiros': typeof AppParceirosRoute
+  '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
+  '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
   '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -194,12 +212,14 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
+    | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
     | '/api/chat/media/$mediaId'
+    | '/api/push/media/$mediaId'
     | '/api/settings/chatbot/education'
     | '/api/settings/chatbot/evolution'
   fileRoutesByTo: FileRoutesByTo
@@ -213,12 +233,14 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
+    | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app'
     | '/app/chat/ia'
     | '/app/clientes/novo'
     | '/api/chat/media/$mediaId'
+    | '/api/push/media/$mediaId'
     | '/api/settings/chatbot/education'
     | '/api/settings/chatbot/evolution'
   id:
@@ -233,12 +255,14 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
+    | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
     | '/api/chat/media/$mediaId'
+    | '/api/push/media/$mediaId'
     | '/api/settings/chatbot/education'
     | '/api/settings/chatbot/evolution'
   fileRoutesById: FileRoutesById
@@ -249,6 +273,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiChatMediaMediaIdRoute: typeof ApiChatMediaMediaIdRoute
+  ApiPushMediaMediaIdRoute: typeof ApiPushMediaMediaIdRoute
   ApiSettingsChatbotEducationRoute: typeof ApiSettingsChatbotEducationRoute
   ApiSettingsChatbotEvolutionRoute: typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -295,6 +320,13 @@ declare module '@tanstack/react-router' {
       path: '/remarketing'
       fullPath: '/app/remarketing'
       preLoaderRoute: typeof AppRemarketingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/push': {
+      id: '/app/push'
+      path: '/push'
+      fullPath: '/app/push'
+      preLoaderRoute: typeof AppPushRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/parceiros': {
@@ -374,6 +406,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSettingsChatbotEducationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/push/media/$mediaId': {
+      id: '/api/push/media/$mediaId'
+      path: '/api/push/media/$mediaId'
+      fullPath: '/api/push/media/$mediaId'
+      preLoaderRoute: typeof ApiPushMediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/chat/media/$mediaId': {
       id: '/api/chat/media/$mediaId'
       path: '/api/chat/media/$mediaId'
@@ -414,6 +453,7 @@ interface AppRouteChildren {
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppKanbanRoute: typeof AppKanbanRoute
   AppParceirosRoute: typeof AppParceirosRoute
+  AppPushRoute: typeof AppPushRoute
   AppRemarketingRoute: typeof AppRemarketingRoute
   AppUsuariosRoute: typeof AppUsuariosRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -426,6 +466,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppKanbanRoute: AppKanbanRoute,
   AppParceirosRoute: AppParceirosRoute,
+  AppPushRoute: AppPushRoute,
   AppRemarketingRoute: AppRemarketingRoute,
   AppUsuariosRoute: AppUsuariosRoute,
   AppIndexRoute: AppIndexRoute,
@@ -439,6 +480,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiChatMediaMediaIdRoute: ApiChatMediaMediaIdRoute,
+  ApiPushMediaMediaIdRoute: ApiPushMediaMediaIdRoute,
   ApiSettingsChatbotEducationRoute: ApiSettingsChatbotEducationRoute,
   ApiSettingsChatbotEvolutionRoute: ApiSettingsChatbotEvolutionRoute,
 }

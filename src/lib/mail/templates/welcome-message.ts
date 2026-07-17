@@ -1,3 +1,5 @@
+import { SOMA_DEFAULT_COMMUNITY_INVITE_LINK } from "@/lib/push/push.constants";
+
 /** Conteúdo compartilhado de boas-vindas (e-mail + WhatsApp). */
 
 export type WelcomeMessageInput = {
@@ -7,6 +9,8 @@ export type WelcomeMessageInput = {
   senha: string;
   /** URL do sistema (sem barra final). */
   loginUrl: string;
+  /** Convite da comunidade WhatsApp (opcional). */
+  communityLink?: string;
 };
 
 function escapeHtml(value: string): string {
@@ -23,6 +27,9 @@ export function buildWelcomeMessageText(input: WelcomeMessageInput): string {
   const usuario = input.usuario.trim();
   const senha = input.senha.trim();
   const loginUrl = input.loginUrl.trim().replace(/\/$/, "") || "https://app.somaconecta.com.br";
+  const communityLink =
+    String(input.communityLink || SOMA_DEFAULT_COMMUNITY_INVITE_LINK).trim() ||
+    SOMA_DEFAULT_COMMUNITY_INVITE_LINK;
 
   return [
     "Olá! 👋",
@@ -38,6 +45,9 @@ export function buildWelcomeMessageText(input: WelcomeMessageInput): string {
     "",
     "🌐 Acesse o sistema:",
     loginUrl,
+    "",
+    "📢 Entre na nossa Comunidade Oficial no WhatsApp:",
+    communityLink,
     "",
     "Recomendamos que, no primeiro acesso, você altere sua senha para uma de sua preferência, garantindo ainda mais segurança para sua conta.",
     "",
@@ -56,6 +66,9 @@ export function buildWelcomeWhatsAppText(input: WelcomeMessageInput): string {
   const usuario = input.usuario.trim();
   const senha = input.senha.trim();
   const loginUrl = input.loginUrl.trim().replace(/\/$/, "") || "https://app.somaconecta.com.br";
+  const communityLink =
+    String(input.communityLink || SOMA_DEFAULT_COMMUNITY_INVITE_LINK).trim() ||
+    SOMA_DEFAULT_COMMUNITY_INVITE_LINK;
 
   return [
     "Olá! 👋",
@@ -71,6 +84,9 @@ export function buildWelcomeWhatsAppText(input: WelcomeMessageInput): string {
     "",
     "*🌐 Acesse o sistema:*",
     loginUrl,
+    "",
+    "*📢 Entre na nossa Comunidade Oficial no WhatsApp:*",
+    communityLink,
     "",
     "Recomendamos que, no primeiro acesso, você altere sua senha para uma de sua preferência, garantindo ainda mais segurança para sua conta.",
     "",
@@ -92,6 +108,9 @@ export function buildWelcomeEmailContent(input: WelcomeMessageInput): {
   const usuario = input.usuario.trim();
   const senha = input.senha.trim();
   const loginUrl = input.loginUrl.trim().replace(/\/$/, "") || "https://app.somaconecta.com.br";
+  const communityLink =
+    String(input.communityLink || SOMA_DEFAULT_COMMUNITY_INVITE_LINK).trim() ||
+    SOMA_DEFAULT_COMMUNITY_INVITE_LINK;
   const text = buildWelcomeMessageText(input);
 
   const html = `<!DOCTYPE html>
@@ -103,7 +122,7 @@ export function buildWelcomeEmailContent(input: WelcomeMessageInput): {
       <td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
           <tr>
-            <td style="background:#0f766e;padding:24px 28px;">
+            <td style="background:#be1c6a;padding:24px 28px;">
               <div style="color:#ecfdf5;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Soma Promotora</div>
               <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;line-height:1.3;">Bem-vindo(a)!</h1>
             </td>
@@ -130,9 +149,13 @@ export function buildWelcomeEmailContent(input: WelcomeMessageInput): {
               </table>
               <p style="margin:0 0 8px;"><strong>🌐 Acesse o sistema:</strong></p>
               <p style="margin:0 0 20px;text-align:center;">
-                <a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+                <a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#be1c6a;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">
                   ${escapeHtml(loginUrl)}
                 </a>
+              </p>
+              <p style="margin:0 0 8px;"><strong>📢 Comunidade WhatsApp:</strong></p>
+              <p style="margin:0 0 20px;">
+                <a href="${escapeHtml(communityLink)}" style="color:#be1c6a;">${escapeHtml(communityLink)}</a>
               </p>
               <p style="margin:0 0 16px;color:#4b5563;font-size:14px;">
                 Recomendamos que, no primeiro acesso, você altere sua senha para uma de sua preferência, garantindo ainda mais segurança para sua conta.

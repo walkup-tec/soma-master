@@ -1,3 +1,10 @@
+## 2026-07-17 18:35 — Push / Comunicados (portado da WABA)
+- Menu **Gestão → Push** + sininho no topbar; destinos: usuários, parceiros, comunidade WhatsApp, e-mail.
+- Comunidade Soma: `https://chat.whatsapp.com/HOArsOldAKREFg23isS3ZT` (não usar link DRAX/WABA); instância `soma-crm`.
+- Boas-vindas passam a incluir o link da comunidade; Evolution aceita JID `@g.us`.
+- Build OK. LOG: `doc/LOG-2026-07-17__183500__feat-push-comunicados-comunidade-soma.md`.
+- Keywords: push, sininho, comunidade Soma, Gestão.
+
 ## 2026-07-17 18:20 — Modal de deploy restrito à produção
 - Ativa somente no host exato `app.somaconecta.com.br`; local, IP, preview e outros domínios ficam sem modal/service worker.
 - Guardas internas impedem chamada manual fora de produção.

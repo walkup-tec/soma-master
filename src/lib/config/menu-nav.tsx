@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  Bell,
   CalendarDays,
   Columns3,
   LayoutDashboard,
@@ -21,5 +22,6 @@ export const MENU_ICONS: Record<MenuItemId, ComponentType<{ className?: string }
   agenda: CalendarDays,
   chat: MessageCircle,
   usuarios: UserCog,
+  push: Bell,
   configuracoes: Settings,
 };

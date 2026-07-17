@@ -25,6 +25,9 @@ const ENV_KEYS = [
   "EVOLUTION_INSTANCE",
   "CHAT_WEBHOOK_SECRET",
   "CHAT_PUBLIC_BASE_URL",
+  "SOMA_PUSH_COMMUNITY_INVITE_LINK",
+  "SOMA_PUSH_COMMUNITY_EVO_INSTANCE",
+  "SOMA_PUSH_COMMUNITY_ANNOUNCEMENT_GROUP_JID",
 ] as const;
 
 function parseEnvFile(content: string): Record<string, string> {
