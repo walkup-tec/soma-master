@@ -1,6 +1,5 @@
 import {
   appendMessage,
-  getChatAiSettings,
   getConversation,
   getOrCreateConversationByPhone,
 } from "@/lib/chat/chat.repository";
@@ -51,12 +50,9 @@ function extractInboundFromEvolution(payload: unknown): Array<{
 }
 
 async function maybeReplyWithAi(conversationId: string, userText: string): Promise<void> {
-  const [settings, conversation] = await Promise.all([
-    getChatAiSettings(),
-    getConversation(conversationId),
-  ]);
+  const conversation = await getConversation(conversationId);
 
-  if (!settings.aiGlobalEnabled) return;
+  // O estado individual é soberano: o botão geral apenas aplica um comando em massa.
   if (!conversation?.aiEnabled) return;
   if (!isOpenAiConfigured()) {
     await appendMessage({
@@ -74,6 +70,10 @@ async function maybeReplyWithAi(conversationId: string, userText: string): Promi
       conversationId,
       latestUserMessage: userText,
     });
+    // O atendente pode ter enviado uma mensagem enquanto a resposta era gerada.
+    // Revalida antes de publicar para garantir que o takeover manual seja soberano.
+    const latestConversation = await getConversation(conversationId);
+    if (!latestConversation?.aiEnabled) return;
     await appendMessage({
       conversationId,
       direction: "outbound",

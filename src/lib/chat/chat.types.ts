@@ -55,7 +55,10 @@ export type ChatAiExample = {
 };
 
 export type ChatAiSettings = {
-  /** Liga/desliga a IA para todas as conversas (ainda respeita aiEnabled por chat). */
+  /**
+   * Estado do último comando geral. O comando aplica o valor a todas as conversas,
+   * mas cada conversa pode ser sobrescrita depois pelo seu próprio aiEnabled.
+   */
   aiGlobalEnabled: boolean;
   openaiModel: string;
   systemPrompt: string;

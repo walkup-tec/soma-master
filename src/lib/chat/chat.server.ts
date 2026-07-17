@@ -6,7 +6,6 @@ import {
   appendMessage,
   deleteAiExample,
   deleteAiKnowledge,
-  disableAiForAllConversations,
   getChatAiSettings,
   getConversation,
   joinConversationAsAgent,
@@ -18,6 +17,7 @@ import {
   listMessages,
   markConversationRead,
   saveChatAiSettings,
+  setAiEnabledForAllConversations,
   setConversationAiEnabled,
   upsertAiExample,
   upsertAiKnowledge,
@@ -126,7 +126,7 @@ export const setChatConversationAiFn = createServerFn({ method: "POST" })
     return getConversation(data.conversationId);
   });
 
-/** Liga/desliga IA em todos os atendimentos (flag global do chatbot). */
+/** Aplica o estado geral da IA a todos os atendimentos. */
 export const setChatAiGlobalEnabledFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const body = data as { enabled?: boolean };
@@ -136,10 +136,7 @@ export const setChatAiGlobalEnabledFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireChatUser();
     const saved = await saveChatAiSettings({ aiGlobalEnabled: data.enabled });
-    // Regra: IA global desligada ⇒ desliga também a IA de cada conversa
-    if (!data.enabled) {
-      await disableAiForAllConversations();
-    }
+    await setAiEnabledForAllConversations(data.enabled);
     return saved;
   });
 
@@ -153,12 +150,18 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const user = await requireChatUser();
-    // Enviar mensagem = entrar no atendimento (pausa IA desta conversa)
-    const conversation = await joinConversationAsAgent({
+    // Enviar manualmente atribui o atendente e pausa apenas a IA desta conversa.
+    await joinConversationAsAgent({
       conversationId: data.conversationId,
       userId: user.userId,
       userName: user.name || user.email || "Atendente",
     });
+    await setConversationAiEnabled({
+      conversationId: data.conversationId,
+      aiEnabled: false,
+    });
+    const conversation = await getConversation(data.conversationId);
+    if (!conversation) throw new Error("Conversa não encontrada.");
 
     const message = await appendMessage({
       conversationId: data.conversationId,
@@ -422,7 +425,11 @@ export const saveChatAiEducationFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     await requireChatBotSettingsUser();
-    return saveChatAiSettings(data);
+    const saved = await saveChatAiSettings(data);
+    if (typeof data.aiGlobalEnabled === "boolean") {
+      await setAiEnabledForAllConversations(data.aiGlobalEnabled);
+    }
+    return saved;
   });
 
 export const upsertChatAiKnowledgeFn = createServerFn({ method: "POST" })

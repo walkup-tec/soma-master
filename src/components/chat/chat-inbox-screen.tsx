@@ -107,7 +107,7 @@ export function ChatInboxScreen({
     setSelectedId(id);
     setLoadingThread(true);
     try {
-      // Abrir conversa = assumir atendimento (atribui ao usuário e pausa IA local)
+      // Abrir conversa atribui ao usuário, mas preserva o estado individual da IA.
       await joinChat({ data: { conversationId: id } });
       const thread = await getThread({ data: { conversationId: id } });
       setActive(thread.conversation);
@@ -215,11 +215,16 @@ export function ChatInboxScreen({
     try {
       const saved = await setAiGlobal({ data: { enabled: next } });
       setAiGlobalEnabled(saved.aiGlobalEnabled);
-      if (!saved.aiGlobalEnabled) {
-        // Regra: global off ⇒ todas as conversas ficam com IA pausada
-        setConversations((prev) => prev.map((c) => ({ ...c, aiEnabled: false })));
-        setActive((prev) => (prev ? { ...prev, aiEnabled: false } : prev));
-      }
+      // O comando geral aplica o estado a todas; depois cada chat pode sobrescrever.
+      setConversations((prev) =>
+        prev.map((conversation) => ({
+          ...conversation,
+          aiEnabled: saved.aiGlobalEnabled,
+        })),
+      );
+      setActive((prev) =>
+        prev ? { ...prev, aiEnabled: saved.aiGlobalEnabled } : prev,
+      );
       toast.success(
         saved.aiGlobalEnabled
           ? "IA ligada em todos os atendimentos"

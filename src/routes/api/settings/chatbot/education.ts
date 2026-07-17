@@ -8,6 +8,7 @@ import {
   listAiExamples,
   listAiKnowledge,
   saveChatAiSettings,
+  setAiEnabledForAllConversations,
   upsertAiExample,
   upsertAiKnowledge,
 } from "@/lib/chat/chat.repository";
@@ -61,11 +62,15 @@ export const Route = createFileRoute("/api/settings/chatbot/education")({
 
         try {
           if (kind === "save-settings") {
+            const aiGlobalEnabled =
+              form.get("aiGlobalEnabled") === "on" ||
+              form.get("aiGlobalEnabled") === "true";
             await saveChatAiSettings({
-              aiGlobalEnabled: form.get("aiGlobalEnabled") === "on" || form.get("aiGlobalEnabled") === "true",
+              aiGlobalEnabled,
               openaiModel: String(form.get("openaiModel") ?? "").trim() || "gpt-4o-mini",
               systemPrompt: String(form.get("systemPrompt") ?? ""),
             });
+            await setAiEnabledForAllConversations(aiGlobalEnabled);
             return redirectIa({ ...redirectExtra, ok: "salva" });
           }
 

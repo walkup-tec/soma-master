@@ -164,6 +164,14 @@ export async function getOrCreateConversationByPhone(input: {
       }
 
       const linked = await findClientIdByPhone(phone);
+      const aiSettings = await sql<{ ai_global_enabled: boolean }[]>`
+        select ai_global_enabled
+        from crm.chat_ai_settings
+        where id = 'default'
+        limit 1
+      `;
+      const initialAiEnabled =
+        aiSettings[0]?.ai_global_enabled ?? DEFAULT_CHAT_AI_SETTINGS.aiGlobalEnabled;
       const id = `chat-${crypto.randomUUID().slice(0, 10)}`;
       const now = new Date();
       await sql`
@@ -174,7 +182,7 @@ export async function getOrCreateConversationByPhone(input: {
           ${phone},
           ${input.contactName ?? linked?.name ?? null},
           ${linked?.clientId ?? null},
-          true,
+          ${initialAiEnabled},
           ${now},
           ${now}
         )
@@ -186,7 +194,7 @@ export async function getOrCreateConversationByPhone(input: {
         clientId: linked?.clientId ?? null,
         assignedUserId: null,
         assignedUserName: null,
-        aiEnabled: true,
+        aiEnabled: initialAiEnabled,
         lastMessageAt: null,
         lastMessagePreview: null,
         unreadCount: 0,
@@ -199,6 +207,7 @@ export async function getOrCreateConversationByPhone(input: {
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
   const found = items.find((c) => c.phone === phone);
   if (found) return found;
+  const initialAiEnabled = (await getChatAiSettings()).aiGlobalEnabled;
   const now = new Date().toISOString();
   const created: ChatConversation = {
     id: `chat-${crypto.randomUUID().slice(0, 10)}`,
@@ -207,7 +216,7 @@ export async function getOrCreateConversationByPhone(input: {
     clientId: null,
     assignedUserId: null,
     assignedUserName: null,
-    aiEnabled: true,
+    aiEnabled: initialAiEnabled,
     lastMessageAt: null,
     lastMessagePreview: null,
     unreadCount: 0,
@@ -351,10 +360,9 @@ export async function joinConversationAsAgent(input: {
   const before = await getConversation(input.conversationId);
   if (!before) throw new Error("Conversa não encontrada.");
 
-  const alreadyAgent =
-    before.assignedUserId === input.userId && before.aiEnabled === false;
+  const alreadyAgent = before.assignedUserId === input.userId;
 
-  // Já é o atendente com IA pausada — não regrava nem gera mensagem de sistema
+  // Abrir a conversa apenas atribui o atendente; não altera a IA.
   if (alreadyAgent) {
     return before;
   }
@@ -366,7 +374,6 @@ export async function joinConversationAsAgent(input: {
         set
           assigned_user_id = ${input.userId},
           assigned_user_name = ${input.userName},
-          ai_enabled = false,
           updated_at = now()
         where id = ${input.conversationId}
       `,
@@ -379,7 +386,6 @@ export async function joinConversationAsAgent(input: {
             ...c,
             assignedUserId: input.userId,
             assignedUserName: input.userName,
-            aiEnabled: false,
             updatedAt: new Date().toISOString(),
           }
         : c,
@@ -390,7 +396,7 @@ export async function joinConversationAsAgent(input: {
   await appendMessage({
     conversationId: input.conversationId,
     direction: "outbound",
-    body: `${input.userName} entrou no atendimento. A IA foi pausada nesta conversa.`,
+    body: `${input.userName} entrou no atendimento.`,
     senderType: "system",
     senderName: "Sistema",
   });
@@ -425,14 +431,14 @@ export async function setConversationAiEnabled(input: {
   );
 }
 
-/** Desliga a IA de todas as conversas (regra: IA global off ⇒ IA individual off). */
-export async function disableAiForAllConversations(): Promise<void> {
+/** Aplica o comando geral de IA a todas as conversas. */
+export async function setAiEnabledForAllConversations(aiEnabled: boolean): Promise<void> {
   if (isDatabaseEnabled()) {
     await withChatDb(
       (sql) => sql`
         update crm.chat_conversations
-        set ai_enabled = false, updated_at = now()
-        where ai_enabled = true
+        set ai_enabled = ${aiEnabled}, updated_at = now()
+        where ai_enabled is distinct from ${aiEnabled}
       `,
     );
     return;
@@ -441,7 +447,9 @@ export async function disableAiForAllConversations(): Promise<void> {
   await writeJsonFile(
     CONV_FILE,
     convs.map((c) =>
-      c.aiEnabled ? { ...c, aiEnabled: false, updatedAt: new Date().toISOString() } : c,
+      c.aiEnabled !== aiEnabled
+        ? { ...c, aiEnabled, updatedAt: new Date().toISOString() }
+        : c,
     ),
   );
 }

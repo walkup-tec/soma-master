@@ -14,10 +14,10 @@
 # Uso (root no srv1261237):
 #   bash heal-soma-gestao-vps.sh run|burst|watch|install|status|check
 #
-# Versão: heal-soma-gestao-2026-07-17-v1
+# Versão: heal-soma-gestao-2026-07-17-v2 (normaliza entryPoints web/websecure→http/https)
 set -euo pipefail
 
-VERSION="heal-soma-gestao-2026-07-17-v1"
+VERSION="heal-soma-gestao-2026-07-17-v2"
 LOG="${SOMA_HEAL_LOG:-/var/log/soma-gestao-heal.log}"
 LOCK="${SOMA_HEAL_LOCK:-/var/run/soma-gestao-heal.lock}"
 INSTALL_DIR="/root/soma-infra"
@@ -135,6 +135,34 @@ for svc in ("soma-promotora_gestao-interno-0", "soma-promotora_gestao-interno-1"
     pattern = rf'("{svc}"\s*:\s*\{{[^\}}]*?"url"\s*:\s*")[^"]*(")'
     t, n = re.subn(pattern, rf"\1{new_url}\2", t, count=1, flags=re.S)
 
+# entryPoints web/websecure → http/https nos routers do Soma (lição WABA 2026-07-10:
+# router com entrypoint inexistente vira órfão → 404 SPA). Prefixo do key manda.
+pos = 0
+while True:
+    m = re.search(r'"((?:https?-)[^"]*soma[^"]*)"\s*:\s*\{', t[pos:], re.I)
+    if not m:
+        break
+    abs_start = pos + m.start()
+    key = m.group(1)
+    brace = t.find("{", abs_start)
+    depth, end = 0, brace
+    for j, ch in enumerate(t[brace:], brace):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = j + 1
+                break
+    block = t[abs_start:end]
+    ep = "https" if key.startswith("https-") else ("http" if key.startswith("http-") else None)
+    if ep and re.search(r'["\'](web|websecure)["\']', block, re.I):
+        nb = re.sub(r'"entryPoints"\s*:\s*\[[^\]]*\]', f'"entryPoints": ["{ep}"]', block, count=1, flags=re.S)
+        if nb != block:
+            t = t[:abs_start] + nb + t[end:]
+            end = abs_start + len(nb)
+    pos = end
+
 if t != orig:
     path.write_text(t, encoding="utf-8")
     print(f"patched → {new_url}")
@@ -152,7 +180,35 @@ needs_heal() {
   # Host slash residual no yaml
   if grep -qF "Host(\`${DOMAIN}/\`)" "$MAIN_YAML" 2>/dev/null; then return 0; fi
   if grep -qF "http://soma-promotora_gestao-interno:" "$MAIN_YAML" 2>/dev/null; then return 0; fi
+  # entryPoints web/websecure em router do Soma (órfão → 404)
+  if soma_router_has_bad_entrypoint; then return 0; fi
   return 1
+}
+
+# 0 (true) se algum router do Soma usa entryPoints web/websecure (deveria ser http/https)
+soma_router_has_bad_entrypoint() {
+  [[ -f "$MAIN_YAML" ]] || return 1
+  python3 - "$MAIN_YAML" <<'PY' 2>/dev/null
+import re, sys
+from pathlib import Path
+t = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+for m in re.finditer(r'"((?:https?-)[^"]*soma[^"]*)"\s*:\s*\{', t, re.I):
+    brace = t.find("{", m.start())
+    depth, end = 0, brace
+    for i, ch in enumerate(t[brace:], brace):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    block = t[m.start():end]
+    ep = re.search(r'"entryPoints"\s*:\s*\[(.*?)\]', block, re.S)
+    if ep and re.search(r'["\'](web|websecure)["\']', ep.group(1), re.I):
+        sys.exit(0)
+sys.exit(1)
+PY
 }
 
 cmd_check() {
@@ -196,7 +252,8 @@ cmd_burst() {
   for i in $(seq 1 "$BURST_ROUNDS"); do
     if local_health_ok && https_ok "$EASY_HOST" && https_ok "$DOMAIN" "/login"; then
       if ! grep -qF "http://soma-promotora_gestao-interno:" "$MAIN_YAML" 2>/dev/null \
-        && ! grep -qF "Host(\`${DOMAIN}/\`)" "$MAIN_YAML" 2>/dev/null; then
+        && ! grep -qF "Host(\`${DOMAIN}/\`)" "$MAIN_YAML" 2>/dev/null \
+        && ! soma_router_has_bad_entrypoint; then
         log "burst OK rodada ${i}"
         return 0
       fi

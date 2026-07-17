@@ -1,4 +1,12 @@
-﻿## 2026-07-17 — Tema escuro apagado pelo AppTopbar
+﻿## 2026-07-17 09:30 — Regra IA geral/individual + takeover manual
+- Geral ON/OFF aplica em massa; depois cada chat pode sobrescrever mesmo com geral OFF.
+- Envio manual sempre pausa só a conversa atual; abrir conversa apenas atribui o atendente e preserva IA.
+- Conversa nova herda último estado geral; webhook revalida IA antes de publicar para evitar corrida com takeover.
+- Build client+SSR OK; lint sem erros.
+- LOG: `doc/LOG-2026-07-17__093000__regra-ia-geral-individual-takeover.md`.
+- Keywords: IA geral, IA individual, takeover manual, setAiEnabledForAllConversations.
+
+## 2026-07-17 — Tema escuro apagado pelo AppTopbar
 
 - Causa: ``useState(false)`` + ``useEffect`` que fazia ``classList.toggle('dark', false)`` no mount → limpava o dark do bootstrap após reload (ex.: Atualizar status EVO).
 - Fix: ler tema do DOM/localStorage; ``persistSomaTheme`` + ``data-theme-toggle``.
@@ -182,6 +190,20 @@
 
 ## 2026-07-17 08:20 — Produto cor/tag
 - `ProductConfig.tag` + `color`; resolveProductTagLabel. Keywords: produto tag badge.
+
+## 2026-07-17 09:15 — Suíte estabilidade Traefik Soma (base WABA)
+- Novo `scripts/soma-traefik-guard-vps.sh` (entryPoints http/https + backend host-gw :30300 + host sem barra; timer 3min anti-thrash).
+- `heal-soma-gestao-vps.sh` → v2: também corrige entryPoints web/websecure dos routers Soma (needs_heal + burst).
+- Nova Rule `.cursor/rules/soma-traefik-estabilidade.mdc` (alwaysApply) — modelo em camadas: :443/bootstrap/entrypoint-guard = camada COMPARTILHADA WABA; Soma só heal + guard. NUNCA force Traefik; nunca web/websecure; nunca heals :30180/:30210 no Soma.
+- Validado: bash -n OK + teste Python (4 fixes, router WABA intacto).
+- Install VPS (após push): curl heal-soma-gestao + soma-traefik-guard → `install`.
+- LOG: `doc/LOG-2026-07-17__091500__soma-traefik-estabilidade-suite.md`.
+- Keywords: soma-traefik-guard, entryPoints, host gateway 30300, bad-gateway, anti-thrash.
+
+## 2026-07-17 09:01 — bad-gateway pós-deploy (recuperado)
+- `app.somaconecta.com.br` mostrou JSON `Cannot GET /api/errors/bad-gateway` após push `a0fccae` — Traefik/publish `:30300`, não bug do app.
+- Checagem externa: `/login` 200, `/api/health` 200. Se voltar: `heal-soma-gestao-vps.sh burst`.
+- LOG: `doc/LOG-2026-07-17__090100__soma-bad-gateway-pos-deploy.md`.
 
 ## 2026-07-17 08:53 — IA da conversa + regra global off
 - Toggle da conversa igual ao global (Sparkles verde/contorno). Global off ⇒ `disableAiForAllConversations()` desliga IA de todas as conversas (server + front).
