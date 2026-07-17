@@ -9,6 +9,11 @@ import type { SessionData } from "@/lib/auth/session-config";
 import { sessionCanAccessMenu } from "@/lib/auth/menu-access";
 import { logoutFn } from "@/lib/auth/auth.server";
 import {
+  readDomSomaTheme,
+  readStoredSomaTheme,
+  persistSomaTheme,
+} from "@/lib/theme/soma-theme";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -41,18 +46,29 @@ export function AppTopbar({ user }: { user: SessionData }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const logout = useServerFn(logoutFn);
-  const [dark, setDark] = useState(false);
+  // Nunca iniciar em false fixo — isso apagava o dark do bootstrap no useEffect
+  const [dark, setDark] = useState(() => {
+    if (typeof document === "undefined") return false;
+    return readDomSomaTheme() === "dark" || readStoredSomaTheme() === "dark";
+  });
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
+    const sync = () => setDark(readDomSomaTheme() === "dark");
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const segs = path.split("/").filter(Boolean);
   const crumbs = segs.map((seg, i) => {
     const url = "/" + segs.slice(0, i + 1).join("/");
     return { label: TITLES[url] ?? seg, url };
   });
-  const title = TITLES[path] ?? crumbs.at(-1)?.label ?? "Sinal Verde";
+  const title = TITLES[path] ?? crumbs.at(-1)?.label ?? "Soma Promotora";
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur">
@@ -74,18 +90,37 @@ export function AppTopbar({ user }: { user: SessionData }) {
       <div className="ml-auto flex items-center gap-2">
         {sessionCanAccessMenu(user, "agenda") ? <AgendaTopbarAlerts /> : null}
         {sessionCanAccessMenu(user, "clientes") ? (
-          <Button asChild size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-soft hidden sm:inline-flex">
+          <Button
+            asChild
+            size="sm"
+            className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-soft hidden sm:inline-flex"
+          >
             <Link to="/app/clientes/novo">
               <Plus className="size-4" /> Novo cliente
             </Link>
           </Button>
         ) : null}
-        <Button variant="ghost" size="icon" onClick={() => setDark((v) => !v)} aria-label="Alternar tema">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-theme-toggle
+          aria-label={dark ? "Ativar modo claro" : "Ativar modo escuro"}
+          title={dark ? "Ativar modo claro" : "Ativar modo escuro"}
+          onClick={() => {
+            const next = dark ? "light" : "dark";
+            persistSomaTheme(next);
+            setDark(next === "dark");
+          }}
+        >
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 hover:bg-muted transition-colors">
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 hover:bg-muted transition-colors"
+            >
               <span className="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
                 {initials(user.name)}
               </span>
