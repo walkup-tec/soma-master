@@ -124,6 +124,18 @@ export const setChatConversationAiFn = createServerFn({ method: "POST" })
     return getConversation(data.conversationId);
   });
 
+/** Liga/desliga IA em todos os atendimentos (flag global do chatbot). */
+export const setChatAiGlobalEnabledFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { enabled?: boolean };
+    if (typeof body.enabled !== "boolean") throw new Error("Informe se a IA deve ligar ou desligar.");
+    return { enabled: body.enabled };
+  })
+  .handler(async ({ data }) => {
+    await requireChatUser();
+    return saveChatAiSettings({ aiGlobalEnabled: data.enabled });
+  });
+
 export const sendChatMessageFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const body = data as { conversationId?: string; text?: string };

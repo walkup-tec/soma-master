@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
 import {
   Bot,
   BotOff,
@@ -8,7 +7,6 @@ import {
   MessageCircle,
   Search,
   Send,
-  Settings2,
   StickyNote,
   UserRound,
 } from "lucide-react";
@@ -34,6 +32,7 @@ import {
   joinChatConversationFn,
   listChatConversationsFn,
   sendChatMessageFn,
+  setChatAiGlobalEnabledFn,
   setChatClientStatusFn,
   setChatConversationAiFn,
 } from "@/lib/chat/chat.server";
@@ -67,6 +66,7 @@ export function ChatInboxScreen({
   const joinChat = useServerFn(joinChatConversationFn);
   const sendMessage = useServerFn(sendChatMessageFn);
   const setConvAi = useServerFn(setChatConversationAiFn);
+  const setAiGlobal = useServerFn(setChatAiGlobalEnabledFn);
   const addNote = useServerFn(addChatAttendanceNoteFn);
   const setStatus = useServerFn(setChatClientStatusFn);
 
@@ -81,6 +81,8 @@ export function ChatInboxScreen({
   const [filter, setFilter] = useState<FilterTab>("all");
   const [query, setQuery] = useState("");
   const [composer, setComposer] = useState<ComposerMode>("reply");
+  const [aiGlobalEnabled, setAiGlobalEnabled] = useState(bootstrap.aiSettings.aiGlobalEnabled);
+  const [togglingAiGlobal, setTogglingAiGlobal] = useState(false);
   const userId = bootstrap.currentUserId;
 
   const filtered = useMemo(() => {
@@ -221,6 +223,26 @@ export function ChatInboxScreen({
     }
   }
 
+  async function handleToggleAiGlobal() {
+    const next = !aiGlobalEnabled;
+    setTogglingAiGlobal(true);
+    setAiGlobalEnabled(next); // otimista
+    try {
+      const saved = await setAiGlobal({ data: { enabled: next } });
+      setAiGlobalEnabled(saved.aiGlobalEnabled);
+      toast.success(
+        saved.aiGlobalEnabled
+          ? "IA ligada em todos os atendimentos"
+          : "IA desligada em todos os atendimentos",
+      );
+    } catch (error) {
+      setAiGlobalEnabled(!next);
+      toast.error(error instanceof Error ? error.message : "Falha ao alterar IA global");
+    } finally {
+      setTogglingAiGlobal(false);
+    }
+  }
+
   async function handleNote() {
     if (!selectedId || !note.trim()) return;
     try {
@@ -248,14 +270,31 @@ export function ChatInboxScreen({
             <div>
               <h2 className="font-display text-sm font-semibold">Inbox WhatsApp</h2>
               <p className="text-[11px] text-muted-foreground">
-                IA global: {bootstrap.aiSettings.aiGlobalEnabled ? "ligada" : "desligada"}
+                IA global: {aiGlobalEnabled ? "ligada" : "desligada"}
               </p>
             </div>
-            <Button asChild size="sm" variant="outline" className="cursor-pointer shrink-0">
-              <Link to="/app/configuracoes" search={{ tab: "chatbot" }}>
-                <Settings2 className="size-4" />
-                EVO
-              </Link>
+            <Button
+              type="button"
+              size="sm"
+              variant={aiGlobalEnabled ? "default" : "outline"}
+              className="cursor-pointer shrink-0 gap-1.5"
+              disabled={togglingAiGlobal}
+              aria-pressed={aiGlobalEnabled}
+              title={
+                aiGlobalEnabled
+                  ? "Desligar IA em todos os atendimentos"
+                  : "Ligar IA em todos os atendimentos"
+              }
+              onClick={() => void handleToggleAiGlobal()}
+            >
+              {togglingAiGlobal ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : aiGlobalEnabled ? (
+                <Bot className="size-4" />
+              ) : (
+                <BotOff className="size-4" />
+              )}
+              IA
             </Button>
           </div>
           <div
