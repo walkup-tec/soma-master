@@ -49,6 +49,20 @@ type Props = {
 /** Contatos mapeados na importação — ficam na coluna Contato (não nos dados indexados). */
 const CONTACT_FIELD_IDS: ClientFieldId[] = ["email", "telefone", "whatsapp"];
 const CONTACT_FIELD_SET = new Set<ClientFieldId>(CONTACT_FIELD_IDS);
+const WHATSAPP_NOTE_PREFIX = /^\[WhatsApp\]\s*/i;
+
+function WhatsAppSourceIcon() {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      aria-label="Origem WhatsApp"
+      role="img"
+      className="mt-0.5 size-4 shrink-0 fill-[#25D366]"
+    >
+      <path d="M16.04 3A12.86 12.86 0 0 0 5 22.48L3.22 29l6.68-1.75A12.94 12.94 0 1 0 16.04 3Zm0 23.65c-2.02 0-4-.55-5.72-1.58l-.41-.25-3.96 1.04 1.06-3.86-.27-.42a10.61 10.61 0 1 1 9.3 5.07Zm5.82-7.94c-.32-.16-1.88-.93-2.17-1.04-.29-.11-.5-.16-.71.16-.21.32-.82 1.04-1 1.25-.19.21-.37.24-.69.08-.32-.16-1.34-.49-2.55-1.57a9.54 9.54 0 0 1-1.77-2.2c-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.56.16-.18.21-.32.32-.53.1-.21.05-.4-.03-.56-.08-.16-.71-1.72-.98-2.35-.26-.62-.52-.54-.71-.55h-.61c-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.56 1.14 3.07 1.3 3.28.16.21 2.24 3.42 5.43 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.88-.77 2.14-1.51.27-.74.27-1.38.19-1.51-.08-.13-.29-.21-.61-.37Z" />
+    </svg>
+  );
+}
 
 async function copyText(value: string, successMessage: string) {
   try {
@@ -453,8 +467,13 @@ export function ClientAttendanceDialog({
                                 <Trash2 className="size-3.5" />
                               </Button>
                             </div>
-                            <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">
-                              {attendance.note}
+                            <p className="mt-2 flex items-start gap-2 text-sm leading-relaxed">
+                              {WHATSAPP_NOTE_PREFIX.test(attendance.note) ? (
+                                <WhatsAppSourceIcon />
+                              ) : null}
+                              <span className="whitespace-pre-wrap">
+                                {attendance.note.replace(WHATSAPP_NOTE_PREFIX, "")}
+                              </span>
                             </p>
                           </article>
                         ))}

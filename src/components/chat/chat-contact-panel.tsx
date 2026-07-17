@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
-import { Link2, Loader2 } from "lucide-react";
+import { IdCard, Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { ClientAttendanceDialog } from "@/components/clients/client-attendance-dialog";
 import { ClientFieldInput } from "@/components/clients/client-field-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,8 @@ type Props = {
   products: ProductConfig[];
   banks: BankConfig[];
   onUpdated: (next: ChatConversation) => void;
+  /** Nome/WhatsApp digitados no formulário — o cabeçalho Contato espelha em tempo real. */
+  onDraftChange?: (draft: { name: string; phone: string }) => void;
 };
 
 function seedFieldsFromConversation(
@@ -46,6 +48,7 @@ export function ChatContactPanel({
   products,
   banks,
   onUpdated,
+  onDraftChange,
 }: Props) {
   const createAndLink = useServerFn(createAndLinkChatClientFn);
   const setStatus = useServerFn(setChatClientStatusFn);
@@ -56,6 +59,7 @@ export function ChatContactPanel({
     () => attendanceStatuses.find((s) => s.id === "em_atendimento")?.id ?? attendanceStatuses[0]?.id ?? "novo",
   );
   const [saving, setSaving] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const product = useMemo(
     () => products.find((item) => item.id === productId) ?? null,
@@ -74,6 +78,15 @@ export function ChatContactPanel({
     }
     setFields(seedFieldsFromConversation(conversation, product.requiredFieldIds));
   }, [product, conversation.id, conversation.phone, conversation.contactName, conversation.clientName]);
+
+  // Espelha nome/WhatsApp digitados no cabeçalho Contato (tempo real)
+  useEffect(() => {
+    onDraftChange?.({
+      name: String(fields.nome ?? "").trim(),
+      phone: String(fields.whatsapp ?? fields.telefone ?? "").trim(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields.nome, fields.whatsapp, fields.telefone]);
 
   async function handleLink() {
     if (!product) {
@@ -148,10 +161,24 @@ export function ChatContactPanel({
               ))}
             </SelectContent>
           </Select>
-          <Button asChild size="sm" variant="link" className="h-auto cursor-pointer px-0">
-            <Link to="/app/clientes">Abrir no CRM</Link>
+          <Button
+            type="button"
+            size="sm"
+            variant="link"
+            className="h-auto cursor-pointer px-0"
+            onClick={() => setDetailsOpen(true)}
+          >
+            <IdCard className="size-3.5" /> Detalhes
           </Button>
         </div>
+
+        {/* Mesmo modal da tela Clientes (dados + histórico + status + anexos) */}
+        <ClientAttendanceDialog
+          clientId={conversation.clientId}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          onStatusChange={() => onUpdated(conversation)}
+        />
       </div>
     );
   }

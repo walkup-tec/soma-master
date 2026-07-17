@@ -1,4 +1,37 @@
-﻿## 2026-07-17 09:35 — Heal Soma automático pós-deploy (Actions)
+﻿## 2026-07-17 10:20 — Imagens no Chat WhatsApp (envio + recebimento)
+- Evolution v2: `sendMedia` (base64) + webhook `MESSAGES_UPSERT base64=true`; fallback `getBase64FromMediaMessage`.
+- UI: JPG/PNG/WEBP até 10 MB, preview, legenda, upload chunks 1 MiB, balão com imagem.
+- Persistência: `crm.chat_media` (bytea separado) + metadados em `chat_messages`; cache `/app/data/chat-media`; rota autenticada `/api/chat/media/:id`.
+- Segurança: MIME allowlist, tamanho/chunks, sessão Chat, nosniff, dedupe waMessageId.
+- Build client+SSR OK; lint sem erros.
+- LOG: `doc/LOG-2026-07-17__102000__chat-whatsapp-imagens-envio-recebimento.md`.
+- Keywords: Evolution sendMedia, imageMessage, chat_media, WhatsApp imagens.
+
+## 2026-07-17 10:00 — Chat "Detalhes" abre modal do cliente
+- Cartão Contato: "Abrir no CRM" → botão "Detalhes" com `ClientAttendanceDialog` (mesmo modal da tela Clientes).
+- LOG: `doc/LOG-2026-07-17__100000__chat-detalhes-modal-cliente.md`.
+
+## 2026-07-17 09:55 — Separação das grandes seções do menu
+- `PARCEIROS` e `PRODUÇÃO PRÓPRIA` agora têm cabeçalho em bloco (fundo/borda/sombra) e divisória forte entre seções; subgrupos seguem secundários.
+- LOG: `doc/LOG-2026-07-17__095500__separacao-secoes-menu.md`.
+- Keywords: sidebar, seções menu, hierarquia visual.
+
+## 2026-07-17 09:50 — Chat ativo só com contorno rosa
+- Lista do Inbox remove `bg-primary-soft` do item ativo; usa borda `primary`, fundo/hover transparentes (melhor no dark).
+- LOG: `doc/LOG-2026-07-17__095000__chat-ativo-contorno-rosa.md`.
+- Keywords: chat ativo, contorno rosa, dark mode.
+
+## 2026-07-17 09:45 — Ícone WhatsApp no histórico
+- Notas com prefixo `[WhatsApp]` exibem ícone vetorial verde `#25D366`; prefixo fica armazenado, mas oculto na UI (sem migração).
+- LOG: `doc/LOG-2026-07-17__094500__historico-icone-whatsapp.md`.
+- Keywords: histórico, WhatsApp icon, origem atendimento.
+
+## 2026-07-17 09:40 — Header Contato espelha nome/WhatsApp
+- Painel Vincular ao CRM emite `onDraftChange`; cabeçalho Contato mostra rascunho em tempo real e zera ao trocar/vincular.
+- Telefone da conversa (chave WhatsApp) não muda no banco; após vincular vale `clientName`.
+- LOG: `doc/LOG-2026-07-17__094000__contato-header-espelha-nome-whatsapp.md`.
+
+## 2026-07-17 09:35 — Heal Soma automático pós-deploy (Actions)
 - Novo `.github/workflows/heal-soma-on-deploy.yml` (espelho WABA): push main → SSH VPS → `install` (idempotente) + burst da suíte (heal + guard).
 - Elimina passo manual: após 1º run, VPS se cura sozinho em todo redeploy (watch docker events + timer). Actions não é dependência contínua.
 - Pré-req único (no GitHub, não no VPS): secret `VPS_SSH_PRIVATE_KEY` no repo soma-master (mesma chave root do WABA); opcional `VPS_HOST`.

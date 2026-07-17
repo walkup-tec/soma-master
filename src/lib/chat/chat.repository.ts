@@ -235,6 +235,10 @@ export async function listMessages(conversationId: string, limit = 200): Promise
       conversation_id: string;
       direction: string;
       body: string;
+      message_type: string;
+      media_id: string | null;
+      media_mime_type: string | null;
+      media_file_name: string | null;
       sender_type: string;
       sender_user_id: string | null;
       sender_name: string | null;
@@ -251,6 +255,10 @@ export async function listMessages(conversationId: string, limit = 200): Promise
       conversationId: row.conversation_id,
       direction: row.direction as ChatMessage["direction"],
       body: row.body,
+      messageType: row.message_type === "image" ? "image" : "text",
+      mediaId: row.media_id,
+      mediaMimeType: row.media_mime_type,
+      mediaFileName: row.media_file_name,
       senderType: row.sender_type as ChatSenderType,
       senderUserId: row.sender_user_id,
       senderName: row.sender_name,
@@ -262,6 +270,13 @@ export async function listMessages(conversationId: string, limit = 200): Promise
   const all = await readJsonFile<ChatMessage[]>(MSG_FILE, []);
   return all
     .filter((m) => m.conversationId === conversationId)
+    .map((message) => ({
+      ...message,
+      messageType: message.messageType ?? "text",
+      mediaId: message.mediaId ?? null,
+      mediaMimeType: message.mediaMimeType ?? null,
+      mediaFileName: message.mediaFileName ?? null,
+    }))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .slice(-limit);
 }
@@ -270,6 +285,10 @@ export async function appendMessage(input: {
   conversationId: string;
   direction: ChatMessage["direction"];
   body: string;
+  messageType?: ChatMessage["messageType"];
+  mediaId?: string | null;
+  mediaMimeType?: string | null;
+  mediaFileName?: string | null;
   senderType: ChatSenderType;
   senderUserId?: string | null;
   senderName?: string | null;
@@ -277,13 +296,20 @@ export async function appendMessage(input: {
   bumpUnread?: boolean;
 }): Promise<ChatMessage> {
   const body = input.body.trim();
-  if (!body) throw new Error("Mensagem vazia.");
+  const messageType = input.messageType ?? "text";
+  if (!body && messageType !== "image") throw new Error("Mensagem vazia.");
+  if (messageType === "image" && !input.mediaId) throw new Error("Imagem ausente.");
+  const preview = messageType === "image" ? `📷 ${body || "Imagem"}` : body;
 
   const message: ChatMessage = {
     id: `msg-${crypto.randomUUID().slice(0, 10)}`,
     conversationId: input.conversationId,
     direction: input.direction,
     body,
+    messageType,
+    mediaId: input.mediaId ?? null,
+    mediaMimeType: input.mediaMimeType ?? null,
+    mediaFileName: input.mediaFileName ?? null,
     senderType: input.senderType,
     senderUserId: input.senderUserId ?? null,
     senderName: input.senderName ?? null,
@@ -299,9 +325,11 @@ export async function appendMessage(input: {
       }
       await sql`
         insert into crm.chat_messages (
-          id, conversation_id, direction, body, sender_type, sender_user_id, sender_name, wa_message_id, created_at
+          id, conversation_id, direction, body, message_type, media_id, media_mime_type,
+          media_file_name, sender_type, sender_user_id, sender_name, wa_message_id, created_at
         ) values (
           ${message.id}, ${message.conversationId}, ${message.direction}, ${message.body},
+          ${message.messageType}, ${message.mediaId}, ${message.mediaMimeType}, ${message.mediaFileName},
           ${message.senderType}, ${message.senderUserId}, ${message.senderName}, ${message.waMessageId},
           ${new Date(message.createdAt)}
         )
@@ -310,7 +338,7 @@ export async function appendMessage(input: {
         update crm.chat_conversations
         set
           last_message_at = ${new Date(message.createdAt)},
-          last_message_preview = ${body.slice(0, 180)},
+          last_message_preview = ${preview.slice(0, 180)},
           unread_count = case when ${Boolean(input.bumpUnread)} then unread_count + 1 else unread_count end,
           updated_at = now()
         where id = ${input.conversationId}
@@ -331,7 +359,7 @@ export async function appendMessage(input: {
     convs[idx] = {
       ...convs[idx],
       lastMessageAt: message.createdAt,
-      lastMessagePreview: body.slice(0, 180),
+      lastMessagePreview: preview.slice(0, 180),
       unreadCount: input.bumpUnread ? convs[idx].unreadCount + 1 : convs[idx].unreadCount,
       updatedAt: message.createdAt,
     };

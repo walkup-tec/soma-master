@@ -218,8 +218,15 @@ export async function ensureSomaEvolutionInstance(options?: {
     };
   }
 
+  const webhookUrl = resolveWebhookUrl(options?.webhookPublicBaseUrl);
   const state = await evolutionFetch(`/instance/connectionState/${encodeURIComponent(instance)}`);
   if (state.ok) {
+    // Mantém instâncias existentes atualizadas (inclui base64=true para imagens recebidas).
+    if (webhookUrl) {
+      await evolutionSetInstanceWebhook(webhookUrl, options?.webhookPublicBaseUrl).catch(
+        () => undefined,
+      );
+    }
     return { ok: true, created: false };
   }
   // Rede/timeout: não cria no escuro
@@ -228,7 +235,6 @@ export async function ensureSomaEvolutionInstance(options?: {
   }
   // 404 (ou equivalente): cria só soma-*; 409 no create = já existe
 
-  const webhookUrl = resolveWebhookUrl(options?.webhookPublicBaseUrl);
   const secret = process.env.CHAT_WEBHOOK_SECRET?.trim();
   const createPayload: Record<string, unknown> = {
     instanceName: instance,
@@ -240,7 +246,7 @@ export async function ensureSomaEvolutionInstance(options?: {
       enabled: true,
       url: webhookUrl,
       byEvents: false,
-      base64: false,
+      base64: true,
       events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
       ...(secret
         ? {
@@ -301,7 +307,7 @@ export async function evolutionSetInstanceWebhook(
         enabled: true,
         url,
         byEvents: false,
-        base64: false,
+        base64: true,
         events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
         ...(secret
           ? {
@@ -397,6 +403,80 @@ export async function evolutionSendText(input: {
     return { ok: false, raw: result.raw, error: result.error };
   }
   return { ok: true, raw: result.raw };
+}
+
+/**
+ * Envia imagem pela Evolution v2.
+ * Doc oficial: POST /message/sendMedia/{instance}; `media` aceita URL ou data URL base64.
+ */
+export async function evolutionSendImage(input: {
+  phone: string;
+  dataUrl: string;
+  mimeType: string;
+  fileName: string;
+  caption?: string;
+}): Promise<{ ok: boolean; raw?: unknown; error?: string }> {
+  if (!isEvolutionConfigured()) {
+    return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE)." };
+  }
+  if (!/^image\/(jpeg|png|webp)$/i.test(input.mimeType)) {
+    return { ok: false, error: "Formato de imagem não permitido." };
+  }
+
+  const { instance } = evolutionEnv();
+  assertSomaOwnedInstance(instance);
+  const result = await evolutionFetch(`/message/sendMedia/${encodeURIComponent(instance)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      number: input.phone.replace(/\D+/g, ""),
+      mediatype: "image",
+      mimetype: input.mimeType,
+      caption: input.caption?.trim() ?? "",
+      media: input.dataUrl,
+      fileName: input.fileName,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  return result.ok
+    ? { ok: true, raw: result.raw }
+    : { ok: false, raw: result.raw, error: result.error };
+}
+
+/**
+ * Fallback para webhooks sem base64 embutido.
+ * Doc oficial: POST /chat/getBase64FromMediaMessage/{instance}.
+ */
+export async function evolutionGetMediaBase64(messageKey: Record<string, unknown>): Promise<{
+  ok: boolean;
+  base64?: string;
+  mimeType?: string;
+  error?: string;
+}> {
+  const { instance } = evolutionEnv();
+  assertSomaOwnedInstance(instance);
+  const result = await evolutionFetch(
+    `/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ message: { key: messageKey }, convertToMp4: false }),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const raw = (result.raw && typeof result.raw === "object"
+    ? result.raw
+    : {}) as Record<string, unknown>;
+  const base64 =
+    (typeof raw.base64 === "string" && raw.base64) ||
+    (typeof raw.media === "string" && raw.media) ||
+    undefined;
+  const mimeType =
+    (typeof raw.mimetype === "string" && raw.mimetype) ||
+    (typeof raw.mimeType === "string" && raw.mimeType) ||
+    undefined;
+  return base64
+    ? { ok: true, base64, mimeType }
+    : { ok: false, error: "Evolution não retornou o conteúdo da imagem." };
 }
 
 /** Extrai nome da instância no payload do webhook — ignora eventos de outras apps. */

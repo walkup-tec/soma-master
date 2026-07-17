@@ -26,6 +26,7 @@ import { clearEvolutionQrFlash, putEvolutionQrFlash, takeEvolutionQrFlash } from
 import {
   evolutionConnectQr,
   evolutionConnectionState,
+  evolutionSendImage,
   evolutionSendText,
   ensureSomaEvolutionInstance,
   getEvolutionPublicConfig,
@@ -34,6 +35,17 @@ import {
   type EvolutionConnectionState,
   type EvolutionQrPayload,
 } from "@/lib/chat/evolution.adapter";
+import {
+  appendChatImageChunk,
+  finalizeChatImageUpload,
+  getChatImageUploadMeta,
+  initChatImageUpload,
+  readChatImageAsDataUrl,
+} from "@/lib/chat/chat-media.repository";
+import {
+  CHAT_IMAGE_CHUNK_BYTES,
+  CHAT_IMAGE_MAX_BYTES,
+} from "@/lib/chat/chat-media.constants";
 import { isOpenAiConfigured } from "@/lib/chat/openai.adapter";
 import { createClientAttendance } from "@/lib/clients/client-attendance.repository";
 import { createManualClient, updateClientStatus } from "@/lib/clients/clients.repository";
@@ -69,6 +81,10 @@ async function requireChatBotSettingsUser(): Promise<SessionData> {
 export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(async () => {
   const user = await requireChatUser();
   const [conversations, aiSettings] = await Promise.all([listConversations(), getChatAiSettings()]);
+  // Reaplica webhook (base64=true) em background — necessário para receber imagens
+  void ensureSomaEvolutionInstance({
+    webhookPublicBaseUrl: aiSettings.webhookPublicBaseUrl,
+  }).catch(() => undefined);
   return {
     conversations,
     aiSettings,
@@ -175,6 +191,113 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
     // Evolution é a parte lenta — timeout curto; UI já mostra otimista no cliente
     const send = await evolutionSendText({ phone: conversation.phone, text: data.text });
     return { message, conversation, evolution: send };
+  });
+
+export const initChatImageUploadFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as {
+      conversationId?: string;
+      fileName?: string;
+      fileSize?: number;
+      mimeType?: string;
+      totalChunks?: number;
+    };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const fileName = String(body.fileName ?? "imagem").trim().slice(0, 160);
+    const mimeType = String(body.mimeType ?? "").trim().toLowerCase();
+    const fileSize = Number(body.fileSize);
+    const totalChunks = Number(body.totalChunks);
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    if (!/^image\/(jpeg|png|webp)$/.test(mimeType)) {
+      throw new Error("Use uma imagem JPG, PNG ou WEBP.");
+    }
+    if (!Number.isSafeInteger(fileSize) || fileSize <= 0 || fileSize > CHAT_IMAGE_MAX_BYTES) {
+      throw new Error("A imagem deve ter no máximo 10 MB.");
+    }
+    if (!Number.isSafeInteger(totalChunks) || totalChunks < 1 || totalChunks > 10) {
+      throw new Error("Quantidade de partes inválida.");
+    }
+    return { conversationId, fileName, fileSize, mimeType, totalChunks };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const conversation = await getConversation(data.conversationId);
+    if (!conversation) throw new Error("Conversa não encontrada.");
+    return initChatImageUpload({
+      ...data,
+      userId: user.userId,
+      userName: user.name || user.email || "Atendente",
+    });
+  });
+
+export const appendChatImageChunkFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { mediaId?: string; chunkIndex?: number; chunkBase64?: string };
+    const mediaId = String(body.mediaId ?? "").trim();
+    const chunkIndex = Number(body.chunkIndex);
+    const chunkBase64 = String(body.chunkBase64 ?? "");
+    if (!mediaId || !Number.isSafeInteger(chunkIndex) || !chunkBase64) {
+      throw new Error("Parte da imagem inválida.");
+    }
+    // 1 MiB binário vira ~1.4 MiB base64; margem pequena para padding.
+    if (chunkBase64.length > Math.ceil((CHAT_IMAGE_CHUNK_BYTES * 4) / 3) + 16) {
+      throw new Error("Parte da imagem acima do limite.");
+    }
+    return { mediaId, chunkIndex, chunkBase64 };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const meta = await getChatImageUploadMeta(data.mediaId);
+    if (!meta || meta.userId !== user.userId) throw new Error("Upload não encontrado.");
+    return appendChatImageChunk(data.mediaId, data.chunkIndex, data.chunkBase64);
+  });
+
+export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { mediaId?: string; caption?: string };
+    const mediaId = String(body.mediaId ?? "").trim();
+    const caption = String(body.caption ?? "").trim().slice(0, 1024);
+    if (!mediaId) throw new Error("Imagem obrigatória.");
+    return { mediaId, caption };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const pending = await getChatImageUploadMeta(data.mediaId);
+    if (!pending || pending.userId !== user.userId) throw new Error("Upload não encontrado.");
+    const conversation = await getConversation(pending.conversationId);
+    if (!conversation) throw new Error("Conversa não encontrada.");
+
+    const meta = await finalizeChatImageUpload(data.mediaId);
+    await joinConversationAsAgent({
+      conversationId: conversation.id,
+      userId: user.userId,
+      userName: user.name || user.email || "Atendente",
+    });
+    await setConversationAiEnabled({ conversationId: conversation.id, aiEnabled: false });
+
+    const message = await appendMessage({
+      conversationId: conversation.id,
+      direction: "outbound",
+      body: data.caption,
+      messageType: "image",
+      mediaId: meta.mediaId,
+      mediaMimeType: meta.mimeType,
+      mediaFileName: meta.fileName,
+      senderType: "agent",
+      senderUserId: user.userId,
+      senderName: user.name || user.email || "Atendente",
+    });
+    // Persiste primeiro; a Evolution é externa e pode responder timeout após entregar.
+    const { dataUrl } = await readChatImageAsDataUrl(meta.mediaId);
+    const send = await evolutionSendImage({
+      phone: conversation.phone,
+      dataUrl,
+      mimeType: meta.mimeType,
+      fileName: meta.fileName,
+      caption: data.caption,
+    });
+    const updatedConversation = await getConversation(conversation.id);
+    return { message, conversation: updatedConversation, evolution: send };
   });
 
 export const addChatAttendanceNoteFn = createServerFn({ method: "POST" })

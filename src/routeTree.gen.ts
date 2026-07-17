@@ -25,6 +25,7 @@ import { Route as AppClientesNovoRouteImport } from './routes/app/clientes.novo'
 import { Route as AppChatIaRouteImport } from './routes/app/chat.ia'
 import { Route as ApiSettingsChatbotEvolutionRouteImport } from './routes/api/settings/chatbot/evolution'
 import { Route as ApiSettingsChatbotEducationRouteImport } from './routes/api/settings/chatbot/education'
+import { Route as ApiChatMediaMediaIdRouteImport } from './routes/api/chat/media.$mediaId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -108,6 +109,11 @@ const ApiSettingsChatbotEducationRoute =
     path: '/api/settings/chatbot/education',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiChatMediaMediaIdRoute = ApiChatMediaMediaIdRouteImport.update({
+  id: '/api/chat/media/$mediaId',
+  path: '/api/chat/media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
   '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -141,6 +148,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
   '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/settings/chatbot/education': typeof ApiSettingsChatbotEducationRoute
   '/api/settings/chatbot/evolution': typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -180,6 +189,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/chat/media/$mediaId'
     | '/api/settings/chatbot/education'
     | '/api/settings/chatbot/evolution'
   fileRoutesByTo: FileRoutesByTo
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/chat/media/$mediaId'
     | '/api/settings/chatbot/education'
     | '/api/settings/chatbot/evolution'
   id:
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/api/chat/media/$mediaId'
     | '/api/settings/chatbot/education'
     | '/api/settings/chatbot/evolution'
   fileRoutesById: FileRoutesById
@@ -224,6 +236,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiChatMediaMediaIdRoute: typeof ApiChatMediaMediaIdRoute
   ApiSettingsChatbotEducationRoute: typeof ApiSettingsChatbotEducationRoute
   ApiSettingsChatbotEvolutionRoute: typeof ApiSettingsChatbotEvolutionRoute
 }
@@ -342,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSettingsChatbotEducationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/chat/media/$mediaId': {
+      id: '/api/chat/media/$mediaId'
+      path: '/api/chat/media/$mediaId'
+      fullPath: '/api/chat/media/$mediaId'
+      preLoaderRoute: typeof ApiChatMediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -397,6 +417,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiChatMediaMediaIdRoute: ApiChatMediaMediaIdRoute,
   ApiSettingsChatbotEducationRoute: ApiSettingsChatbotEducationRoute,
   ApiSettingsChatbotEvolutionRoute: ApiSettingsChatbotEvolutionRoute,
 }

@@ -41,16 +41,23 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
         />
       </SidebarHeader>
       <SidebarContent>
-        {MENU_SECTIONS.map((section) => {
+        {MENU_SECTIONS.map((section, sectionIndex) => {
           const sectionItems = itemsBySection(allowedItems, section.id);
           const grouped = groupMenuItems(sectionItems);
           const hasItems = sectionItems.length > 0;
 
           return (
-            <div key={section.id} className="mb-1">
+            <div
+              key={section.id}
+              className={
+                sectionIndex === 0
+                  ? "pb-3"
+                  : "mt-2 border-t-2 border-sidebar-border/80 pb-3 pt-3"
+              }
+            >
               {!collapsed ? (
-                <div className="px-3 pb-1 pt-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/50">
+                <div className="mx-2 mb-1 rounded-md border border-sidebar-border/70 bg-sidebar-accent/60 px-3 py-2 shadow-sm">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/85">
                     {section.label}
                   </p>
                 </div>
@@ -97,7 +104,7 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
                   );
                 })
               ) : !collapsed ? (
-                <p className="px-3 pb-2 text-xs text-sidebar-foreground/40">Em breve</p>
+                <p className="px-5 py-2 text-xs italic text-sidebar-foreground/45">Em breve</p>
               ) : null}
             </div>
           );

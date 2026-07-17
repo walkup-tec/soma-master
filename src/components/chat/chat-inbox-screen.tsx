@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import {
   BotOff,
+  ImagePlus,
   Loader2,
   MessageCircle,
   Search,
   Send,
   Sparkles,
   StickyNote,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ChatContactPanel } from "@/components/chat/chat-contact-panel";
@@ -21,13 +23,22 @@ import { cn } from "@/lib/utils";
 import type { ChatAiSettings, ChatConversation, ChatMessage } from "@/lib/chat/chat.types";
 import {
   addChatAttendanceNoteFn,
+  appendChatImageChunkFn,
+  finalizeAndSendChatImageFn,
   getChatThreadFn,
+  initChatImageUploadFn,
   joinChatConversationFn,
   listChatConversationsFn,
   sendChatMessageFn,
   setChatAiGlobalEnabledFn,
   setChatConversationAiFn,
 } from "@/lib/chat/chat.server";
+import {
+  CHAT_IMAGE_ACCEPT,
+  CHAT_IMAGE_CHUNK_BYTES,
+  CHAT_IMAGE_MAX_BYTES,
+} from "@/lib/chat/chat-media.constants";
+import { readFileInChunks } from "@/lib/clients/upload-file-chunks";
 import type { AttendanceStatusConfig, BankConfig, ProductConfig } from "@/lib/config/settings-types";
 
 type Bootstrap = {
@@ -61,6 +72,9 @@ export function ChatInboxScreen({
   const getThread = useServerFn(getChatThreadFn);
   const joinChat = useServerFn(joinChatConversationFn);
   const sendMessage = useServerFn(sendChatMessageFn);
+  const initImageUpload = useServerFn(initChatImageUploadFn);
+  const appendImageChunk = useServerFn(appendChatImageChunkFn);
+  const finalizeAndSendImage = useServerFn(finalizeAndSendChatImageFn);
   const setConvAi = useServerFn(setChatConversationAiFn);
   const setAiGlobal = useServerFn(setChatAiGlobalEnabledFn);
   const addNote = useServerFn(addChatAttendanceNoteFn);
@@ -73,11 +87,19 @@ export function ChatInboxScreen({
   const [note, setNote] = useState("");
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [query, setQuery] = useState("");
   const [composer, setComposer] = useState<ComposerMode>("reply");
   const [aiGlobalEnabled, setAiGlobalEnabled] = useState(bootstrap.aiSettings.aiGlobalEnabled);
   const [togglingAiGlobal, setTogglingAiGlobal] = useState(false);
+  // Nome/WhatsApp digitados no formulário Vincular ao CRM — o cabeçalho Contato espelha
+  const [contactDraft, setContactDraft] = useState<{ name: string; phone: string }>({
+    name: "",
+    phone: "",
+  });
   const userId = bootstrap.currentUserId;
 
   const filtered = useMemo(() => {
@@ -98,6 +120,28 @@ export function ChatInboxScreen({
       });
   }, [conversations, filter, query, userId]);
 
+  function clearSelectedImage() {
+    if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
+    setSelectedImage(null);
+    setSelectedImageUrl(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }
+
+  function chooseImage(file: File | undefined) {
+    if (!file) return;
+    if (!CHAT_IMAGE_ACCEPT.split(",").includes(file.type)) {
+      toast.error("Use uma imagem JPG, PNG ou WEBP.");
+      return;
+    }
+    if (file.size <= 0 || file.size > CHAT_IMAGE_MAX_BYTES) {
+      toast.error("A imagem deve ter no máximo 10 MB.");
+      return;
+    }
+    if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
+    setSelectedImage(file);
+    setSelectedImageUrl(URL.createObjectURL(file));
+  }
+
   async function refreshList() {
     const next = await listConversations();
     setConversations(next);
@@ -105,6 +149,8 @@ export function ChatInboxScreen({
 
   async function openConversation(id: string) {
     setSelectedId(id);
+    setContactDraft({ name: "", phone: "" });
+    clearSelectedImage();
     setLoadingThread(true);
     try {
       // Abrir conversa atribui ao usuário, mas preserva o estado individual da IA.
@@ -141,8 +187,108 @@ export function ChatInboxScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
+  async function handleSendImage() {
+    if (!selectedId || !selectedImage || !selectedImageUrl) return;
+    const file = selectedImage;
+    const previewUrl = selectedImageUrl;
+    const caption = text.trim();
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    const optimistic: ChatMessage = {
+      id: tempId,
+      conversationId: selectedId,
+      direction: "outbound",
+      body: caption,
+      messageType: "image",
+      mediaId: null,
+      mediaMimeType: file.type,
+      mediaFileName: file.name,
+      mediaPreviewUrl: previewUrl,
+      senderType: "agent",
+      senderUserId: userId,
+      senderName: active?.assignedUserName ?? "Você",
+      waMessageId: null,
+      createdAt: now,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setText("");
+    setActive((prev) =>
+      prev
+        ? {
+            ...prev,
+            lastMessageAt: now,
+            lastMessagePreview: `📷 ${caption || "Imagem"}`,
+            assignedUserId: prev.assignedUserId ?? userId,
+            aiEnabled: false,
+          }
+        : prev,
+    );
+    setConversations((prev) =>
+      prev.map((conversation) =>
+        conversation.id === selectedId
+          ? {
+              ...conversation,
+              lastMessageAt: now,
+              lastMessagePreview: `📷 ${caption || "Imagem"}`,
+              assignedUserId: conversation.assignedUserId ?? userId,
+              aiEnabled: false,
+            }
+          : conversation,
+      ),
+    );
+
+    setSending(true);
+    try {
+      const totalChunks = Math.ceil(file.size / CHAT_IMAGE_CHUNK_BYTES);
+      const upload = await initImageUpload({
+        data: {
+          conversationId: selectedId,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          totalChunks,
+        },
+      });
+      await readFileInChunks(file, CHAT_IMAGE_CHUNK_BYTES, async (chunkIndex, _total, base64) => {
+        await appendImageChunk({
+          data: { mediaId: upload.mediaId, chunkIndex, chunkBase64: base64 },
+        });
+      });
+      const result = await finalizeAndSendImage({
+        data: { mediaId: upload.mediaId, caption },
+      });
+      setMessages((prev) => prev.map((message) => (message.id === tempId ? result.message : message)));
+      if (result.conversation) {
+        setActive(result.conversation);
+        setConversations((prev) =>
+          prev.map((conversation) =>
+            conversation.id === result.conversation?.id
+              ? { ...conversation, ...result.conversation }
+              : conversation,
+          ),
+        );
+      }
+      clearSelectedImage();
+      if (!result.evolution.ok) {
+        toast.message("Imagem salva no CRM", {
+          description: result.evolution.error ?? "Evolution não enviou a imagem.",
+        });
+      }
+    } catch (error) {
+      setMessages((prev) => prev.filter((message) => message.id !== tempId));
+      setText(caption);
+      toast.error(error instanceof Error ? error.message : "Falha ao enviar imagem");
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleSend() {
-    if (!selectedId || !text.trim()) return;
+    if (!selectedId || (!text.trim() && !selectedImage)) return;
+    if (selectedImage) {
+      await handleSendImage();
+      return;
+    }
     const body = text.trim();
     const tempId = `temp-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
@@ -151,6 +297,10 @@ export function ChatInboxScreen({
       conversationId: selectedId,
       direction: "outbound",
       body,
+      messageType: "text",
+      mediaId: null,
+      mediaMimeType: null,
+      mediaFileName: null,
       senderType: "agent",
       senderUserId: userId,
       senderName: active?.assignedUserName ?? "Você",
@@ -356,8 +506,9 @@ export function ChatInboxScreen({
                   type="button"
                   onClick={() => void openConversation(conv.id)}
                   className={cn(
-                    "w-full cursor-pointer rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted",
-                    selectedId === conv.id && "bg-primary-soft",
+                    "w-full cursor-pointer rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted",
+                    selectedId === conv.id &&
+                      "border-primary bg-transparent hover:bg-transparent dark:border-primary dark:bg-transparent",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -499,7 +650,28 @@ export function ChatInboxScreen({
                               {msg.senderName ?? (msg.senderType === "ai" ? "IA" : "Contato")}
                             </div>
                           ) : null}
-                          <p className="whitespace-pre-wrap">{msg.body}</p>
+                          {msg.messageType === "image" &&
+                          (msg.mediaPreviewUrl || msg.mediaId) ? (
+                            <img
+                              src={
+                                msg.mediaPreviewUrl ??
+                                `/api/chat/media/${encodeURIComponent(msg.mediaId!)}`
+                              }
+                              alt={msg.body || msg.mediaFileName || "Imagem do WhatsApp"}
+                              className="max-h-80 w-auto max-w-full rounded-xl object-contain"
+                              loading="lazy"
+                            />
+                          ) : null}
+                          {msg.body ? (
+                            <p
+                              className={cn(
+                                "whitespace-pre-wrap",
+                                msg.messageType === "image" && "mt-1.5",
+                              )}
+                            >
+                              {msg.body}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -550,30 +722,75 @@ export function ChatInboxScreen({
                   </Button>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <Input
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="Escreva para o cliente… (Enter envia)"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void handleSend();
+                <div className="space-y-2">
+                  {selectedImageUrl ? (
+                    <div className="relative inline-flex max-w-[220px] rounded-lg border border-border bg-muted/30 p-1">
+                      <img
+                        src={selectedImageUrl}
+                        alt="Imagem selecionada para envio"
+                        className="max-h-32 rounded-md object-contain"
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="destructive"
+                        className="absolute -right-2 -top-2 size-6 cursor-pointer rounded-full"
+                        aria-label="Remover imagem"
+                        onClick={clearSelectedImage}
+                        disabled={sending}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept={CHAT_IMAGE_ACCEPT}
+                      className="sr-only"
+                      onChange={(event) => chooseImage(event.target.files?.[0])}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="shrink-0 cursor-pointer"
+                      aria-label="Enviar imagem"
+                      title="Enviar imagem (JPG, PNG ou WEBP; até 10 MB)"
+                      disabled={sending}
+                      onClick={() => imageInputRef.current?.click()}
+                    >
+                      <ImagePlus className="size-4" />
+                    </Button>
+                    <Input
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      placeholder={
+                        selectedImage
+                          ? "Legenda opcional… (Enter envia)"
+                          : "Escreva para o cliente… (Enter envia)"
                       }
-                    }}
-                  />
-                  <Button
-                    className="cursor-pointer"
-                    onClick={() => void handleSend()}
-                    disabled={!text.trim()}
-                    aria-busy={sending}
-                  >
-                    {sending && !text.trim() ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Send className="size-4" />
-                    )}
-                  </Button>
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void handleSend();
+                        }
+                      }}
+                    />
+                    <Button
+                      className="cursor-pointer"
+                      onClick={() => void handleSend()}
+                      disabled={sending || (!text.trim() && !selectedImage)}
+                      aria-busy={sending}
+                    >
+                      {sending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Send className="size-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -589,9 +806,9 @@ export function ChatInboxScreen({
               Contato
             </p>
             <h3 className="mt-1 truncate font-display text-sm font-semibold">
-              {active.clientName || active.contactName || "Sem nome"}
+              {contactDraft.name || active.clientName || active.contactName || "Sem nome"}
             </h3>
-            <p className="text-xs text-muted-foreground">{active.phone}</p>
+            <p className="text-xs text-muted-foreground">{contactDraft.phone || active.phone}</p>
           </div>
           <div className="p-4">
             <ChatContactPanel
@@ -599,7 +816,9 @@ export function ChatInboxScreen({
               attendanceStatuses={attendanceStatuses}
               products={products}
               banks={banks}
+              onDraftChange={setContactDraft}
               onUpdated={(next) => {
+                setContactDraft({ name: "", phone: "" });
                 setActive(next);
                 void refreshList();
               }}

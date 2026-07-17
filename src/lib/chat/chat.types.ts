@@ -2,6 +2,7 @@
 
 export type ChatSenderType = "contact" | "agent" | "ai" | "system";
 export type ChatMessageDirection = "inbound" | "outbound";
+export type ChatMessageType = "text" | "image";
 
 export type ChatConversation = {
   id: string;
@@ -29,6 +30,12 @@ export type ChatMessage = {
   conversationId: string;
   direction: ChatMessageDirection;
   body: string;
+  messageType: ChatMessageType;
+  mediaId: string | null;
+  mediaMimeType: string | null;
+  mediaFileName: string | null;
+  /** Apenas no cliente enquanto o upload otimista ainda não terminou. */
+  mediaPreviewUrl?: string;
   senderType: ChatSenderType;
   senderUserId: string | null;
   senderName: string | null;

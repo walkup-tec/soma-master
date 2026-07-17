@@ -8,6 +8,37 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
     alter table crm.chat_ai_settings
     add column if not exists webhook_public_base_url text null
   `;
+  await sql`
+    alter table crm.chat_messages
+    add column if not exists message_type text not null default 'text'
+  `;
+  await sql`
+    alter table crm.chat_messages
+    add column if not exists media_id text null
+  `;
+  await sql`
+    alter table crm.chat_messages
+    add column if not exists media_mime_type text null
+  `;
+  await sql`
+    alter table crm.chat_messages
+    add column if not exists media_file_name text null
+  `;
+  await sql`
+    create table if not exists crm.chat_media (
+      id text primary key,
+      conversation_id text not null references crm.chat_conversations(id) on delete cascade,
+      file_name text not null,
+      file_size bigint not null,
+      mime_type text not null,
+      total_chunks int not null default 1,
+      received_chunks int not null default 0,
+      user_id text not null,
+      user_name text not null,
+      content bytea null,
+      created_at timestamptz not null default now()
+    )
+  `;
 }
 
 /** Tabelas do Chat WhatsApp + educação da IA. */
@@ -54,6 +85,10 @@ export async function ensureChatSchema(sql: Sql): Promise<void> {
       conversation_id text not null references crm.chat_conversations(id) on delete cascade,
       direction text not null,
       body text not null,
+      message_type text not null default 'text',
+      media_id text null,
+      media_mime_type text null,
+      media_file_name text null,
       sender_type text not null,
       sender_user_id text null,
       sender_name text null,

@@ -2,31 +2,47 @@ import {
   appendMessage,
   getConversation,
   getOrCreateConversationByPhone,
+  listMessages,
 } from "@/lib/chat/chat.repository";
-import { evolutionSendText, isWebhookForSomaInstance } from "@/lib/chat/evolution.adapter";
+import {
+  evolutionGetMediaBase64,
+  evolutionSendText,
+  isWebhookForSomaInstance,
+} from "@/lib/chat/evolution.adapter";
+import { saveInboundChatImage } from "@/lib/chat/chat-media.repository";
 import { generateAiReply, isOpenAiConfigured } from "@/lib/chat/openai.adapter";
 import { normalizeWhatsAppPhone } from "@/lib/chat/phone";
 
-function extractInboundFromEvolution(payload: unknown): Array<{
+type EvolutionInboundMessage = {
   phone: string;
   text: string;
   pushName?: string;
   messageId?: string;
   fromMe?: boolean;
-}> {
+  imageBase64?: string;
+  imageMimeType?: string;
+  imageFileName?: string;
+  messageKey: Record<string, unknown>;
+};
+
+function extractInboundFromEvolution(payload: unknown): EvolutionInboundMessage[] {
   if (!payload || typeof payload !== "object") return [];
   const root = payload as Record<string, unknown>;
   const data = (root.data ?? root) as Record<string, unknown>;
 
   // Formato comum Evolution: { event, data: { key, pushName, message } }
   const items = Array.isArray(data) ? data : [data];
-  const out: Array<{ phone: string; text: string; pushName?: string; messageId?: string; fromMe?: boolean }> = [];
+  const out: EvolutionInboundMessage[] = [];
 
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
     const row = item as Record<string, unknown>;
     const key = (row.key ?? {}) as Record<string, unknown>;
     const message = (row.message ?? {}) as Record<string, unknown>;
+    const imageMessage =
+      message.imageMessage && typeof message.imageMessage === "object"
+        ? (message.imageMessage as Record<string, unknown>)
+        : null;
     const fromMe = Boolean(key.fromMe ?? row.fromMe);
     const remoteJid = String(key.remoteJid ?? row.remoteJid ?? "");
     const phone = normalizeWhatsAppPhone(remoteJid.split("@")[0] ?? "");
@@ -35,14 +51,30 @@ function extractInboundFromEvolution(payload: unknown): Array<{
       (typeof (message.extendedTextMessage as { text?: string } | undefined)?.text === "string" &&
         (message.extendedTextMessage as { text: string }).text) ||
       (typeof row.text === "string" && row.text) ||
+      (typeof imageMessage?.caption === "string" && imageMessage.caption) ||
       "";
-    if (!phone || !text.trim()) continue;
+    const imageBase64 =
+      (typeof row.base64 === "string" && row.base64) ||
+      (typeof imageMessage?.base64 === "string" && imageMessage.base64) ||
+      undefined;
+    const imageMimeType =
+      (typeof imageMessage?.mimetype === "string" && imageMessage.mimetype) ||
+      (typeof row.mimetype === "string" && row.mimetype) ||
+      undefined;
+    if (!phone || (!text.trim() && !imageMessage)) continue;
     out.push({
       phone,
       text: text.trim(),
       pushName: typeof row.pushName === "string" ? row.pushName : undefined,
       messageId: typeof key.id === "string" ? key.id : undefined,
       fromMe,
+      imageBase64,
+      imageMimeType,
+      imageFileName:
+        (typeof imageMessage?.fileName === "string" && imageMessage.fileName) ||
+        (typeof row.fileName === "string" && row.fileName) ||
+        undefined,
+      messageKey: key,
     });
   }
 
@@ -138,17 +170,57 @@ export async function handleEvolutionWebhook(request: Request): Promise<Response
       phone: msg.phone,
       contactName: msg.pushName ?? null,
     });
+    if (msg.messageId) {
+      const existing = await listMessages(conversation.id);
+      if (existing.some((message) => message.waMessageId === msg.messageId)) continue;
+    }
+
+    let media:
+      | { mediaId: string; mimeType: string; fileName: string }
+      | undefined;
+    if (msg.imageMimeType?.startsWith("image/") || msg.imageBase64) {
+      let base64 = msg.imageBase64;
+      let mimeType = msg.imageMimeType ?? "image/jpeg";
+      if (!base64) {
+        const fetched = await evolutionGetMediaBase64(msg.messageKey);
+        if (fetched.ok) {
+          base64 = fetched.base64;
+          mimeType = fetched.mimeType ?? mimeType;
+        }
+      }
+      if (base64) {
+        const saved = await saveInboundChatImage({
+          base64,
+          mimeType,
+          fileName: msg.imageFileName,
+          conversationId: conversation.id,
+        });
+        media = {
+          mediaId: saved.mediaId,
+          mimeType: saved.mimeType,
+          fileName: saved.fileName,
+        };
+      }
+    }
+
     await appendMessage({
       conversationId: conversation.id,
       direction: "inbound",
-      body: msg.text,
+      body: msg.text || (media ? "" : "Imagem recebida, mas não foi possível carregá-la."),
+      messageType: media ? "image" : "text",
+      mediaId: media?.mediaId,
+      mediaMimeType: media?.mimeType,
+      mediaFileName: media?.fileName,
       senderType: "contact",
       senderName: msg.pushName ?? conversation.contactName,
       waMessageId: msg.messageId ?? null,
       bumpUnread: true,
     });
     // Processa IA em background não bloqueante (fire-and-forget seguro o suficiente no Node)
-    void maybeReplyWithAi(conversation.id, msg.text);
+    void maybeReplyWithAi(
+      conversation.id,
+      msg.text || "O cliente enviou uma imagem sem legenda.",
+    );
   }
 
   return Response.json({ ok: true, accepted: inbound.length });
