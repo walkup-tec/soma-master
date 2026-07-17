@@ -234,12 +234,12 @@ export function ChatbotSettings({ evo, education, flashOk, flashErr }: Props) {
               <input
                 name="webhookPublicBaseUrl"
                 defaultValue={webhookPublicBaseUrl}
-                placeholder="https://crm.seudominio.com.br"
+                placeholder="https://app.somaconecta.com.br"
                 className="flex h-9 w-full cursor-text rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </label>
             <p className="text-xs text-muted-foreground">
-              Webhook que será cadastrado na EVO:{" "}
+              Só o domínio HTTPS (sem /api/...). Webhook na EVO:{" "}
               <code className="text-[11px]">
                 {webhookUrl ?? "(ainda sem URL pública — normal no localhost)"}
               </code>
