@@ -1,4 +1,8 @@
-﻿## 2026-07-18 13:46 — Parceiros → Produtos: coluna Origem (tags)
+﻿## 2026-07-18 13:49 — Deploy trigger Easypanel (parceiros)
+- Nada pendente de código; empty commit `b8e441d` para redeploy.
+- LOG: `doc/LOG-2026-07-18__134900__deploy-trigger-parceiros.md`.
+
+## 2026-07-18 13:46 — Parceiros → Produtos: coluna Origem (tags)
 - Tabela → Origem; tags Parceiros / Produção própria; lista + wizard no Novo produto.
 - LOG: `doc/LOG-2026-07-18__134644__parceiros-produtos-coluna-origem.md`.
 
