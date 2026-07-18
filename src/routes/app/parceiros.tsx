@@ -1,26 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { PartnersScreen } from "@/components/partners/partners-screen";
-import { listPartnersFn } from "@/lib/partners/partners.server";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
+/** Layout pai — lista em index; Bancos/Produtos/Tabelas em rotas filhas. */
 export const Route = createFileRoute("/app/parceiros")({
-  loader: async () => {
-    const partners = await listPartnersFn({
-      data: {
-        status: "active",
-        search: "",
-        production: "all",
-        bankIds: [],
-        page: 1,
-        pageSize: 20,
-      },
-    });
-    return { partners };
-  },
-  staleTime: 15_000,
-  component: PartnersPage,
+  component: ParceirosLayout,
 });
 
-function PartnersPage() {
-  const { partners } = Route.useLoaderData();
-  return <PartnersScreen initialData={partners} />;
+function ParceirosLayout() {
+  return <Outlet />;
 }

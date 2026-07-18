@@ -9,34 +9,35 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteImport } from './routes/app'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as AppIndexRouteImport } from './routes/app/index'
-import { Route as AppUsuariosRouteImport } from './routes/app/usuarios'
-import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
-import { Route as AppPushRouteImport } from './routes/app/push'
+import { Route as AppAgendaRouteImport } from './routes/app/agenda'
+import { Route as AppChatRouteImport } from './routes/app/chat'
+import { Route as AppClientesRouteImport } from './routes/app/clientes'
+import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
+import { Route as AppKanbanRouteImport } from './routes/app/kanban'
 import { Route as AppParceirosRouteImport } from './routes/app/parceiros'
+import { Route as AppPushRouteImport } from './routes/app/push'
+import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
+import { Route as AppUsuariosRouteImport } from './routes/app/usuarios'
+import { Route as AppChatIaRouteImport } from './routes/app/chat.ia'
+import { Route as AppClientesNovoRouteImport } from './routes/app/clientes.novo'
+import { Route as AppParceirosIndexRouteImport } from './routes/app/parceiros.index'
 import { Route as AppParceirosBancosRouteImport } from './routes/app/parceiros.bancos'
 import { Route as AppParceirosProdutosRouteImport } from './routes/app/parceiros.produtos'
 import { Route as AppParceirosTabelasRouteImport } from './routes/app/parceiros.tabelas'
-import { Route as AppKanbanRouteImport } from './routes/app/kanban'
-import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
-import { Route as AppClientesRouteImport } from './routes/app/clientes'
-import { Route as AppChatRouteImport } from './routes/app/chat'
-import { Route as AppAgendaRouteImport } from './routes/app/agenda'
-import { Route as ApiHealthRouteImport } from './routes/api/health'
-import { Route as AppClientesNovoRouteImport } from './routes/app/clientes.novo'
-import { Route as AppChatIaRouteImport } from './routes/app/chat.ia'
-import { Route as ApiSettingsChatbotEvolutionRouteImport } from './routes/api/settings/chatbot/evolution'
-import { Route as ApiSettingsChatbotEducationRouteImport } from './routes/api/settings/chatbot/education'
-import { Route as ApiPushMediaMediaIdRouteImport } from './routes/api/push/media.$mediaId'
-import { Route as ApiChatMediaMediaIdRouteImport } from './routes/api/chat/media.$mediaId'
 import { Route as ApiBanksGuidesStorageIdRouteImport } from './routes/api/banks/guides.$storageId'
+import { Route as ApiChatMediaMediaIdRouteImport } from './routes/api/chat/media.$mediaId'
+import { Route as ApiPushMediaMediaIdRouteImport } from './routes/api/push/media.$mediaId'
+import { Route as ApiSettingsChatbotEducationRouteImport } from './routes/api/settings/chatbot/education'
+import { Route as ApiSettingsChatbotEvolutionRouteImport } from './routes/api/settings/chatbot/evolution'
 
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -44,9 +45,14 @@ const AppRoute = AppRouteImport.update({
   path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -54,54 +60,9 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppUsuariosRoute = AppUsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppRemarketingRoute = AppRemarketingRouteImport.update({
-  id: '/remarketing',
-  path: '/remarketing',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPushRoute = AppPushRouteImport.update({
-  id: '/push',
-  path: '/push',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppParceirosRoute = AppParceirosRouteImport.update({
-  id: '/parceiros',
-  path: '/parceiros',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppParceirosBancosRoute = AppParceirosBancosRouteImport.update({
-  id: '/parceiros/bancos',
-  path: '/parceiros/bancos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppParceirosProdutosRoute = AppParceirosProdutosRouteImport.update({
-  id: '/parceiros/produtos',
-  path: '/parceiros/produtos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppParceirosTabelasRoute = AppParceirosTabelasRouteImport.update({
-  id: '/parceiros/tabelas',
-  path: '/parceiros/tabelas',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppKanbanRoute = AppKanbanRouteImport.update({
-  id: '/kanban',
-  path: '/kanban',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppClientesRoute = AppClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
+const AppAgendaRoute = AppAgendaRouteImport.update({
+  id: '/agenda',
+  path: '/agenda',
   getParentRoute: () => AppRoute,
 } as any)
 const AppChatRoute = AppChatRouteImport.update({
@@ -109,41 +70,74 @@ const AppChatRoute = AppChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAgendaRoute = AppAgendaRouteImport.update({
-  id: '/agenda',
-  path: '/agenda',
+const AppClientesRoute = AppClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
   getParentRoute: () => AppRoute,
 } as any)
-const ApiHealthRoute = ApiHealthRouteImport.update({
-  id: '/api/health',
-  path: '/api/health',
-  getParentRoute: () => rootRouteImport,
+const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => AppRoute,
 } as any)
-const AppClientesNovoRoute = AppClientesNovoRouteImport.update({
-  id: '/novo',
-  path: '/novo',
-  getParentRoute: () => AppClientesRoute,
+const AppKanbanRoute = AppKanbanRouteImport.update({
+  id: '/kanban',
+  path: '/kanban',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppParceirosRoute = AppParceirosRouteImport.update({
+  id: '/parceiros',
+  path: '/parceiros',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPushRoute = AppPushRouteImport.update({
+  id: '/push',
+  path: '/push',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRemarketingRoute = AppRemarketingRouteImport.update({
+  id: '/remarketing',
+  path: '/remarketing',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppUsuariosRoute = AppUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppChatIaRoute = AppChatIaRouteImport.update({
   id: '/ia',
   path: '/ia',
   getParentRoute: () => AppChatRoute,
 } as any)
-const ApiSettingsChatbotEvolutionRoute =
-  ApiSettingsChatbotEvolutionRouteImport.update({
-    id: '/api/settings/chatbot/evolution',
-    path: '/api/settings/chatbot/evolution',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiSettingsChatbotEducationRoute =
-  ApiSettingsChatbotEducationRouteImport.update({
-    id: '/api/settings/chatbot/education',
-    path: '/api/settings/chatbot/education',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPushMediaMediaIdRoute = ApiPushMediaMediaIdRouteImport.update({
-  id: '/api/push/media/$mediaId',
-  path: '/api/push/media/$mediaId',
+const AppClientesNovoRoute = AppClientesNovoRouteImport.update({
+  id: '/novo',
+  path: '/novo',
+  getParentRoute: () => AppClientesRoute,
+} as any)
+const AppParceirosIndexRoute = AppParceirosIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppParceirosRoute,
+} as any)
+const AppParceirosBancosRoute = AppParceirosBancosRouteImport.update({
+  id: '/bancos',
+  path: '/bancos',
+  getParentRoute: () => AppParceirosRoute,
+} as any)
+const AppParceirosProdutosRoute = AppParceirosProdutosRouteImport.update({
+  id: '/produtos',
+  path: '/produtos',
+  getParentRoute: () => AppParceirosRoute,
+} as any)
+const AppParceirosTabelasRoute = AppParceirosTabelasRouteImport.update({
+  id: '/tabelas',
+  path: '/tabelas',
+  getParentRoute: () => AppParceirosRoute,
+} as any)
+const ApiBanksGuidesStorageIdRoute = ApiBanksGuidesStorageIdRouteImport.update({
+  id: '/api/banks/guides/$storageId',
+  path: '/api/banks/guides/$storageId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatMediaMediaIdRoute = ApiChatMediaMediaIdRouteImport.update({
@@ -151,11 +145,23 @@ const ApiChatMediaMediaIdRoute = ApiChatMediaMediaIdRouteImport.update({
   path: '/api/chat/media/$mediaId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiBanksGuidesStorageIdRoute = ApiBanksGuidesStorageIdRouteImport.update({
-  id: '/api/banks/guides/$storageId',
-  path: '/api/banks/guides/$storageId',
+const ApiPushMediaMediaIdRoute = ApiPushMediaMediaIdRouteImport.update({
+  id: '/api/push/media/$mediaId',
+  path: '/api/push/media/$mediaId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSettingsChatbotEducationRoute =
+  ApiSettingsChatbotEducationRouteImport.update({
+    id: '/api/settings/chatbot/education',
+    path: '/api/settings/chatbot/education',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSettingsChatbotEvolutionRoute =
+  ApiSettingsChatbotEvolutionRouteImport.update({
+    id: '/api/settings/chatbot/evolution',
+    path: '/api/settings/chatbot/evolution',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -167,16 +173,17 @@ export interface FileRoutesByFullPath {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
-  '/app/parceiros': typeof AppParceirosRoute
-  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
-  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
-  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
+  '/app/parceiros': typeof AppParceirosRouteWithChildren
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
+  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
+  '/app/parceiros/': typeof AppParceirosIndexRoute
   '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
@@ -192,16 +199,16 @@ export interface FileRoutesByTo {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
-  '/app/parceiros': typeof AppParceirosRoute
-  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
-  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
-  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
+  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
+  '/app/parceiros': typeof AppParceirosIndexRoute
   '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
@@ -219,16 +226,17 @@ export interface FileRoutesById {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
-  '/app/parceiros': typeof AppParceirosRoute
-  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
-  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
-  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
+  '/app/parceiros': typeof AppParceirosRouteWithChildren
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
   '/app/': typeof AppIndexRoute
   '/app/chat/ia': typeof AppChatIaRoute
   '/app/clientes/novo': typeof AppClientesNovoRoute
+  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
+  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
+  '/app/parceiros/': typeof AppParceirosIndexRoute
   '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
   '/api/chat/media/$mediaId': typeof ApiChatMediaMediaIdRoute
   '/api/push/media/$mediaId': typeof ApiPushMediaMediaIdRoute
@@ -248,15 +256,16 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
-    | '/app/parceiros/bancos'
-    | '/app/parceiros/produtos'
-    | '/app/parceiros/tabelas'
     | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/app/parceiros/bancos'
+    | '/app/parceiros/produtos'
+    | '/app/parceiros/tabelas'
+    | '/app/parceiros/'
     | '/api/banks/guides/$storageId'
     | '/api/chat/media/$mediaId'
     | '/api/push/media/$mediaId'
@@ -272,16 +281,16 @@ export interface FileRouteTypes {
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/kanban'
-    | '/app/parceiros'
-    | '/app/parceiros/bancos'
-    | '/app/parceiros/produtos'
-    | '/app/parceiros/tabelas'
     | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/app/parceiros/bancos'
+    | '/app/parceiros/produtos'
+    | '/app/parceiros/tabelas'
+    | '/app/parceiros'
     | '/api/banks/guides/$storageId'
     | '/api/chat/media/$mediaId'
     | '/api/push/media/$mediaId'
@@ -299,15 +308,16 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
-    | '/app/parceiros/bancos'
-    | '/app/parceiros/produtos'
-    | '/app/parceiros/tabelas'
     | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
     | '/app/'
     | '/app/chat/ia'
     | '/app/clientes/novo'
+    | '/app/parceiros/bancos'
+    | '/app/parceiros/produtos'
+    | '/app/parceiros/tabelas'
+    | '/app/parceiros/'
     | '/api/banks/guides/$storageId'
     | '/api/chat/media/$mediaId'
     | '/api/push/media/$mediaId'
@@ -329,11 +339,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -343,11 +353,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -357,74 +374,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/usuarios': {
-      id: '/app/usuarios'
-      path: '/usuarios'
-      fullPath: '/app/usuarios'
-      preLoaderRoute: typeof AppUsuariosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/remarketing': {
-      id: '/app/remarketing'
-      path: '/remarketing'
-      fullPath: '/app/remarketing'
-      preLoaderRoute: typeof AppRemarketingRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/push': {
-      id: '/app/push'
-      path: '/push'
-      fullPath: '/app/push'
-      preLoaderRoute: typeof AppPushRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/parceiros': {
-      id: '/app/parceiros'
-      path: '/parceiros'
-      fullPath: '/app/parceiros'
-      preLoaderRoute: typeof AppParceirosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/parceiros/bancos': {
-      id: '/app/parceiros/bancos'
-      path: '/parceiros/bancos'
-      fullPath: '/app/parceiros/bancos'
-      preLoaderRoute: typeof AppParceirosBancosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/parceiros/produtos': {
-      id: '/app/parceiros/produtos'
-      path: '/parceiros/produtos'
-      fullPath: '/app/parceiros/produtos'
-      preLoaderRoute: typeof AppParceirosProdutosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/parceiros/tabelas': {
-      id: '/app/parceiros/tabelas'
-      path: '/parceiros/tabelas'
-      fullPath: '/app/parceiros/tabelas'
-      preLoaderRoute: typeof AppParceirosTabelasRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/kanban': {
-      id: '/app/kanban'
-      path: '/kanban'
-      fullPath: '/app/kanban'
-      preLoaderRoute: typeof AppKanbanRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/configuracoes': {
-      id: '/app/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/app/configuracoes'
-      preLoaderRoute: typeof AppConfiguracoesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/clientes': {
-      id: '/app/clientes'
-      path: '/clientes'
-      fullPath: '/app/clientes'
-      preLoaderRoute: typeof AppClientesRouteImport
+    '/app/agenda': {
+      id: '/app/agenda'
+      path: '/agenda'
+      fullPath: '/app/agenda'
+      preLoaderRoute: typeof AppAgendaRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/chat': {
@@ -434,26 +388,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChatRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/agenda': {
-      id: '/app/agenda'
-      path: '/agenda'
-      fullPath: '/app/agenda'
-      preLoaderRoute: typeof AppAgendaRouteImport
+    '/app/clientes': {
+      id: '/app/clientes'
+      path: '/clientes'
+      fullPath: '/app/clientes'
+      preLoaderRoute: typeof AppClientesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/api/health': {
-      id: '/api/health'
-      path: '/api/health'
-      fullPath: '/api/health'
-      preLoaderRoute: typeof ApiHealthRouteImport
-      parentRoute: typeof rootRouteImport
+    '/app/configuracoes': {
+      id: '/app/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/app/configuracoes'
+      preLoaderRoute: typeof AppConfiguracoesRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/app/clientes/novo': {
-      id: '/app/clientes/novo'
-      path: '/novo'
-      fullPath: '/app/clientes/novo'
-      preLoaderRoute: typeof AppClientesNovoRouteImport
-      parentRoute: typeof AppClientesRoute
+    '/app/kanban': {
+      id: '/app/kanban'
+      path: '/kanban'
+      fullPath: '/app/kanban'
+      preLoaderRoute: typeof AppKanbanRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/parceiros': {
+      id: '/app/parceiros'
+      path: '/parceiros'
+      fullPath: '/app/parceiros'
+      preLoaderRoute: typeof AppParceirosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/push': {
+      id: '/app/push'
+      path: '/push'
+      fullPath: '/app/push'
+      preLoaderRoute: typeof AppPushRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/remarketing': {
+      id: '/app/remarketing'
+      path: '/remarketing'
+      fullPath: '/app/remarketing'
+      preLoaderRoute: typeof AppRemarketingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/usuarios': {
+      id: '/app/usuarios'
+      path: '/usuarios'
+      fullPath: '/app/usuarios'
+      preLoaderRoute: typeof AppUsuariosRouteImport
+      parentRoute: typeof AppRoute
     }
     '/app/chat/ia': {
       id: '/app/chat/ia'
@@ -462,25 +444,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChatIaRouteImport
       parentRoute: typeof AppChatRoute
     }
-    '/api/settings/chatbot/evolution': {
-      id: '/api/settings/chatbot/evolution'
-      path: '/api/settings/chatbot/evolution'
-      fullPath: '/api/settings/chatbot/evolution'
-      preLoaderRoute: typeof ApiSettingsChatbotEvolutionRouteImport
-      parentRoute: typeof rootRouteImport
+    '/app/clientes/novo': {
+      id: '/app/clientes/novo'
+      path: '/novo'
+      fullPath: '/app/clientes/novo'
+      preLoaderRoute: typeof AppClientesNovoRouteImport
+      parentRoute: typeof AppClientesRoute
     }
-    '/api/settings/chatbot/education': {
-      id: '/api/settings/chatbot/education'
-      path: '/api/settings/chatbot/education'
-      fullPath: '/api/settings/chatbot/education'
-      preLoaderRoute: typeof ApiSettingsChatbotEducationRouteImport
-      parentRoute: typeof rootRouteImport
+    '/app/parceiros/': {
+      id: '/app/parceiros/'
+      path: '/'
+      fullPath: '/app/parceiros/'
+      preLoaderRoute: typeof AppParceirosIndexRouteImport
+      parentRoute: typeof AppParceirosRoute
     }
-    '/api/push/media/$mediaId': {
-      id: '/api/push/media/$mediaId'
-      path: '/api/push/media/$mediaId'
-      fullPath: '/api/push/media/$mediaId'
-      preLoaderRoute: typeof ApiPushMediaMediaIdRouteImport
+    '/app/parceiros/bancos': {
+      id: '/app/parceiros/bancos'
+      path: '/bancos'
+      fullPath: '/app/parceiros/bancos'
+      preLoaderRoute: typeof AppParceirosBancosRouteImport
+      parentRoute: typeof AppParceirosRoute
+    }
+    '/app/parceiros/produtos': {
+      id: '/app/parceiros/produtos'
+      path: '/produtos'
+      fullPath: '/app/parceiros/produtos'
+      preLoaderRoute: typeof AppParceirosProdutosRouteImport
+      parentRoute: typeof AppParceirosRoute
+    }
+    '/app/parceiros/tabelas': {
+      id: '/app/parceiros/tabelas'
+      path: '/tabelas'
+      fullPath: '/app/parceiros/tabelas'
+      preLoaderRoute: typeof AppParceirosTabelasRouteImport
+      parentRoute: typeof AppParceirosRoute
+    }
+    '/api/banks/guides/$storageId': {
+      id: '/api/banks/guides/$storageId'
+      path: '/api/banks/guides/$storageId'
+      fullPath: '/api/banks/guides/$storageId'
+      preLoaderRoute: typeof ApiBanksGuidesStorageIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat/media/$mediaId': {
@@ -490,11 +493,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatMediaMediaIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/banks/guides/$storageId': {
-      id: '/api/banks/guides/$storageId'
-      path: '/api/banks/guides/$storageId'
-      fullPath: '/api/banks/guides/$storageId'
-      preLoaderRoute: typeof ApiBanksGuidesStorageIdRouteImport
+    '/api/push/media/$mediaId': {
+      id: '/api/push/media/$mediaId'
+      path: '/api/push/media/$mediaId'
+      fullPath: '/api/push/media/$mediaId'
+      preLoaderRoute: typeof ApiPushMediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/settings/chatbot/education': {
+      id: '/api/settings/chatbot/education'
+      path: '/api/settings/chatbot/education'
+      fullPath: '/api/settings/chatbot/education'
+      preLoaderRoute: typeof ApiSettingsChatbotEducationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/settings/chatbot/evolution': {
+      id: '/api/settings/chatbot/evolution'
+      path: '/api/settings/chatbot/evolution'
+      fullPath: '/api/settings/chatbot/evolution'
+      preLoaderRoute: typeof ApiSettingsChatbotEvolutionRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -523,16 +540,31 @@ const AppClientesRouteWithChildren = AppClientesRoute._addFileChildren(
   AppClientesRouteChildren,
 )
 
+interface AppParceirosRouteChildren {
+  AppParceirosBancosRoute: typeof AppParceirosBancosRoute
+  AppParceirosProdutosRoute: typeof AppParceirosProdutosRoute
+  AppParceirosTabelasRoute: typeof AppParceirosTabelasRoute
+  AppParceirosIndexRoute: typeof AppParceirosIndexRoute
+}
+
+const AppParceirosRouteChildren: AppParceirosRouteChildren = {
+  AppParceirosBancosRoute: AppParceirosBancosRoute,
+  AppParceirosProdutosRoute: AppParceirosProdutosRoute,
+  AppParceirosTabelasRoute: AppParceirosTabelasRoute,
+  AppParceirosIndexRoute: AppParceirosIndexRoute,
+}
+
+const AppParceirosRouteWithChildren = AppParceirosRoute._addFileChildren(
+  AppParceirosRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAgendaRoute: typeof AppAgendaRoute
   AppChatRoute: typeof AppChatRouteWithChildren
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppKanbanRoute: typeof AppKanbanRoute
-  AppParceirosRoute: typeof AppParceirosRoute
-  AppParceirosBancosRoute: typeof AppParceirosBancosRoute
-  AppParceirosProdutosRoute: typeof AppParceirosProdutosRoute
-  AppParceirosTabelasRoute: typeof AppParceirosTabelasRoute
+  AppParceirosRoute: typeof AppParceirosRouteWithChildren
   AppPushRoute: typeof AppPushRoute
   AppRemarketingRoute: typeof AppRemarketingRoute
   AppUsuariosRoute: typeof AppUsuariosRoute
@@ -545,10 +577,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppClientesRoute: AppClientesRouteWithChildren,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppKanbanRoute: AppKanbanRoute,
-  AppParceirosRoute: AppParceirosRoute,
-  AppParceirosBancosRoute: AppParceirosBancosRoute,
-  AppParceirosProdutosRoute: AppParceirosProdutosRoute,
-  AppParceirosTabelasRoute: AppParceirosTabelasRoute,
+  AppParceirosRoute: AppParceirosRouteWithChildren,
   AppPushRoute: AppPushRoute,
   AppRemarketingRoute: AppRemarketingRoute,
   AppUsuariosRoute: AppUsuariosRoute,

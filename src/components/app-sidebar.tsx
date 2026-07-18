@@ -16,8 +16,10 @@ import {
 import { Logo } from "@/components/logo";
 import {
   filterMenuItemsByIds,
+  getMenuItemById,
   groupMenuItems,
   itemsBySection,
+  menuIdForPath,
   MENU_GROUPS,
   MENU_SECTIONS,
   type MenuSectionId,
@@ -90,7 +92,12 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
     });
   };
 
-  const isActive = (url: string) => (url === "/app" ? path === "/app" : path.startsWith(url));
+  /** Maior prefixo do menu — evita "Parceiros" ativo em /parceiros/bancos. */
+  const isActive = (url: string) => {
+    if (url === "/app") return path === "/app" || path === "/app/";
+    const menuId = menuIdForPath(path);
+    return menuId ? getMenuItemById(menuId)?.path === url : false;
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-sidebar-border">

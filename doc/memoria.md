@@ -1,4 +1,10 @@
-﻿## 2026-07-17 23:55 - Histórico push com data, título e status por canal
+﻿## 2026-07-18 00:04 — Fix: submenus PARCEIROS (Bancos/Produtos/Tabelas) não mudavam a tela
+- Causa: `/app/parceiros` folha sem Outlet vs rotas irmãs com prefixo.
+- Fix: layout + `parceiros.index` + filhos `/bancos|/produtos|/tabelas`; `isActive` por `menuIdForPath`.
+- LOG: `doc/LOG-2026-07-18__000404__fix-parceiros-submenu-navegacao.md`.
+- Keywords: parceiros, outlet, submenu, routeTree, navegacao.
+
+## 2026-07-17 23:55 - Histórico push com data, título e status por canal
 - Lista: data/hora, título+badge, detalhe OK/Falhou por canal.
 - Arquivo: `src/components/push/push-screen.tsx`.
 - Continuação da sessão após ambiente de execução cair.
