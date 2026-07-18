@@ -1,4 +1,8 @@
-﻿## 2026-07-18 13:38 — Parceiros → Produtos: mesmo wizard da Produção própria (partnerOnly)
+﻿## 2026-07-18 13:39 — Tabelas: Parceiros como multi-select
+- Modal criar/editar tabela: `MultiSelectFilter` no lugar da lista de checkboxes.
+- LOG: `doc/LOG-2026-07-18__133929__tabelas-parceiros-multiselect.md`.
+
+## 2026-07-18 13:38 — Parceiros → Produtos: mesmo wizard da Produção própria (partnerOnly)
 - `ProductsSettings catalog="partners"`; sync DB dos dois subconjuntos; create com partnerOnly.
 - LOG: `doc/LOG-2026-07-18__133815__parceiros-produtos-mesmo-wizard-partneronly.md`.
 - Keywords: parceiros, produtos, partnerOnly, wizard, products-settings.

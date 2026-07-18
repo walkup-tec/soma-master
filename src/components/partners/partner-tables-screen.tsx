@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import {
   Select,
   SelectContent,
@@ -354,30 +355,17 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
             ) : (
               <div className="space-y-2">
                 <Label>Parceiros</Label>
-                <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-border/60 p-2">
-                  {partners.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Nenhum parceiro ativo.</p>
-                  ) : (
-                    partners.map((partner) => {
-                      const checked = partnerUserIds.includes(partner.id);
-                      return (
-                        <label key={partner.id} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(v) => {
-                              setPartnerUserIds((current) =>
-                                v === true
-                                  ? [...new Set([...current, partner.id])]
-                                  : current.filter((id) => id !== partner.id),
-                              );
-                            }}
-                          />
-                          {partner.name}
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
+                <MultiSelectFilter
+                  allLabel="Selecione os parceiros"
+                  emptyLabel="Nenhum parceiro ativo."
+                  values={partnerUserIds}
+                  options={partners.map((partner) => ({
+                    value: partner.id,
+                    label: partner.name,
+                  }))}
+                  onChange={setPartnerUserIds}
+                  className="w-full sm:w-full"
+                />
               </div>
             )}
 
