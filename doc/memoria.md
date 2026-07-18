@@ -1,4 +1,9 @@
-﻿## 2026-07-17 23:50 — Modal deploy só em produção (anti falso positivo)
+﻿## 2026-07-17 23:55 - Histórico push com data, título e status por canal
+- Lista: data/hora, título+badge, detalhe OK/Falhou por canal.
+- Arquivo: `src/components/push/push-screen.tsx`.
+- Continuação da sessão após ambiente de execução cair.
+- LOG: `doc/LOG-2026-07-17__235500__push-historico-data-titulo-status-canais.md`.
+## 2026-07-17 23:50 — Modal deploy só em produção (anti falso positivo)
 - Overlay/SW **apenas** em `app.somaconecta.com.br`; fora disso desregistra SW e não liga watch.
 - Exige `hasSeenHealthy`; catch de rede não abre overlay imediato; gateway payload sem "Not Found" genérico; SW **v5**.
 - Nota: modal durante deploy em produção = esperado; em localhost = bug corrigido.
@@ -518,5 +523,6 @@
 - Build client/SSR, ESLint, endpoint oficial e HTTP local validados. Commit/push pendentes.
 - LOG: `doc/LOG-2026-07-17__154300__integracao-brasilapi-cnpj-parceiros.md`.
 - Keywords: BrasilAPI, CNPJ, PJ, lookupPartnerCnpjFn, brasil-api-cnpj.adapter.
+
 
 

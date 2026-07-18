@@ -49,6 +49,85 @@ function statusLabel(status: SomaPushMessage["status"]): string {
   }
 }
 
+function statusBadgeClass(status: SomaPushMessage["status"]): string {
+  if (status === "sent") return "bg-emerald-500/15 text-emerald-600 border-emerald-500/30";
+  if (status === "partial") return "bg-sky-500/15 text-sky-600 border-sky-500/30";
+  if (status === "failed") return "bg-destructive/15 text-destructive border-destructive/30";
+  return "";
+}
+
+type ChannelLine = { label: string; ok: boolean; detail: string };
+
+function buildChannelStatusLines(row: SomaPushMessage): ChannelLine[] {
+  const results = row.deliveryResults;
+  const lines: ChannelLine[] = [];
+  const audiences = new Set(row.audiences);
+
+  if (audiences.has("users")) {
+    const targeted = results?.users?.targeted;
+    lines.push({
+      label: "Usuários",
+      ok: true,
+      detail:
+        typeof targeted === "number"
+          ? `OK — ${targeted} destinatário(s) (sininho)`
+          : "OK — sininho no sistema",
+    });
+  }
+  if (audiences.has("partners")) {
+    const targeted = results?.partners?.targeted;
+    lines.push({
+      label: "Parceiros",
+      ok: true,
+      detail:
+        typeof targeted === "number"
+          ? `OK — ${targeted} destinatário(s) (sininho)`
+          : "OK — sininho para parceiros",
+    });
+  }
+  if (audiences.has("community")) {
+    const community = results?.community;
+    if (community) {
+      lines.push({
+        label: "Comunidade",
+        ok: community.ok,
+        detail: community.ok
+          ? `OK — ${community.detail || "enviado"}`
+          : `Falhou — ${community.detail || "erro no envio"}`,
+      });
+    } else {
+      lines.push({
+        label: "Comunidade",
+        ok: row.status === "sent",
+        detail: row.status === "sending" ? "Enviando…" : "Sem retorno de entrega",
+      });
+    }
+  }
+  if (audiences.has("email")) {
+    const email = results?.email;
+    if (email) {
+      const ok = email.sent > 0 && email.failed === 0;
+      const partialOk = email.sent > 0 && email.failed > 0;
+      lines.push({
+        label: "E-mail",
+        ok: ok || partialOk,
+        detail: ok
+          ? `OK — ${email.sent} enviado(s)`
+          : partialOk
+            ? `Parcial — ${email.sent} ok / ${email.failed} falha${email.detail ? ` — ${email.detail}` : ""}`
+            : `Falhou — ${email.sent} ok / ${email.failed} falha${email.detail ? ` — ${email.detail}` : ""}`,
+      });
+    } else {
+      lines.push({
+        label: "E-mail",
+        ok: row.status === "sent",
+        detail: row.status === "sending" ? "Enviando…" : "Sem retorno de entrega",
+      });
+    }
+  }
+  return lines;
+}
+
 export function PushScreen() {
   const listHistory = useServerFn(listPushHistoryFn);
   const reviewMessage = useServerFn(reviewPushMessageFn);
@@ -359,47 +438,52 @@ export function PushScreen() {
             <Bell className="size-4 text-primary" />
             Histórico
           </CardTitle>
-          <CardDescription>Últimos comunicados enviados.</CardDescription>
+          <CardDescription>
+            Data/hora, título e status por canal (Usuários, Parceiros, Comunidade, E-mail).
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {history.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhum comunicado ainda.</p>
           ) : (
-            history.map((row) => (
-              <div key={row.id} className="rounded-xl border border-border/60 p-3">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold">{row.title}</p>
-                  <Badge variant="secondary">{statusLabel(row.status)}</Badge>
-                </div>
-                <p className="line-clamp-3 text-xs text-muted-foreground whitespace-pre-wrap">
-                  {row.reviewedText || row.originalText}
-                </p>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  {new Date(row.sentAt || row.createdAt).toLocaleString("pt-BR")} ·{" "}
-                  {row.audiences.join(", ")}
-                </p>
-                {row.deliveryResults?.community || row.deliveryResults?.email ? (
-                  <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
-                    {row.deliveryResults.community ? (
-                      <p>
-                        Comunidade:{" "}
-                        {row.deliveryResults.community.ok ? "OK" : "falhou"} —{" "}
-                        {row.deliveryResults.community.detail}
-                      </p>
-                    ) : null}
-                    {row.deliveryResults.email ? (
-                      <p>
-                        E-mail: {row.deliveryResults.email.sent} ok /{" "}
-                        {row.deliveryResults.email.failed} falha
-                        {row.deliveryResults.email.detail
-                          ? ` — ${row.deliveryResults.email.detail}`
-                          : ""}
-                      </p>
-                    ) : null}
+            history.map((row) => {
+              const when = new Date(row.sentAt || row.createdAt).toLocaleString("pt-BR");
+              const channels = buildChannelStatusLines(row);
+              return (
+                <div key={row.id} className="rounded-xl border border-border/60 p-3 space-y-2">
+                  <p className="text-[11px] text-muted-foreground">{when}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold leading-snug">{row.title || "Sem título"}</p>
+                    <Badge
+                      variant="outline"
+                      className={cn("shrink-0", statusBadgeClass(row.status))}
+                    >
+                      {statusLabel(row.status)}
+                    </Badge>
                   </div>
-                ) : null}
-              </div>
-            ))
+                  {channels.length > 0 ? (
+                    <ul className="space-y-1 border-t border-border/50 pt-2">
+                      {channels.map((channel) => (
+                        <li
+                          key={channel.label}
+                          className={cn(
+                            "text-[11px] leading-relaxed",
+                            channel.ok ? "text-muted-foreground" : "text-destructive",
+                          )}
+                        >
+                          <span className="font-medium text-foreground">{channel.label}:</span>{" "}
+                          {channel.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground border-t border-border/50 pt-2">
+                      Sem detalhe de canais.
+                    </p>
+                  )}
+                </div>
+              );
+            })
           )}
         </CardContent>
       </Card>
