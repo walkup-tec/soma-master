@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -366,6 +366,24 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
     });
   };
 
+  const setAvailableForPartners = (productId: string, available: boolean) => {
+    const nextProducts = products.map((product) =>
+      product.id === productId
+        ? normalizeProductFields({ ...product, availableForPartners: available })
+        : product,
+    );
+    void persistProducts(nextProducts, {
+      successMessage: available
+        ? "Produto disponível na seção Parceiros."
+        : "Produto removido da seção Parceiros.",
+    });
+  };
+
+  const editProductFromList = (productId: string) => {
+    setSelectedId(productId);
+    setStepIndex(0);
+  };
+
   const requestDeleteIds = (ids: string[]) => {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return;
@@ -615,10 +633,9 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Produtos cadastrados</p>
                   <p className="text-xs text-muted-foreground">
-                    Cada banco vinculado aparece em uma linha. Clique na linha para editar o produto.
                     {isPartnersCatalog
-                      ? " Estes produtos não entram na lista de Produção própria."
-                      : null}
+                      ? "Cada banco vinculado aparece em uma linha. Use editar ou excluir nas ações."
+                      : "Cada banco vinculado aparece em uma linha. Marque Parceiros para exibir na seção Parceiros; desmarque para ocultar. Edite ou exclua pelas ações."}
                   </p>
                   {productBankRows.length === 0 ? (
                     <p className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -634,6 +651,7 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
                             {isPartnersCatalog ? null : (
                               <th className="px-4 py-3 font-medium text-center">Parceiros</th>
                             )}
+                            <th className="px-4 py-3 font-medium text-right">Ação</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -643,31 +661,62 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
                               <tr
                                 key={row.key}
                                 className={cn(
-                                  "border-t border-border/60 cursor-pointer transition-colors hover:bg-muted/40",
+                                  "border-t border-border/60 transition-colors",
                                   isActive && "bg-primary/10",
                                 )}
-                                onClick={() => {
-                                  setSelectedId(row.productId);
-                                  setStepIndex(0);
-                                }}
                               >
                                 <td className="px-4 py-3 font-medium">{row.productName}</td>
                                 <td className="px-4 py-3 text-muted-foreground">{row.bankName}</td>
                                 {isPartnersCatalog ? null : (
-                                  <td className="px-4 py-3 text-center">
-                                    {row.availableForPartners ? (
-                                      <span
-                                        className="inline-flex size-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
-                                        title="Disponível para parceiros"
-                                        aria-label="Disponível para parceiros"
-                                      >
-                                        <Check className="size-3.5" strokeWidth={3} />
-                                      </span>
-                                    ) : (
-                                      <span className="text-muted-foreground">—</span>
-                                    )}
+                                  <td className="px-4 py-3">
+                                    <div className="flex justify-center">
+                                      <Checkbox
+                                        checked={row.availableForPartners}
+                                        disabled={saving}
+                                        onCheckedChange={(value) =>
+                                          setAvailableForPartners(row.productId, value === true)
+                                        }
+                                        aria-label={
+                                          row.availableForPartners
+                                            ? `Remover ${row.productName} da seção Parceiros`
+                                            : `Exibir ${row.productName} na seção Parceiros`
+                                        }
+                                        title={
+                                          row.availableForPartners
+                                            ? "Marcado: aparece em Parceiros. Clique para remover."
+                                            : "Desmarcado: não aparece em Parceiros. Clique para liberar."
+                                        }
+                                      />
+                                    </div>
                                   </td>
                                 )}
+                                <td className="px-4 py-3">
+                                  <div className="flex justify-end gap-1">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={saving}
+                                      title="Editar produto"
+                                      aria-label={`Editar ${row.productName}`}
+                                      onClick={() => editProductFromList(row.productId)}
+                                    >
+                                      <Pencil className="size-3.5" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-destructive hover:text-destructive"
+                                      disabled={saving}
+                                      title="Excluir produto"
+                                      aria-label={`Excluir ${row.productName}`}
+                                      onClick={() => requestDeleteIds([row.productId])}
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </Button>
+                                  </div>
+                                </td>
                               </tr>
                             );
                           })}

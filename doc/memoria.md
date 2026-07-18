@@ -1,4 +1,8 @@
-﻿## 2026-07-18 14:14 — Tabela padrão: categorias multi-select + Todos
+﻿## 2026-07-18 14:35 — Produtos: toggle Parceiros + editar/excluir na lista
+- Checkbox `availableForPartners`; ações Pencil/Trash na tabela produto×banco.
+- LOG: `doc/LOG-2026-07-18__143511__produtos-lista-parceiros-toggle-acoes.md`.
+
+## 2026-07-18 14:14 — Tabela padrão: categorias multi-select + Todos
 - Select único → MultiSelectFilter; opção `all`; storage legado-compatible.
 - LOG: `doc/LOG-2026-07-18__141300__tabela-padrao-categorias-multiselect.md`.
 
