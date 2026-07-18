@@ -1,25 +1,25 @@
 /**
- * Resiliência de deploy (modelo WABA index.html):
- * - Vigia /api/health em segundo plano; ao detectar queda (502/504, JSON do
- *   Traefik "bad-gateway" ou rede), mostra o overlay "ATUALIZANDO O SISTEMA".
- * - Só opera no host oficial de produção e exige duas falhas consecutivas,
- *   evitando ativação local ou por oscilação isolada de rede.
- * - Segue sondando a cada 2s; com 3 sondas estáveis (ou drift de serverBootId,
- *   que indica que o novo deploy subiu), fecha o modal e recarrega a tela.
- * - Registra o service worker (v4) que preserva a shell HTML e, se não houver
- *   cache, devolve um fallback embutido com o modal — evitando a tela JSON
- *   "Cannot GET /api/errors/bad-gateway" no refresh pós-deploy.
- * Roda sem React — igual ao bootstrap do tema — para não depender da hidratação.
+ * Resiliência de deploy — overlay "ATUALIZANDO O SISTEMA".
+ *
+ * REGRA (obrigatória):
+ * - Só no host de produção Easypanel: app.somaconecta.com.br
+ * - Nunca em localhost, IP, preview ou outros domínios
+ * - Só após já ter visto health OK (evita modal em cold start)
+ * - Overlay imediato só para 502–504 / JSON Traefik bad-gateway
+ * - Drift de serverBootId exige 2 sondas consecutivas (anti multi-réplica)
+ * - Em host não-produção: desregistra qualquer SW legado
  */
 export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   var POLL_MS = 2000;
-  var WATCH_MS = 3000;
+  var WATCH_MS = 4000;
   var STABLE_PROBES_REQUIRED = 3;
   var FAILURE_PROBES_REQUIRED = 2;
+  var BOOT_ID_DRIFT_REQUIRED = 2;
   var COMPLETE_RELOAD_DELAY_MS = 600;
   var LONG_WAIT_MS = 120000;
   var OVERLAY_ID = "soma-deploy-overlay";
-  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=4";
+  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=5";
+  var PRODUCTION_HOST = "app.somaconecta.com.br";
 
   var pollTimer = null;
   var watchTimer = null;
@@ -28,23 +28,27 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   var pollStartedAt = 0;
   var stableStreak = 0;
   var failureStreak = 0;
+  var bootDriftStreak = 0;
   var baselineBootId = "";
+  var hasSeenHealthy = false;
 
   function isProductionHost() {
     var host = String(window.location.hostname || "").toLowerCase();
-    return host === "app.somaconecta.com.br";
+    return host === PRODUCTION_HOST;
   }
 
+  /** Só Traefik/Easypanel bad-gateway — NÃO genérico "Not Found". */
   function looksLikeGatewayPayload(data, status) {
     if (status >= 502 && status <= 504) return true;
+    if (status !== 404 && status !== 503) return false;
     if (!data || typeof data !== "object") return false;
     var message = "";
     try {
       message = JSON.stringify(data);
     } catch (_) {
-      message = "";
+      return false;
     }
-    return /bad-gateway|Cannot GET|Not Found/i.test(message);
+    return /bad-gateway|Cannot GET \\/api\\/errors\\/bad-gateway/i.test(message);
   }
 
   function ensureStyles() {
@@ -56,8 +60,6 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     var style = document.createElement("style");
     style.id = STYLE_ID;
     style.setAttribute("data-version", STYLE_VERSION);
-    // Paleta oficial Soma: magenta #be1c6a · lima #ecf759 · azul #2775e5 · neutros
-    // Sem pink Tailwind (#ec4899), roxo (#a855f7), ciano (#22d3ee) ou verde WABA.
     style.textContent =
       "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,9,18,.94);backdrop-filter:blur(8px)}" +
       "#" + OVERLAY_ID + "[hidden]{display:none!important}" +
@@ -148,10 +150,13 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
       if (looksLikeGatewayPayload(data, response.status) || (response.status >= 502 && response.status <= 504)) {
         return { stable: false, gateway: true };
       }
-      if (!response.ok || !data || data.ok !== true) return { stable: false, gateway: false };
+      if (!response.ok || !data || data.ok !== true) {
+        return { stable: false, gateway: false };
+      }
       return { stable: true, gateway: false, bootId: String(data.serverBootId || "") };
     } catch (_) {
-      return { stable: false, gateway: true };
+      // Rede/abort local ≠ Traefik bad-gateway; exige streak, não overlay imediato.
+      return { stable: false, gateway: false };
     }
   }
 
@@ -160,6 +165,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     showOverlay();
     var probe = await probeHealth();
     if (probe.stable) {
+      hasSeenHealthy = true;
       stableStreak += 1;
       setPhase("stabilizing");
       if (stableStreak >= STABLE_PROBES_REQUIRED || (baselineBootId && probe.bootId && probe.bootId !== baselineBootId)) {
@@ -184,6 +190,8 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
 
   function startRecovery() {
     if (!isProductionHost()) return;
+    // Sem baseline saudável: não é redeploy — evita modal em first paint / cold start.
+    if (!hasSeenHealthy) return;
     if (recoveryActive) return;
     if (confirmFailureTimer) {
       window.clearTimeout(confirmFailureTimer);
@@ -195,8 +203,9 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     void pollUntilReady();
   }
 
-  function confirmProductionDeployFailure() {
+  function confirmProductionDeployFailure(_isGateway) {
     if (!isProductionHost() || recoveryActive) return;
+    if (!hasSeenHealthy) return;
     failureStreak += 1;
     if (failureStreak >= FAILURE_PROBES_REQUIRED) {
       startRecovery();
@@ -214,28 +223,45 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     if (!isProductionHost() || recoveryActive) return;
     var probe = await probeHealth();
     if (!probe.stable) {
-      // JSON Traefik / 502: overlay na hora (não esperar 2 falhas).
-      if (probe.gateway) {
-        startRecovery();
-        return;
-      }
-      confirmProductionDeployFailure();
+      bootDriftStreak = 0;
+      confirmProductionDeployFailure(Boolean(probe.gateway));
       return;
     }
     failureStreak = 0;
+    hasSeenHealthy = true;
     if (!baselineBootId && probe.bootId) {
       baselineBootId = probe.bootId;
+      bootDriftStreak = 0;
       return;
     }
     if (baselineBootId && probe.bootId && probe.bootId !== baselineBootId) {
-      showOverlay();
-      setPhase("stabilizing");
-      recoveryActive = true;
-      window.setTimeout(completeRecovery, 900);
+      bootDriftStreak += 1;
+      // Multi-réplica pode devolver bootIds diferentes; exige confirmação.
+      if (bootDriftStreak >= BOOT_ID_DRIFT_REQUIRED && hasSeenHealthy) {
+        showOverlay();
+        setPhase("stabilizing");
+        recoveryActive = true;
+        window.setTimeout(completeRecovery, 900);
+      }
+      return;
     }
+    bootDriftStreak = 0;
   }
 
-  if (!isProductionHost()) return;
+  function unregisterLegacyServiceWorkers() {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      regs.forEach(function (reg) {
+        reg.unregister().catch(function () {});
+      });
+    }).catch(function () {});
+  }
+
+  // Fora de produção: limpa SW antigo e NÃO liga watch/modal.
+  if (!isProductionHost()) {
+    unregisterLegacyServiceWorkers();
+    return;
+  }
 
   window.somaDeployResilience = {
     show: showOverlay,
@@ -251,11 +277,12 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
 
   document.addEventListener("DOMContentLoaded", function () {
     void probeHealth().then(function (probe) {
-      if (probe.stable && probe.bootId) baselineBootId = probe.bootId;
-      if (!probe.stable) {
-        if (probe.gateway) startRecovery();
-        else confirmProductionDeployFailure();
+      if (probe.stable) {
+        hasSeenHealthy = true;
+        if (probe.bootId) baselineBootId = probe.bootId;
+        return;
       }
+      // Primeira carga sem health OK: não abre modal (não é redeploy).
     });
     watchTimer = window.setInterval(function () {
       void watchInBackground();

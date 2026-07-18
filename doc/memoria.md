@@ -1,3 +1,9 @@
+﻿## 2026-07-17 23:50 — Modal deploy só em produção (anti falso positivo)
+- Overlay/SW **apenas** em `app.somaconecta.com.br`; fora disso desregistra SW e não liga watch.
+- Exige `hasSeenHealthy`; catch de rede não abre overlay imediato; gateway payload sem "Not Found" genérico; SW **v5**.
+- Nota: modal durante deploy em produção = esperado; em localhost = bug corrigido.
+- LOG: `doc/LOG-2026-07-17__235000__fix-modal-deploy-somente-producao-anti-falso.md`.
+- Keywords: modal-deploy, sw-v5, hasSeenHealthy, anti-falso-positivo, producao-easypanel.
 ## 2026-07-17 23:45 — Sidebar: seções PARCEIROS / PRODUÇÃO PRÓPRIA recolhíveis
 - `app-sidebar.tsx`: cabeçalhos de seção clicáveis (ChevronDown), estado em `sessionStorage` (`soma.sidebar.sectionsOpen`); seção ativa abre automaticamente.
 - LOG: `doc/LOG-2026-07-17__234500__sidebar-secoes-recolhiveis.md`.

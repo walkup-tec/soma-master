@@ -1,11 +1,11 @@
 /**
- * Service worker Soma — mantém a shell do app disponível durante redeploy.
- * Se uma navegação retornar 502/503/504 ou o JSON do Traefik
- * ("Cannot GET /api/errors/bad-gateway"), devolve a última shell HTML válida
- * ou um fallback embutido com o modal "ATUALIZANDO O SISTEMA".
+ * Service worker Soma — só na produção (app.somaconecta.com.br).
+ * Em outros hosts o bootstrap desregistra este SW.
+ * Em navegação 502/bad-gateway devolve shell em cache ou fallback com modal.
  */
-const CACHE_SHELL = "soma-deploy-shell-v4";
-const SW_VERSION = "v4";
+const CACHE_SHELL = "soma-deploy-shell-v5";
+const SW_VERSION = "v5";
+const PRODUCTION_HOST = "app.somaconecta.com.br";
 
 const FALLBACK_HTML = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -37,6 +37,10 @@ const FALLBACK_HTML = `<!DOCTYPE html>
   </div>
   <script>
     (function () {
+      if (String(location.hostname || "").toLowerCase() !== "app.somaconecta.com.br") {
+        location.replace("/");
+        return;
+      }
       var statusEl = document.getElementById("status");
       var tries = 0;
       async function probe() {
@@ -58,6 +62,14 @@ const FALLBACK_HTML = `<!DOCTYPE html>
   </script>
 </body>
 </html>`;
+
+function isProductionScope() {
+  try {
+    return String(self.location.hostname || "").toLowerCase() === PRODUCTION_HOST;
+  } catch {
+    return false;
+  }
+}
 
 function isNavigationRequest(request) {
   if (request.mode === "navigate") return true;
@@ -81,17 +93,14 @@ function isHtmlResponse(response) {
 
 async function isGatewayFailure(response) {
   if (response.status >= 502 && response.status <= 504) return true;
-  if (response.status >= 400 && !isHtmlResponse(response)) {
-    try {
-      const text = await response.clone().text();
-      if (/bad-gateway|Bad Gateway|Cannot GET|application\/json/i.test(text) || text.trim().startsWith("{")) {
-        return true;
-      }
-    } catch {
-      return true;
-    }
+  if (response.status !== 404 && response.status !== 503) return false;
+  if (isHtmlResponse(response)) return false;
+  try {
+    const text = await response.clone().text();
+    return /bad-gateway|Cannot GET \/api\/errors\/bad-gateway/i.test(text);
+  } catch {
+    return false;
   }
-  return false;
 }
 
 function fallbackShellResponse() {
@@ -118,6 +127,10 @@ async function readCachedShell(cache, request) {
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
+      if (!isProductionScope()) {
+        await self.skipWaiting();
+        return;
+      }
       const cache = await caches.open(CACHE_SHELL);
       await Promise.all(
         ["/", "/login"].map(async (path) => {
@@ -141,12 +154,16 @@ self.addEventListener("activate", (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(keys.filter((key) => key !== CACHE_SHELL).map((key) => caches.delete(key)));
+      if (!isProductionScope()) {
+        await self.registration.unregister();
+      }
       await self.clients.claim();
     })(),
   );
 });
 
 self.addEventListener("fetch", (event) => {
+  if (!isProductionScope()) return;
   const { request } = event;
   if (request.method !== "GET" || isProbeRequest(request)) return;
   if (!isNavigationRequest(request)) return;
@@ -168,7 +185,8 @@ self.addEventListener("fetch", (event) => {
         return response;
       } catch {
         const cached = await readCachedShell(cache, request);
-        return cached || fallbackShellResponse();
+        // Sem cache: deixa a rede falhar normalmente (não força modal).
+        return cached || Response.error();
       }
     })(),
   );
