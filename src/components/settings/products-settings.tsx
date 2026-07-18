@@ -149,9 +149,26 @@ function fieldsForWizardStep(step: WizardStepId): {
 }
 
 /** Persistência já chega filtrada pela seção "products" em Configurações. */
+
+function isOwnProduct(product: ProductConfig): boolean {
+  return !product.partnerOnly;
+}
+
+function ownProducts(products: ProductConfig[]): ProductConfig[] {
+  return products.filter(isOwnProduct);
+}
+
+/** Mantém partnerOnly (Parceiros → Produtos) ao salvar Produção própria. */
+function mergeOwnWithPartnerOnly(
+  nextOwn: ProductConfig[],
+  allFromSettings: ProductConfig[],
+): ProductConfig[] {
+  const partnerOnly = allFromSettings.filter((product) => product.partnerOnly);
+  return [...nextOwn.map((p) => ({ ...p, partnerOnly: false })), ...partnerOnly];
+}
 export function ProductsSettings({ settings, onChange }: Props) {
-  const [products, setProducts] = useState<ProductConfig[]>(settings.products);
-  const [selectedId, setSelectedId] = useState(settings.products[0]?.id ?? "");
+  const [products, setProducts] = useState<ProductConfig[]>(() => ownProducts(settings.products));
+  const [selectedId, setSelectedId] = useState(() => ownProducts(settings.products)[0]?.id ?? "");
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
@@ -163,13 +180,14 @@ export function ProductsSettings({ settings, onChange }: Props) {
 
   useEffect(() => {
     if (colorEditingRef.current) return;
-    setProducts(settings.products);
-    productsRef.current = settings.products;
+    const next = ownProducts(settings.products);
+    setProducts(next);
+    productsRef.current = next;
     setSelectedId((current) => {
-      if (current && settings.products.some((product) => product.id === current)) return current;
-      return settings.products[0]?.id ?? "";
+      if (current && next.some((product) => product.id === current)) return current;
+      return next[0]?.id ?? "";
     });
-    setCheckedIds((current) => current.filter((id) => settings.products.some((p) => p.id === id)));
+    setCheckedIds((current) => current.filter((id) => next.some((p) => p.id === id)));
   }, [settings.products]);
 
   const selected = products.find((product) => product.id === selectedId) ?? products[0];
@@ -190,11 +208,13 @@ export function ProductsSettings({ settings, onChange }: Props) {
 
     const run = async () => {
       try {
-        const saved = await onChange({ ...settings, products: productsRef.current });
+        const toSave = mergeOwnWithPartnerOnly(productsRef.current, settings.products);
+        const saved = await onChange({ ...settings, products: toSave });
         if (saved?.products) {
+          const savedOwn = ownProducts(saved.products);
           if (colorEditingRef.current) {
             const localById = new Map(productsRef.current.map((p) => [p.id, p]));
-            const merged = saved.products.map((p) => {
+            const merged = savedOwn.map((p) => {
               const local = localById.get(p.id);
               if (local && p.id === selectedId) {
                 return {
@@ -211,23 +231,24 @@ export function ProductsSettings({ settings, onChange }: Props) {
             setProducts(merged);
             productsRef.current = merged;
           } else {
-            setProducts(saved.products);
-            productsRef.current = saved.products;
+            setProducts(savedOwn);
+            productsRef.current = savedOwn;
           }
           setSelectedId((current) => {
-            if (current && saved.products.some((product) => product.id === current)) return current;
-            return saved.products[0]?.id ?? "";
+            if (current && savedOwn.some((product) => product.id === current)) return current;
+            return savedOwn[0]?.id ?? "";
           });
           setCheckedIds((current) =>
-            current.filter((id) => saved.products.some((product) => product.id === id)),
+            current.filter((id) => savedOwn.some((product) => product.id === id)),
           );
         }
         if (!options?.quiet) {
           toast.success(options?.successMessage ?? "Produtos salvos.");
         }
       } catch (error) {
-        setProducts(settings.products);
-        productsRef.current = settings.products;
+        const rollback = ownProducts(settings.products);
+        setProducts(rollback);
+        productsRef.current = rollback;
         toast.error(error instanceof Error ? error.message : "Não foi possível salvar os produtos.");
         throw error;
       } finally {

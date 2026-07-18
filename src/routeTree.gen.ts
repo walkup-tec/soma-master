@@ -17,6 +17,9 @@ import { Route as AppUsuariosRouteImport } from './routes/app/usuarios'
 import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
 import { Route as AppPushRouteImport } from './routes/app/push'
 import { Route as AppParceirosRouteImport } from './routes/app/parceiros'
+import { Route as AppParceirosBancosRouteImport } from './routes/app/parceiros.bancos'
+import { Route as AppParceirosProdutosRouteImport } from './routes/app/parceiros.produtos'
+import { Route as AppParceirosTabelasRouteImport } from './routes/app/parceiros.tabelas'
 import { Route as AppKanbanRouteImport } from './routes/app/kanban'
 import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
 import { Route as AppClientesRouteImport } from './routes/app/clientes'
@@ -70,6 +73,21 @@ const AppParceirosRoute = AppParceirosRouteImport.update({
   id: '/parceiros',
   path: '/parceiros',
   getParentRoute: () => AppRoute,
+} as any)
+const AppParceirosBancosRoute = AppParceirosBancosRouteImport.update({
+  id: '/bancos',
+  path: '/bancos',
+  getParentRoute: () => AppParceirosRoute,
+} as any)
+const AppParceirosProdutosRoute = AppParceirosProdutosRouteImport.update({
+  id: '/produtos',
+  path: '/produtos',
+  getParentRoute: () => AppParceirosRoute,
+} as any)
+const AppParceirosTabelasRoute = AppParceirosTabelasRouteImport.update({
+  id: '/tabelas',
+  path: '/tabelas',
+  getParentRoute: () => AppParceirosRoute,
 } as any)
 const AppKanbanRoute = AppKanbanRouteImport.update({
   id: '/kanban',
@@ -149,7 +167,10 @@ export interface FileRoutesByFullPath {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
-  '/app/parceiros': typeof AppParceirosRoute
+  '/app/parceiros': typeof AppParceirosRouteWithChildren
+  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
+  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
@@ -171,7 +192,10 @@ export interface FileRoutesByTo {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
-  '/app/parceiros': typeof AppParceirosRoute
+  '/app/parceiros': typeof AppParceirosRouteWithChildren
+  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
+  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
@@ -195,7 +219,10 @@ export interface FileRoutesById {
   '/app/clientes': typeof AppClientesRouteWithChildren
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
-  '/app/parceiros': typeof AppParceirosRoute
+  '/app/parceiros': typeof AppParceirosRouteWithChildren
+  '/app/parceiros/bancos': typeof AppParceirosBancosRoute
+  '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
@@ -221,6 +248,9 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
+    | '/app/parceiros/bancos'
+    | '/app/parceiros/produtos'
+    | '/app/parceiros/tabelas'
     | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
@@ -243,6 +273,9 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
+    | '/app/parceiros/bancos'
+    | '/app/parceiros/produtos'
+    | '/app/parceiros/tabelas'
     | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
@@ -266,6 +299,9 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/parceiros'
+    | '/app/parceiros/bancos'
+    | '/app/parceiros/produtos'
+    | '/app/parceiros/tabelas'
     | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
@@ -348,6 +384,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/parceiros'
       preLoaderRoute: typeof AppParceirosRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/app/parceiros/bancos': {
+      id: '/app/parceiros/bancos'
+      path: '/bancos'
+      fullPath: '/app/parceiros/bancos'
+      preLoaderRoute: typeof AppParceirosBancosRouteImport
+      parentRoute: typeof AppParceirosRoute
+    }
+    '/app/parceiros/produtos': {
+      id: '/app/parceiros/produtos'
+      path: '/produtos'
+      fullPath: '/app/parceiros/produtos'
+      preLoaderRoute: typeof AppParceirosProdutosRouteImport
+      parentRoute: typeof AppParceirosRoute
+    }
+    '/app/parceiros/tabelas': {
+      id: '/app/parceiros/tabelas'
+      path: '/tabelas'
+      fullPath: '/app/parceiros/tabelas'
+      preLoaderRoute: typeof AppParceirosTabelasRouteImport
+      parentRoute: typeof AppParceirosRoute
     }
     '/app/kanban': {
       id: '/app/kanban'
@@ -466,13 +523,29 @@ const AppClientesRouteWithChildren = AppClientesRoute._addFileChildren(
   AppClientesRouteChildren,
 )
 
+interface AppParceirosRouteChildren {
+  AppParceirosBancosRoute: typeof AppParceirosBancosRoute
+  AppParceirosProdutosRoute: typeof AppParceirosProdutosRoute
+  AppParceirosTabelasRoute: typeof AppParceirosTabelasRoute
+}
+
+const AppParceirosRouteChildren: AppParceirosRouteChildren = {
+  AppParceirosBancosRoute: AppParceirosBancosRoute,
+  AppParceirosProdutosRoute: AppParceirosProdutosRoute,
+  AppParceirosTabelasRoute: AppParceirosTabelasRoute,
+}
+
+const AppParceirosRouteWithChildren = AppParceirosRoute._addFileChildren(
+  AppParceirosRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAgendaRoute: typeof AppAgendaRoute
   AppChatRoute: typeof AppChatRouteWithChildren
   AppClientesRoute: typeof AppClientesRouteWithChildren
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppKanbanRoute: typeof AppKanbanRoute
-  AppParceirosRoute: typeof AppParceirosRoute
+  AppParceirosRoute: typeof AppParceirosRouteWithChildren
   AppPushRoute: typeof AppPushRoute
   AppRemarketingRoute: typeof AppRemarketingRoute
   AppUsuariosRoute: typeof AppUsuariosRoute
@@ -485,7 +558,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppClientesRoute: AppClientesRouteWithChildren,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppKanbanRoute: AppKanbanRoute,
-  AppParceirosRoute: AppParceirosRoute,
+  AppParceirosRoute: AppParceirosRouteWithChildren,
   AppPushRoute: AppPushRoute,
   AppRemarketingRoute: AppRemarketingRoute,
   AppUsuariosRoute: AppUsuariosRoute,

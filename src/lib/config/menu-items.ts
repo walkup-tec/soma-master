@@ -1,5 +1,8 @@
 export type MenuItemId =
   | "parceiros"
+  | "parceiros-bancos"
+  | "parceiros-produtos"
+  | "parceiros-tabelas"
   | "dashboard"
   | "clientes"
   | "kanban"
@@ -43,6 +46,27 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
     section: "parceiros",
     group: "Gestão",
     path: "/app/parceiros",
+  },
+  {
+    id: "parceiros-bancos",
+    label: "Bancos",
+    section: "parceiros",
+    group: "Gestão",
+    path: "/app/parceiros/bancos",
+  },
+  {
+    id: "parceiros-produtos",
+    label: "Produtos",
+    section: "parceiros",
+    group: "Gestão",
+    path: "/app/parceiros/produtos",
+  },
+  {
+    id: "parceiros-tabelas",
+    label: "Tabelas",
+    section: "parceiros",
+    group: "Gestão",
+    path: "/app/parceiros/tabelas",
   },
   {
     id: "dashboard",

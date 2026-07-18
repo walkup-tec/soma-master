@@ -59,6 +59,10 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
     add column if not exists available_for_partners boolean not null default false
   `;
   await sql`
+    alter table crm.products
+    add column if not exists partner_only boolean not null default false
+  `;
+  await sql`
     alter table crm.banks
     add column if not exists storm_access_enabled boolean not null default false
   `;
@@ -129,9 +133,10 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
         tag: string | null;
         color: string | null;
         available_for_partners: boolean | null;
+        partner_only: boolean | null;
       }[]
     >`
-      select id, name, tag, color, available_for_partners from crm.products order by name
+      select id, name, tag, color, available_for_partners, partner_only from crm.products order by name
     `,
     sql<{ product_id: string; field_id: string; required: boolean }[]>`
       select product_id, field_id, required from crm.product_fields
@@ -215,6 +220,7 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
         color: product.color ?? "#64748b",
         bankIds: banksByProduct.get(product.id) ?? [],
         availableForPartners: Boolean(product.available_for_partners),
+        partnerOnly: Boolean(product.partner_only),
         requiredFieldIds: fields.required,
         availableFieldIds: fields.optional,
       };
@@ -332,19 +338,34 @@ async function syncCategories(tx: Tx, categories: UserCategory[]): Promise<void>
 }
 
 async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
-  if (products.length === 0) {
-    await tx`delete from crm.product_banks`;
-    await tx`delete from crm.product_fields`;
-    await tx`delete from crm.products`;
+  // Produtos partner_only são geridos em Parceiros → Produtos; preservar no sync de Produção própria.
+  const productionProducts = products.filter((product) => !product.partnerOnly);
+
+  if (productionProducts.length === 0) {
+    await tx`
+      delete from crm.product_banks b
+      using crm.products p
+      where b.product_id = p.id and coalesce(p.partner_only, false) = false
+    `;
+    await tx`
+      delete from crm.product_fields f
+      using crm.products p
+      where f.product_id = p.id and coalesce(p.partner_only, false) = false
+    `;
+    await tx`
+      delete from crm.products p
+      where coalesce(p.partner_only, false) = false
+    `;
     return;
   }
 
-  const payload = products.map((product) => ({
+  const payload = productionProducts.map((product) => ({
     id: product.id,
     name: product.name,
     tag: product.tag || "",
     color: product.color || "#64748b",
     available_for_partners: Boolean(product.availableForPartners),
+    partner_only: false,
     required_field_ids: product.requiredFieldIds,
     bank_ids: product.bankIds ?? [],
   }));
@@ -358,33 +379,42 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
         tag text,
         color text,
         available_for_partners boolean,
+        partner_only boolean,
         required_field_ids jsonb,
         bank_ids jsonb
       )
     ),
     del_field_orphans as (
       delete from crm.product_fields f
-      where not exists (select 1 from input i where i.id = f.product_id)
+      using crm.products p
+      where f.product_id = p.id
+        and coalesce(p.partner_only, false) = false
+        and not exists (select 1 from input i where i.id = f.product_id)
       returning 1
     ),
     del_bank_orphans as (
       delete from crm.product_banks b
-      where not exists (select 1 from input i where i.id = b.product_id)
+      using crm.products p
+      where b.product_id = p.id
+        and coalesce(p.partner_only, false) = false
+        and not exists (select 1 from input i where i.id = b.product_id)
       returning 1
     ),
     del_products as (
       delete from crm.products p
-      where not exists (select 1 from input i where i.id = p.id)
+      where coalesce(p.partner_only, false) = false
+        and not exists (select 1 from input i where i.id = p.id)
       returning 1
     ),
     upsert_products as (
-      insert into crm.products (id, name, tag, color, available_for_partners, updated_at)
-      select id, name, tag, color, available_for_partners, now() from input
+      insert into crm.products (id, name, tag, color, available_for_partners, partner_only, updated_at)
+      select id, name, tag, color, available_for_partners, partner_only, now() from input
       on conflict (id) do update set
         name = excluded.name,
         tag = excluded.tag,
         color = excluded.color,
         available_for_partners = excluded.available_for_partners,
+        partner_only = excluded.partner_only,
         updated_at = now()
       returning id
     ),
@@ -412,6 +442,7 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       tag text,
       color text,
       available_for_partners boolean,
+      partner_only boolean,
       required_field_ids jsonb,
       bank_ids jsonb
     )
@@ -428,6 +459,7 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       tag text,
       color text,
       available_for_partners boolean,
+      partner_only boolean,
       required_field_ids jsonb,
       bank_ids jsonb
     )

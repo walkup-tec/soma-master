@@ -235,6 +235,68 @@ export async function ensurePartnerSchema(sql: Sql): Promise<void> {
           and not exists (select 1 from crm.users u where u.category_id = ${legacyId})
       `;
     }
+
+    await tx`
+      alter table crm.products
+      add column if not exists partner_only boolean not null default false
+    `;
+
+    await tx`
+      create table if not exists crm.partner_visible_banks (
+        bank_id text primary key,
+        updated_at timestamptz not null default now()
+      )
+    `;
+
+    await tx`
+      create table if not exists crm.partner_commission_tables (
+        id text primary key,
+        name text not null,
+        product_id text not null,
+        bank_id text not null,
+        is_default boolean not null default false,
+        partner_category text null,
+        fixed_value_enabled boolean not null default false,
+        fixed_value_cents bigint null,
+        flat_percent numeric(12,4) not null default 0,
+        repasse_percent numeric(12,4) not null default 0,
+        flat_cents bigint null,
+        repasse_cents bigint null,
+        range_min_cents bigint not null,
+        range_max_cents bigint not null,
+        created_by_user_id text not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        check (range_max_cents >= range_min_cents)
+      )
+    `;
+    await tx`
+      create index if not exists idx_partner_commission_tables_product_bank
+      on crm.partner_commission_tables (product_id, bank_id)
+    `;
+
+    await tx`
+      create table if not exists crm.partner_commission_table_partners (
+        table_id text not null references crm.partner_commission_tables(id) on delete cascade,
+        partner_user_id text not null,
+        primary key (table_id, partner_user_id)
+      )
+    `;
+
+    await tx`
+      create table if not exists crm.partner_bank_access_requests (
+        id text primary key,
+        requester_user_id text not null,
+        product_id text not null,
+        bank_ids jsonb not null default '[]'::jsonb,
+        status text not null default 'pending'
+          check (status in ('pending', 'approved', 'rejected')),
+        notes text null,
+        created_at timestamptz not null default now(),
+        decided_at timestamptz null,
+        decided_by_user_id text null
+      )
+    `;
   });
 
   // Evita cache de settings com categorias de parceiro misturadas.

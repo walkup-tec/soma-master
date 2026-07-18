@@ -63,6 +63,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       color: "#be1c6a",
       bankIds: [],
       availableForPartners: false,
+      partnerOnly: false,
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone", "tipo_cliente", "renda_mensal"],
     },
@@ -73,6 +74,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       color: "#0d9488",
       bankIds: [],
       availableForPartners: false,
+      partnerOnly: false,
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone"],
     },
@@ -89,6 +91,7 @@ export function createEmptyProduct(): import("@/lib/config/settings-types").Prod
     color: DEFAULT_STATUS_COLOR,
     bankIds: [],
     availableForPartners: false,
+    partnerOnly: false,
     availableFieldIds: [...ALL_CLIENT_FIELD_IDS],
     requiredFieldIds: [],
   });
@@ -300,6 +303,7 @@ export function normalizeProductFields(
     color: normalizeStatusColor(product.color, DEFAULT_STATUS_COLOR),
     bankIds,
     availableForPartners: Boolean(product.availableForPartners),
+    partnerOnly: Boolean(product.partnerOnly),
     availableFieldIds,
     requiredFieldIds,
   };

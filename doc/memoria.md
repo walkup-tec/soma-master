@@ -1,3 +1,18 @@
+## 2026-07-17 23:15 — Parceiros: Bancos, Produtos e Tabelas
+- Menus + telas admin: `/app/parceiros/bancos|produtos|tabelas`; `routeTree.gen.ts` manual (CLI npm falhou).
+- Configurações → Produtos: só `!partnerOnly`; merge no save para não dropar partner-only.
+- `clearSystemSettingsCache` export ok.
+- Schema-ready: `partner_bank_access_requests`; UI parceiro "solicitar acesso" vem depois.
+- LOG: `doc/LOG-2026-07-17__231500__parceiros-bancos-produtos-tabelas.md`.
+- Keywords: parceiros, partnerOnly, tabelas comissao, routeTree, partner_bank_access_requests.
+
+﻿## 2026-07-17 23:15 — Parceiros: Bancos, Produtos e Tabelas
+- Menus + telas admin: `/app/parceiros/bancos|produtos|tabelas`; `routeTree.gen.ts` manual (CLI npm falhou).
+- Configurações → Produtos: só `!partnerOnly`; merge no save para não dropar partner-only.
+- `clearSystemSettingsCache` export ok.
+- Schema-ready: `partner_bank_access_requests`; UI parceiro "solicitar acesso" vem depois.
+- LOG: `doc/LOG-2026-07-17__231500__parceiros-bancos-produtos-tabelas.md`.
+- Keywords: parceiros, partnerOnly, tabelas comissao, routeTree, partner_bank_access_requests.
 ## 2026-07-17 20:40 — Deploy pendências (SW / produtos / push base64)
 - Push `main`: `43139cd` — `[395e9dc] fix: SW fallback deploy, lista produtos e push base64 puro`
 - LOG: `doc/LOG-2026-07-17__204000__deploy-pendencias-sw-produtos-push.md`.
@@ -492,4 +507,5 @@
 - Build client/SSR, ESLint, endpoint oficial e HTTP local validados. Commit/push pendentes.
 - LOG: `doc/LOG-2026-07-17__154300__integracao-brasilapi-cnpj-parceiros.md`.
 - Keywords: BrasilAPI, CNPJ, PJ, lookupPartnerCnpjFn, brasil-api-cnpj.adapter.
+
 

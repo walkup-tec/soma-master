@@ -18,8 +18,10 @@ export type ProductConfig = {
   color: string;
   /** Bancos (Configurações → Bancos) vinculados a este produto. */
   bankIds: string[];
-  /** Reserva: disponibilizar produto no fluxo de parceiros. */
+  /** Disponibilizar produto no fluxo de parceiros. */
   availableForPartners: boolean;
+  /** Criado em Parceiros → Produtos: só aparece para parceiros, não em Produção própria. */
+  partnerOnly: boolean;
   availableFieldIds: ClientFieldId[];
   requiredFieldIds: ClientFieldId[];
 };
