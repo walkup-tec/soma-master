@@ -1,4 +1,8 @@
-﻿## 2026-07-18 13:49 — Deploy trigger Easypanel (parceiros)
+﻿## 2026-07-18 13:59 — Tabelas: ação duplicar
+- Ícone Copy cria linha `(cópia)` com mesmos dados (faixa ajustada se colidir).
+- LOG: `doc/LOG-2026-07-18__135954__tabelas-duplicar-acao.md`.
+
+## 2026-07-18 13:49 — Deploy trigger Easypanel (parceiros)
 - Nada pendente de código; empty commit `b8e441d` para redeploy.
 - LOG: `doc/LOG-2026-07-18__134900__deploy-trigger-parceiros.md`.
 

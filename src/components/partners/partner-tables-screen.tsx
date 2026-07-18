@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -211,6 +211,64 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
     }
   };
 
+  const resolveUniqueRangeMax = (
+    productId: string,
+    bankId: string,
+    rangeMinCents: number,
+    rangeMaxCents: number,
+  ) => {
+    let max = rangeMaxCents;
+    const occupied = new Set(
+      tables
+        .filter((row) => row.productId === productId && row.bankId === bankId)
+        .map((row) => `${row.rangeMinCents}:${row.rangeMaxCents}`),
+    );
+    while (occupied.has(`${rangeMinCents}:${max}`)) {
+      max += 1;
+    }
+    return max;
+  };
+
+  const handleDuplicate = async (table: PartnerCommissionTable) => {
+    setSaving(true);
+    try {
+      const rangeMaxCents = resolveUniqueRangeMax(
+        table.productId,
+        table.bankId,
+        table.rangeMinCents,
+        table.rangeMaxCents,
+      );
+      const next = await upsertTable({
+        data: {
+          name: `${table.name} (cópia)`,
+          productId: table.productId,
+          bankId: table.bankId,
+          isDefault: table.isDefault,
+          partnerCategory: table.isDefault ? table.partnerCategory : null,
+          partnerUserIds: table.isDefault ? [] : table.partnerUserIds,
+          fixedValueEnabled: table.fixedValueEnabled,
+          fixedValueCents: table.fixedValueEnabled
+            ? (table.flatCents ?? table.fixedValueCents ?? 0)
+            : null,
+          fixedValueMaxCents: table.fixedValueEnabled
+            ? (table.repasseCents ?? table.fixedValueCents ?? 0)
+            : null,
+          flatPercent: table.flatPercent,
+          repassePercent: table.repassePercent,
+          rangeMinCents: table.rangeMinCents,
+          rangeMaxCents,
+        },
+      });
+      setTables(next);
+      setRows(await listRows());
+      toast.success("Tabela duplicada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível duplicar a tabela.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card className="border-border/60 shadow-soft">
@@ -298,8 +356,19 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
                                 variant="ghost"
                                 onClick={() => openEdit(table)}
                                 title="Editar"
+                                disabled={saving}
                               >
                                 <Pencil className="size-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void handleDuplicate(table)}
+                                title="Duplicar"
+                                disabled={saving}
+                              >
+                                <Copy className="size-3.5" />
                               </Button>
                               <Button
                                 type="button"
@@ -308,6 +377,7 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
                                 className="text-destructive"
                                 onClick={() => setDeleteId(table.id)}
                                 title="Excluir"
+                                disabled={saving}
                               >
                                 <Trash2 className="size-3.5" />
                               </Button>
