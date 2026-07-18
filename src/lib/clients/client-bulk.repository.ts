@@ -185,6 +185,59 @@ async function resolveClientIdsFromScope(
   return rows.map((row) => row.id);
 }
 
+export type BulkExportClientRecord = {
+  id: string;
+  status: string;
+  productId: string;
+  createdAt: string;
+  data: Record<string, string>;
+};
+
+export async function listClientsForBulkExport(input: {
+  scope: ClientBulkScope;
+  userId: string;
+  isMaster: boolean;
+}): Promise<BulkExportClientRecord[]> {
+  const clientIds = await resolveClientIdsFromScope(input.scope, input.userId, input.isMaster);
+  if (!isDatabaseEnabled()) {
+    throw new Error("Exportação exige banco de dados ativo.");
+  }
+  const sql = await getSql();
+  const rows = await sql<
+    Array<{
+      id: string;
+      status: string;
+      product_id: string;
+      created_at: Date | string;
+      data: Record<string, unknown> | null;
+    }>
+  >`
+    select c.id, c.status, c.product_id, c.created_at, c.data
+    from crm.clients c
+    where c.id in ${sql(clientIds)}
+    order by c.created_at desc
+  `;
+
+  return rows.map((row) => {
+    const raw = row.data && typeof row.data === "object" ? row.data : {};
+    const data: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (value == null) continue;
+      data[key] = String(value);
+    }
+    return {
+      id: row.id,
+      status: row.status || "",
+      productId: row.product_id || "",
+      createdAt:
+        row.created_at instanceof Date
+          ? row.created_at.toISOString()
+          : String(row.created_at || ""),
+      data,
+    };
+  });
+}
+
 export async function countClientsInBulkScope(
   scope: ClientBulkScope,
   userId: string,

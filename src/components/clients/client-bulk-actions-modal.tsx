@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CalendarDays, ListChecks, PackagePlus, Trash2 } from "lucide-react";
+import { CalendarDays, FileSpreadsheet, ListChecks, PackagePlus, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,13 +26,14 @@ import {
   bulkScheduleClientsFn,
   bulkUpdateStatusFn,
   countBulkClientsFn,
+  exportBulkClientsExcelFn,
   listUsersForBulkActionsFn,
 } from "@/lib/clients/clients.server";
 import type { ClientBulkScope } from "@/lib/clients/client.types";
 import { useSystemSettings } from "@/hooks/use-system-settings";
 import { localDateString } from "@/lib/dates/local-date";
 
-type BulkAction = "schedule" | "product" | "status" | "delete";
+type BulkAction = "schedule" | "product" | "status" | "export" | "delete";
 
 type Props = {
   open: boolean;
@@ -41,6 +42,23 @@ type Props = {
   selectionLabel: string;
   onCompleted: () => void;
 };
+
+function downloadBase64File(input: { base64: string; fileName: string; mimeType: string }) {
+  const binary = atob(input.base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: input.mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = input.fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 
 export function ClientBulkActionsModal({
   open,
@@ -55,6 +73,7 @@ export function ClientBulkActionsModal({
   const addProductBulk = useServerFn(bulkAddProductFn);
   const updateStatusBulk = useServerFn(bulkUpdateStatusFn);
   const deleteBulk = useServerFn(bulkDeleteClientsFn);
+  const exportBulk = useServerFn(exportBulkClientsExcelFn);
   const listUsers = useServerFn(listUsersForBulkActionsFn);
 
   const [action, setAction] = useState<BulkAction>("schedule");
@@ -108,6 +127,12 @@ export function ClientBulkActionsModal({
         if (!statusId) throw new Error("Selecione o status.");
         const result = await updateStatusBulk({ data: { scope, status: statusId } });
         toast.success(`Status atualizado em ${result.affected} cliente(s).`);
+      } else if (action === "export") {
+        const result = await exportBulk({ data: scope });
+        downloadBase64File(result);
+        toast.success(
+          `Excel gerado com ${result.total.toLocaleString("pt-BR")} cliente(s). WhatsApp no formato EVO (DDI 55).`,
+        );
       } else {
         const result = await deleteBulk({ data: scope });
         toast.success(`${result.affected} cliente(s) excluído(s).`);
@@ -133,7 +158,7 @@ export function ClientBulkActionsModal({
         </DialogHeader>
 
         <div className="space-y-5">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <Button
               type="button"
               variant={action === "schedule" ? "default" : "outline"}
@@ -160,6 +185,15 @@ export function ClientBulkActionsModal({
             >
               <ListChecks className="size-4 shrink-0" />
               <span>Alterar status</span>
+            </Button>
+            <Button
+              type="button"
+              variant={action === "export" ? "default" : "outline"}
+              className="h-auto min-h-10 justify-start whitespace-normal px-3 py-2 text-left"
+              onClick={() => setAction("export")}
+            >
+              <FileSpreadsheet className="size-4 shrink-0" />
+              <span>Exportar Excel</span>
             </Button>
             <Button
               type="button"
@@ -245,9 +279,24 @@ export function ClientBulkActionsModal({
             </div>
           ) : null}
 
+          {action === "export" ? (
+            <div className="space-y-2 rounded-lg border border-border/60 p-3 text-sm text-muted-foreground">
+              <p>
+                Gera um arquivo Excel com todos os dados dos clientes selecionados (campos do
+                cadastro, status e produto).
+              </p>
+              <p>
+                A coluna <strong className="text-foreground">WhatsApp</strong> sai só com dígitos e
+                DDI 55 (ex.: <code className="text-foreground">5511987654321</code>), pronta para
+                envio na Evolution API. Se WhatsApp estiver vazio, usa o Telefone.
+              </p>
+            </div>
+          ) : null}
+
           {action === "delete" ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-              Exclui permanentemente os cadastros da seleção (e agendas/anexos vinculados). Apenas master.
+              Exclui permanentemente os cadastros da seleção (e agendas/anexos vinculados). Apenas
+              master.
             </div>
           ) : null}
         </div>
@@ -262,7 +311,7 @@ export function ClientBulkActionsModal({
             disabled={loading || total === 0}
             onClick={() => void runAction()}
           >
-            Confirmar
+            {action === "export" ? "Baixar Excel" : "Confirmar"}
           </Button>
         </DialogFooter>
       </DialogContent>

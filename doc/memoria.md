@@ -1,4 +1,9 @@
-﻿## 2026-07-18 14:35 — Produtos: toggle Parceiros + editar/excluir na lista
+﻿## 2026-07-18 14:56 — Clientes: export Excel na seleção (WhatsApp EVO)
+- Modal pós-seleção: ação Exportar Excel; XLSX com todos os campos; WhatsApp só dígitos + DDI 55 (texto no Excel).
+- Sem import de Aquecedor/API Alternativa.
+- LOG: `doc/LOG-2026-07-18__145642__clientes-bulk-export-excel-evo.md`.
+
+## 2026-07-18 14:35 — Produtos: toggle Parceiros + editar/excluir na lista
 - Checkbox `availableForPartners`; ações Pencil/Trash na tabela produto×banco.
 - LOG: `doc/LOG-2026-07-18__143511__produtos-lista-parceiros-toggle-acoes.md`.
 

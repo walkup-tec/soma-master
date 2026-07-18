@@ -28,7 +28,12 @@ import {
   bulkScheduleClientsForUser,
   bulkUpdateClientStatus,
   countClientsInBulkScope,
+  listClientsForBulkExport,
 } from "@/lib/clients/client-bulk.repository";
+import {
+  buildClientsExportWorkbook,
+  workbookToBase64,
+} from "@/lib/clients/client-export-excel";
 import {
   attendanceStatuses,
   isValidAttendanceStatus,
@@ -165,6 +170,38 @@ export const countBulkClientsFn = createServerFn({ method: "POST" })
     const user = await requireClientesAccess();
     const total = await countClientsInBulkScope(data, user.userId, user.role === "master");
     return { total };
+  });
+
+export const exportBulkClientsExcelFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => parseBulkScope(data))
+  .handler(async ({ data }) => {
+    const user = await requireClientesAccess();
+    const clients = await listClientsForBulkExport({
+      scope: data,
+      userId: user.userId,
+      isMaster: user.role === "master",
+    });
+    const settings = await loadSystemSettingsFromDisk();
+    const productNameById: Record<string, string> = {};
+    for (const product of settings.products ?? []) {
+      productNameById[product.id] = product.name || product.tag || product.id;
+    }
+    const statusLabelById: Record<string, string> = {};
+    for (const status of settings.attendanceStatuses ?? []) {
+      statusLabelById[status.id] = status.label || status.id;
+    }
+    const book = buildClientsExportWorkbook({
+      clients,
+      productNameById,
+      statusLabelById,
+    });
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    return {
+      fileName: `clientes-export-${stamp}.xlsx`,
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      base64: workbookToBase64(book),
+      total: clients.length,
+    };
   });
 
 export const bulkScheduleClientsFn = createServerFn({ method: "POST" })
