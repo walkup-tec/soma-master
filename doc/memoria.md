@@ -1,4 +1,8 @@
-﻿## 2026-07-18 13:41 — Tabelas: Valor fixo com mín/máx (R$)
+﻿## 2026-07-18 13:46 — Parceiros → Produtos: coluna Origem (tags)
+- Tabela → Origem; tags Parceiros / Produção própria; lista + wizard no Novo produto.
+- LOG: `doc/LOG-2026-07-18__134644__parceiros-produtos-coluna-origem.md`.
+
+## 2026-07-18 13:41 — Tabelas: Valor fixo com mín/máx (R$)
 - Dois inputs BRL no lugar do valor único; salvos em flat_cents / repasse_cents.
 - LOG: `doc/LOG-2026-07-18__134100__tabelas-valor-fixo-min-max.md`.
 
