@@ -337,35 +337,37 @@ async function syncCategories(tx: Tx, categories: UserCategory[]): Promise<void>
   `;
 }
 
-async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
-  // Produtos partner_only são geridos em Parceiros → Produtos; preservar no sync de Produção própria.
-  const productionProducts = products.filter((product) => !product.partnerOnly);
-
-  if (productionProducts.length === 0) {
+/** Sync de um subconjunto (produção ou só-parceiros), isolado pelo flag partner_only. */
+async function syncProductSubset(
+  tx: Tx,
+  products: ProductConfig[],
+  partnerOnly: boolean,
+): Promise<void> {
+  if (products.length === 0) {
     await tx`
       delete from crm.product_banks b
       using crm.products p
-      where b.product_id = p.id and coalesce(p.partner_only, false) = false
+      where b.product_id = p.id and coalesce(p.partner_only, false) = ${partnerOnly}
     `;
     await tx`
       delete from crm.product_fields f
       using crm.products p
-      where f.product_id = p.id and coalesce(p.partner_only, false) = false
+      where f.product_id = p.id and coalesce(p.partner_only, false) = ${partnerOnly}
     `;
     await tx`
       delete from crm.products p
-      where coalesce(p.partner_only, false) = false
+      where coalesce(p.partner_only, false) = ${partnerOnly}
     `;
     return;
   }
 
-  const payload = productionProducts.map((product) => ({
+  const payload = products.map((product) => ({
     id: product.id,
     name: product.name,
     tag: product.tag || "",
     color: product.color || "#64748b",
-    available_for_partners: Boolean(product.availableForPartners),
-    partner_only: false,
+    available_for_partners: partnerOnly ? true : Boolean(product.availableForPartners),
+    partner_only: partnerOnly,
     required_field_ids: product.requiredFieldIds,
     bank_ids: product.bankIds ?? [],
   }));
@@ -388,7 +390,7 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       delete from crm.product_fields f
       using crm.products p
       where f.product_id = p.id
-        and coalesce(p.partner_only, false) = false
+        and coalesce(p.partner_only, false) = ${partnerOnly}
         and not exists (select 1 from input i where i.id = f.product_id)
       returning 1
     ),
@@ -396,13 +398,13 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
       delete from crm.product_banks b
       using crm.products p
       where b.product_id = p.id
-        and coalesce(p.partner_only, false) = false
+        and coalesce(p.partner_only, false) = ${partnerOnly}
         and not exists (select 1 from input i where i.id = b.product_id)
       returning 1
     ),
     del_products as (
       delete from crm.products p
-      where coalesce(p.partner_only, false) = false
+      where coalesce(p.partner_only, false) = ${partnerOnly}
         and not exists (select 1 from input i where i.id = p.id)
       returning 1
     ),
@@ -467,6 +469,20 @@ async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
     where exists (select 1 from crm.banks b where b.id = bank_id)
     on conflict do nothing
   `;
+}
+
+async function syncProducts(tx: Tx, products: ProductConfig[]): Promise<void> {
+  // Produção própria e Parceiros → Produtos usam o mesmo save; cada subset é isolado por partner_only.
+  await syncProductSubset(
+    tx,
+    products.filter((product) => !product.partnerOnly),
+    false,
+  );
+  await syncProductSubset(
+    tx,
+    products.filter((product) => product.partnerOnly),
+    true,
+  );
 }
 
 async function syncBanks(tx: Tx, banks: BankConfig[]): Promise<void> {

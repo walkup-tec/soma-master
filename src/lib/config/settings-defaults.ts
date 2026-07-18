@@ -83,15 +83,18 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   attendanceStatuses: [...DEFAULT_ATTENDANCE_STATUSES],
 };
 
-export function createEmptyProduct(): import("@/lib/config/settings-types").ProductConfig {
+export function createEmptyProduct(options?: {
+  partnerOnly?: boolean;
+}): import("@/lib/config/settings-types").ProductConfig {
+  const partnerOnly = Boolean(options?.partnerOnly);
   return normalizeProductFields({
     id: `prod-${crypto.randomUUID().slice(0, 8)}`,
     name: "",
     tag: "",
     color: DEFAULT_STATUS_COLOR,
     bankIds: [],
-    availableForPartners: false,
-    partnerOnly: false,
+    availableForPartners: partnerOnly,
+    partnerOnly,
     availableFieldIds: [...ALL_CLIENT_FIELD_IDS],
     requiredFieldIds: [],
   });

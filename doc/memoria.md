@@ -1,4 +1,9 @@
-﻿## 2026-07-18 00:04 — Fix: submenus PARCEIROS (Bancos/Produtos/Tabelas) não mudavam a tela
+﻿## 2026-07-18 13:38 — Parceiros → Produtos: mesmo wizard da Produção própria (partnerOnly)
+- `ProductsSettings catalog="partners"`; sync DB dos dois subconjuntos; create com partnerOnly.
+- LOG: `doc/LOG-2026-07-18__133815__parceiros-produtos-mesmo-wizard-partneronly.md`.
+- Keywords: parceiros, produtos, partnerOnly, wizard, products-settings.
+
+## 2026-07-18 00:04 — Fix: submenus PARCEIROS (Bancos/Produtos/Tabelas) não mudavam a tela
 - Causa: `/app/parceiros` folha sem Outlet vs rotas irmãs com prefixo.
 - Fix: layout + `parceiros.index` + filhos `/bancos|/produtos|/tabelas`; `isActive` por `menuIdForPath`.
 - LOG: `doc/LOG-2026-07-18__000404__fix-parceiros-submenu-navegacao.md`.

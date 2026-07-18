@@ -75,6 +75,11 @@ function buildProductBankListRows(
 type Props = {
   settings: SystemSettings;
   onChange: (settings: SystemSettings) => Promise<SystemSettings>;
+  /**
+   * production = Configurações (não lista partnerOnly).
+   * partners = Parceiros → Produtos (só partnerOnly; mesma tela/wizard).
+   */
+  catalog?: "production" | "partners";
 };
 
 type WizardStepId =
@@ -86,7 +91,7 @@ type WizardStepId =
   | "financeiros"
   | "partners";
 
-const WIZARD_STEPS: Array<{ id: WizardStepId; label: string }> = [
+const WIZARD_STEPS_PRODUCTION: Array<{ id: WizardStepId; label: string }> = [
   { id: "identity", label: "Nome e cor" },
   { id: "banks", label: "Bancos" },
   { id: "pessoais-config", label: "Config. dados pessoais" },
@@ -94,6 +99,16 @@ const WIZARD_STEPS: Array<{ id: WizardStepId; label: string }> = [
   { id: "profissionais", label: "Dados profissionais" },
   { id: "financeiros", label: "Dados financeiros" },
   { id: "partners", label: "Parceiros" },
+];
+
+/** Em Parceiros o produto já é só para parceiros — sem etapa Sim/Não. */
+const WIZARD_STEPS_PARTNERS: Array<{ id: WizardStepId; label: string }> = [
+  { id: "identity", label: "Nome e cor" },
+  { id: "banks", label: "Bancos" },
+  { id: "pessoais-config", label: "Config. dados pessoais" },
+  { id: "pessoais", label: "Dados pessoais" },
+  { id: "profissionais", label: "Dados profissionais" },
+  { id: "financeiros", label: "Dados financeiros" },
 ];
 
 const PESSOAIS_CONFIG_FIELD_IDS: ClientFieldId[] = [
@@ -150,25 +165,48 @@ function fieldsForWizardStep(step: WizardStepId): {
 
 /** Persistência já chega filtrada pela seção "products" em Configurações. */
 
-function isOwnProduct(product: ProductConfig): boolean {
-  return !product.partnerOnly;
+function isCatalogProduct(product: ProductConfig, catalog: "production" | "partners"): boolean {
+  return catalog === "partners" ? Boolean(product.partnerOnly) : !product.partnerOnly;
 }
 
-function ownProducts(products: ProductConfig[]): ProductConfig[] {
-  return products.filter(isOwnProduct);
-}
-
-/** Mantém partnerOnly (Parceiros → Produtos) ao salvar Produção própria. */
-function mergeOwnWithPartnerOnly(
-  nextOwn: ProductConfig[],
-  allFromSettings: ProductConfig[],
+function catalogProducts(
+  products: ProductConfig[],
+  catalog: "production" | "partners",
 ): ProductConfig[] {
-  const partnerOnly = allFromSettings.filter((product) => product.partnerOnly);
-  return [...nextOwn.map((p) => ({ ...p, partnerOnly: false })), ...partnerOnly];
+  return products.filter((product) => isCatalogProduct(product, catalog));
 }
-export function ProductsSettings({ settings, onChange }: Props) {
-  const [products, setProducts] = useState<ProductConfig[]>(() => ownProducts(settings.products));
-  const [selectedId, setSelectedId] = useState(() => ownProducts(settings.products)[0]?.id ?? "");
+
+/** Mantém o outro catálogo intacto ao salvar. */
+function mergeCatalogProducts(
+  nextScoped: ProductConfig[],
+  allFromSettings: ProductConfig[],
+  catalog: "production" | "partners",
+): ProductConfig[] {
+  if (catalog === "partners") {
+    const own = allFromSettings.filter((product) => !product.partnerOnly);
+    return [
+      ...own,
+      ...nextScoped.map((product) => ({
+        ...product,
+        partnerOnly: true,
+        availableForPartners: true,
+      })),
+    ];
+  }
+  const partnerOnly = allFromSettings.filter((product) => product.partnerOnly);
+  return [...nextScoped.map((product) => ({ ...product, partnerOnly: false })), ...partnerOnly];
+}
+
+export function ProductsSettings({ settings, onChange, catalog = "production" }: Props) {
+  const isPartnersCatalog = catalog === "partners";
+  const wizardSteps = isPartnersCatalog ? WIZARD_STEPS_PARTNERS : WIZARD_STEPS_PRODUCTION;
+
+  const [products, setProducts] = useState<ProductConfig[]>(() =>
+    catalogProducts(settings.products, catalog),
+  );
+  const [selectedId, setSelectedId] = useState(
+    () => catalogProducts(settings.products, catalog)[0]?.id ?? "",
+  );
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
@@ -180,7 +218,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
 
   useEffect(() => {
     if (colorEditingRef.current) return;
-    const next = ownProducts(settings.products);
+    const next = catalogProducts(settings.products, catalog);
     setProducts(next);
     productsRef.current = next;
     setSelectedId((current) => {
@@ -188,10 +226,10 @@ export function ProductsSettings({ settings, onChange }: Props) {
       return next[0]?.id ?? "";
     });
     setCheckedIds((current) => current.filter((id) => next.some((p) => p.id === id)));
-  }, [settings.products]);
+  }, [settings.products, catalog]);
 
   const selected = products.find((product) => product.id === selectedId) ?? products[0];
-  const currentStep = WIZARD_STEPS[stepIndex] ?? WIZARD_STEPS[0];
+  const currentStep = wizardSteps[stepIndex] ?? wizardSteps[0];
   const banks = settings.banks ?? [];
   const productBankRows = useMemo(
     () => buildProductBankListRows(products, banks),
@@ -208,13 +246,13 @@ export function ProductsSettings({ settings, onChange }: Props) {
 
     const run = async () => {
       try {
-        const toSave = mergeOwnWithPartnerOnly(productsRef.current, settings.products);
+        const toSave = mergeCatalogProducts(productsRef.current, settings.products, catalog);
         const saved = await onChange({ ...settings, products: toSave });
         if (saved?.products) {
-          const savedOwn = ownProducts(saved.products);
+          const savedScoped = catalogProducts(saved.products, catalog);
           if (colorEditingRef.current) {
             const localById = new Map(productsRef.current.map((p) => [p.id, p]));
-            const merged = savedOwn.map((p) => {
+            const merged = savedScoped.map((p) => {
               const local = localById.get(p.id);
               if (local && p.id === selectedId) {
                 return {
@@ -224,6 +262,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
                   tag: local.tag,
                   bankIds: local.bankIds,
                   availableForPartners: local.availableForPartners,
+                  partnerOnly: local.partnerOnly,
                 };
               }
               return p;
@@ -231,22 +270,22 @@ export function ProductsSettings({ settings, onChange }: Props) {
             setProducts(merged);
             productsRef.current = merged;
           } else {
-            setProducts(savedOwn);
-            productsRef.current = savedOwn;
+            setProducts(savedScoped);
+            productsRef.current = savedScoped;
           }
           setSelectedId((current) => {
-            if (current && savedOwn.some((product) => product.id === current)) return current;
-            return savedOwn[0]?.id ?? "";
+            if (current && savedScoped.some((product) => product.id === current)) return current;
+            return savedScoped[0]?.id ?? "";
           });
           setCheckedIds((current) =>
-            current.filter((id) => savedOwn.some((product) => product.id === id)),
+            current.filter((id) => savedScoped.some((product) => product.id === id)),
           );
         }
         if (!options?.quiet) {
           toast.success(options?.successMessage ?? "Produtos salvos.");
         }
       } catch (error) {
-        const rollback = ownProducts(settings.products);
+        const rollback = catalogProducts(settings.products, catalog);
         setProducts(rollback);
         productsRef.current = rollback;
         toast.error(error instanceof Error ? error.message : "Não foi possível salvar os produtos.");
@@ -307,8 +346,12 @@ export function ProductsSettings({ settings, onChange }: Props) {
   };
 
   const addProduct = () => {
-    const product = createEmptyProduct();
+    const product = createEmptyProduct({ partnerOnly: isPartnersCatalog });
     product.name = "Novo produto";
+    if (isPartnersCatalog) {
+      product.availableForPartners = true;
+      product.partnerOnly = true;
+    }
     const nextProducts = [...products, product];
     setProducts(nextProducts);
     setSelectedId(product.id);
@@ -326,7 +369,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
   const requestDeleteIds = (ids: string[]) => {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return;
-    if (products.length - uniqueIds.length < 1) {
+    if (!isPartnersCatalog && products.length - uniqueIds.length < 1) {
       toast.error("Mantenha ao menos um produto.");
       return;
     }
@@ -338,7 +381,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
     const idsToRemove = [...pendingDeleteIds];
     const removeSet = new Set(idsToRemove);
     const nextProducts = products.filter((product) => !removeSet.has(product.id));
-    if (nextProducts.length < 1) {
+    if (!isPartnersCatalog && nextProducts.length < 1) {
       toast.error("Mantenha ao menos um produto.");
       setPendingDeleteIds(null);
       return;
@@ -364,7 +407,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
       toast.error("Informe o nome do produto.");
       return;
     }
-    setStepIndex((current) => Math.min(current + 1, WIZARD_STEPS.length - 1));
+    setStepIndex((current) => Math.min(current + 1, wizardSteps.length - 1));
     persistSelectedQuiet();
   };
 
@@ -389,10 +432,26 @@ export function ProductsSettings({ settings, onChange }: Props) {
   const fieldStep = fieldsForWizardStep(currentStep.id);
 
   return (
+    <div className="space-y-4">
+      {isPartnersCatalog ? (
+        <div>
+          <h2 className="font-display text-lg font-semibold tracking-tight">
+            Produtos para parceiros
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Mesmo cadastro da Produção própria. Produtos criados aqui ficam disponíveis aos
+            parceiros e não aparecem em Produção própria. Produtos da Produção própria marcados
+            como &quot;Sim&quot; para parceiros continuam gerenciados em Configurações → Produtos.
+          </p>
+        </div>
+      ) : null}
+
     <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
       <Card className="border-border/60 shadow-soft h-fit">
         <CardHeader className="pb-3">
-          <CardTitle className="font-display text-base">Produtos</CardTitle>
+          <CardTitle className="font-display text-base">
+            {isPartnersCatalog ? "Produtos (parceiros)" : "Produtos"}
+          </CardTitle>
           <CardDescription>
             Marque um ou mais para excluir em lote. Clique no nome para editar.
           </CardDescription>
@@ -467,7 +526,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
             <div>
               <CardTitle className="font-display text-base">Configurar produto</CardTitle>
               <CardDescription>
-                Etapa {stepIndex + 1} de {WIZARD_STEPS.length}: {currentStep.label}
+                Etapa {stepIndex + 1} de {wizardSteps.length}: {currentStep.label}
               </CardDescription>
             </div>
             <Button
@@ -484,7 +543,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex flex-wrap gap-2">
-              {WIZARD_STEPS.map((step, index) => (
+              {wizardSteps.map((step, index) => (
                 <button
                   key={step.id}
                   type="button"
@@ -557,6 +616,9 @@ export function ProductsSettings({ settings, onChange }: Props) {
                   <p className="text-sm font-medium">Produtos cadastrados</p>
                   <p className="text-xs text-muted-foreground">
                     Cada banco vinculado aparece em uma linha. Clique na linha para editar o produto.
+                    {isPartnersCatalog
+                      ? " Estes produtos não entram na lista de Produção própria."
+                      : null}
                   </p>
                   {productBankRows.length === 0 ? (
                     <p className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -569,7 +631,9 @@ export function ProductsSettings({ settings, onChange }: Props) {
                           <tr>
                             <th className="px-4 py-3 font-medium">Nome do produto</th>
                             <th className="px-4 py-3 font-medium">Banco</th>
-                            <th className="px-4 py-3 font-medium text-center">Parceiros</th>
+                            {isPartnersCatalog ? null : (
+                              <th className="px-4 py-3 font-medium text-center">Parceiros</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
@@ -589,19 +653,21 @@ export function ProductsSettings({ settings, onChange }: Props) {
                               >
                                 <td className="px-4 py-3 font-medium">{row.productName}</td>
                                 <td className="px-4 py-3 text-muted-foreground">{row.bankName}</td>
-                                <td className="px-4 py-3 text-center">
-                                  {row.availableForPartners ? (
-                                    <span
-                                      className="inline-flex size-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
-                                      title="Disponível para parceiros"
-                                      aria-label="Disponível para parceiros"
-                                    >
-                                      <Check className="size-3.5" strokeWidth={3} />
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                </td>
+                                {isPartnersCatalog ? null : (
+                                  <td className="px-4 py-3 text-center">
+                                    {row.availableForPartners ? (
+                                      <span
+                                        className="inline-flex size-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600"
+                                        title="Disponível para parceiros"
+                                        aria-label="Disponível para parceiros"
+                                      >
+                                        <Check className="size-3.5" strokeWidth={3} />
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">—</span>
+                                    )}
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
@@ -746,7 +812,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
               >
                 <ChevronLeft className="size-4" /> Anterior
               </Button>
-              {stepIndex < WIZARD_STEPS.length - 1 ? (
+              {stepIndex < wizardSteps.length - 1 ? (
                 <Button type="button" onClick={goNext} disabled={saving}>
                   Próximo <ChevronRight className="size-4" />
                 </Button>
@@ -758,7 +824,15 @@ export function ProductsSettings({ settings, onChange }: Props) {
             </div>
           </CardContent>
         </Card>
-      ) : null}
+      ) : (
+        <Card className="border-border/60 shadow-soft">
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            {isPartnersCatalog
+              ? 'Clique em "Novo produto" para cadastrar um produto exclusivo dos parceiros.'
+              : "Nenhum produto selecionado."}
+          </CardContent>
+        </Card>
+      )}
 
       <AlertDialog
         open={pendingDeleteIds !== null}
@@ -792,6 +866,7 @@ export function ProductsSettings({ settings, onChange }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
     </div>
   );
 }
