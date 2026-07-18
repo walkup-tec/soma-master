@@ -1,4 +1,8 @@
-﻿## 2026-07-18 15:01 — Export Excel: texto do modal sem detalhe WhatsApp
+﻿## 2026-07-18 15:04 — Menu: Funil e WhatsApp em Produção própria
+- Novo subgrupo; Chat WhatsApp movido para ele. Sem port de Aquecedor.
+- LOG: `doc/LOG-2026-07-18__150455__submenu-funil-e-whatsapp.md`.
+
+## 2026-07-18 15:01 — Export Excel: texto do modal sem detalhe WhatsApp
 - Removida frase explicativa de DDI/EVO no modal (formato continua no arquivo).
 - LOG: `doc/LOG-2026-07-18__150135__export-excel-remover-texto-whatsapp.md`.
 

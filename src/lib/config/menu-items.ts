@@ -17,7 +17,7 @@ export type MenuItemId =
 export type MenuSectionId = "parceiros" | "producao-propria";
 
 /** Subgrupos internos (usados em Produção própria e nas categorias de usuário). */
-export type MenuGroupId = "Operação" | "Comercial" | "Gestão";
+export type MenuGroupId = "Operação" | "Comercial" | "Funil e WhatsApp" | "Gestão";
 
 export type MenuSectionDefinition = {
   id: MenuSectionId;
@@ -107,7 +107,7 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
     id: "chat",
     label: "Chat WhatsApp",
     section: "producao-propria",
-    group: "Comercial",
+    group: "Funil e WhatsApp",
     path: "/app/chat",
   },
   {
@@ -135,7 +135,12 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
 
 export const ALL_MENU_ITEM_IDS = MENU_ITEMS.map((m) => m.id);
 
-export const MENU_GROUPS: MenuGroupId[] = ["Operação", "Comercial", "Gestão"];
+export const MENU_GROUPS: MenuGroupId[] = [
+  "Operação",
+  "Comercial",
+  "Funil e WhatsApp",
+  "Gestão",
+];
 
 export function getMenuItemById(id: MenuItemId): MenuItemDefinition | undefined {
   return MENU_ITEMS.find((m) => m.id === id);
