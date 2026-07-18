@@ -1,3 +1,8 @@
+## 2026-07-17 23:45 — Sidebar: seções PARCEIROS / PRODUÇÃO PRÓPRIA recolhíveis
+- `app-sidebar.tsx`: cabeçalhos de seção clicáveis (ChevronDown), estado em `sessionStorage` (`soma.sidebar.sectionsOpen`); seção ativa abre automaticamente.
+- LOG: `doc/LOG-2026-07-17__234500__sidebar-secoes-recolhiveis.md`.
+- Keywords: sidebar, collapsible, parceiros, producao-propria, menu.
+
 ## 2026-07-17 23:15 — Parceiros: Bancos, Produtos e Tabelas
 - Menus + telas admin: `/app/parceiros/bancos|produtos|tabelas`; `routeTree.gen.ts` manual (CLI npm falhou).
 - Configurações → Produtos: só `!partnerOnly`; merge no save para não dropar partner-only.
