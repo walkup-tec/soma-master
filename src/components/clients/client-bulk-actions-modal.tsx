@@ -131,7 +131,7 @@ export function ClientBulkActionsModal({
         const result = await exportBulk({ data: scope });
         downloadBase64File(result);
         toast.success(
-          `Excel gerado com ${result.total.toLocaleString("pt-BR")} cliente(s). WhatsApp no formato EVO (DDI 55).`,
+          `Excel gerado com ${result.total.toLocaleString("pt-BR")} cliente(s).`,
         );
       } else {
         const result = await deleteBulk({ data: scope });
@@ -280,15 +280,10 @@ export function ClientBulkActionsModal({
           ) : null}
 
           {action === "export" ? (
-            <div className="space-y-2 rounded-lg border border-border/60 p-3 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-border/60 p-3 text-sm text-muted-foreground">
               <p>
                 Gera um arquivo Excel com todos os dados dos clientes selecionados (campos do
                 cadastro, status e produto).
-              </p>
-              <p>
-                A coluna <strong className="text-foreground">WhatsApp</strong> sai só com dígitos e
-                DDI 55 (ex.: <code className="text-foreground">5511987654321</code>), pronta para
-                envio na Evolution API. Se WhatsApp estiver vazio, usa o Telefone.
               </p>
             </div>
           ) : null}

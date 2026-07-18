@@ -1,4 +1,8 @@
-﻿## 2026-07-18 14:56 — Clientes: export Excel na seleção (WhatsApp EVO)
+﻿## 2026-07-18 15:01 — Export Excel: texto do modal sem detalhe WhatsApp
+- Removida frase explicativa de DDI/EVO no modal (formato continua no arquivo).
+- LOG: `doc/LOG-2026-07-18__150135__export-excel-remover-texto-whatsapp.md`.
+
+## 2026-07-18 14:56 — Clientes: export Excel na seleção (WhatsApp EVO)
 - Modal pós-seleção: ação Exportar Excel; XLSX com todos os campos; WhatsApp só dígitos + DDI 55 (texto no Excel).
 - Sem import de Aquecedor/API Alternativa.
 - LOG: `doc/LOG-2026-07-18__145642__clientes-bulk-export-excel-evo.md`.
