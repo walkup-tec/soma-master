@@ -284,9 +284,19 @@ export async function upsertPartnerCommissionTable(
   }
 
   if (input.fixedValueEnabled) {
-    const cents = Number(input.fixedValueCents || 0);
-    if (!Number.isFinite(cents) || cents <= 0) {
-      throw new Error("Informe o valor fixo em R$.");
+    const minCents = Math.round(Number(input.fixedValueCents || 0));
+    const maxCents = Math.round(
+      Number(
+        input.fixedValueMaxCents != null && input.fixedValueMaxCents !== undefined
+          ? input.fixedValueMaxCents
+          : input.fixedValueCents || 0,
+      ),
+    );
+    if (!Number.isFinite(minCents) || minCents < 0 || !Number.isFinite(maxCents) || maxCents < 0) {
+      throw new Error("Informe valor mínimo e máximo em R$.");
+    }
+    if (maxCents < minCents) {
+      throw new Error("Valor máximo deve ser maior ou igual ao mínimo.");
     }
   } else {
     if (input.flatPercent < 0 || input.repassePercent < 0) {
@@ -302,11 +312,21 @@ export async function upsertPartnerCommissionTable(
 
   const id = input.id?.trim() || `pct-${randomUUID().slice(0, 10)}`;
   const fixed = Boolean(input.fixedValueEnabled);
-  const fixedCents = fixed ? Math.round(Number(input.fixedValueCents || 0)) : null;
+  const fixedMinCents = fixed ? Math.round(Number(input.fixedValueCents || 0)) : null;
+  const fixedMaxCents = fixed
+    ? Math.round(
+        Number(
+          input.fixedValueMaxCents != null && input.fixedValueMaxCents !== undefined
+            ? input.fixedValueMaxCents
+            : input.fixedValueCents || 0,
+        ),
+      )
+    : null;
   const flatPercent = fixed ? 0 : Number(input.flatPercent || 0);
   const repassePercent = fixed ? 0 : Number(input.repassePercent || 0);
-  const flatCents = fixed ? fixedCents : null;
-  const repasseCents = fixed ? fixedCents : null;
+  const flatCents = fixed ? fixedMinCents : null;
+  const repasseCents = fixed ? fixedMaxCents : null;
+  const fixedCents = fixed ? fixedMinCents : null;
   const partnerCategory = input.isDefault
     ? (String(input.partnerCategory || "").trim() as PartnerCategory)
     : null;

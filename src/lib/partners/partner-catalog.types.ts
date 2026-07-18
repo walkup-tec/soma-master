@@ -34,7 +34,10 @@ export type PartnerCommissionTableInput = {
   partnerCategory?: string | null;
   partnerUserIds?: string[];
   fixedValueEnabled: boolean;
+  /** Valor mínimo (R$) quando fixedValueEnabled — espelhado em flatCents. */
   fixedValueCents?: number | null;
+  /** Valor máximo (R$) quando fixedValueEnabled — espelhado em repasseCents. */
+  fixedValueMaxCents?: number | null;
   flatPercent: number;
   repassePercent: number;
   rangeMinCents: number;

@@ -61,8 +61,9 @@ function formatMoney(cents: number): string {
 
 function formatFlatRepasse(table: PartnerCommissionTable): { flat: string; repasse: string } {
   if (table.fixedValueEnabled) {
-    const value = formatMoney(table.fixedValueCents ?? table.flatCents ?? 0);
-    return { flat: value, repasse: value };
+    const minCents = table.flatCents ?? table.fixedValueCents ?? 0;
+    const maxCents = table.repasseCents ?? table.fixedValueCents ?? minCents;
+    return { flat: formatMoney(minCents), repasse: formatMoney(maxCents) };
   }
   return {
     flat: `${table.flatPercent}%`,
@@ -91,7 +92,8 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
   const [partnerCategory, setPartnerCategory] = useState("atendente");
   const [partnerUserIds, setPartnerUserIds] = useState<string[]>([]);
   const [fixedValueEnabled, setFixedValueEnabled] = useState(false);
-  const [fixedMasked, setFixedMasked] = useState("");
+  const [fixedMinMasked, setFixedMinMasked] = useState("");
+  const [fixedMaxMasked, setFixedMaxMasked] = useState("");
   const [flatPercent, setFlatPercent] = useState("0");
   const [repassePercent, setRepassePercent] = useState("0");
   const [rangeMinMasked, setRangeMinMasked] = useState("");
@@ -120,9 +122,15 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
     setPartnerCategory(table?.partnerCategory || "atendente");
     setPartnerUserIds(table?.partnerUserIds ?? []);
     setFixedValueEnabled(table?.fixedValueEnabled ?? false);
-    setFixedMasked(
-      table?.fixedValueEnabled ? maskCurrencyBrl(String(table.fixedValueCents ?? 0)) : "",
-    );
+    if (table?.fixedValueEnabled) {
+      const minCents = table.flatCents ?? table.fixedValueCents ?? 0;
+      const maxCents = table.repasseCents ?? table.fixedValueCents ?? minCents;
+      setFixedMinMasked(maskCurrencyBrl(String(minCents)));
+      setFixedMaxMasked(maskCurrencyBrl(String(maxCents)));
+    } else {
+      setFixedMinMasked("");
+      setFixedMaxMasked("");
+    }
     setFlatPercent(String(table?.flatPercent ?? 0));
     setRepassePercent(String(table?.repassePercent ?? 0));
     setRangeMinMasked(table ? maskCurrencyBrl(String(table.rangeMinCents)) : "");
@@ -167,7 +175,10 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
           partnerCategory: isDefault ? partnerCategory : null,
           partnerUserIds: isDefault ? [] : partnerUserIds,
           fixedValueEnabled,
-          fixedValueCents: fixedValueEnabled ? Number(currencyDigits(fixedMasked) || 0) : null,
+          fixedValueCents: fixedValueEnabled ? Number(currencyDigits(fixedMinMasked) || 0) : null,
+          fixedValueMaxCents: fixedValueEnabled
+            ? Number(currencyDigits(fixedMaxMasked) || 0)
+            : null,
           flatPercent: Number(flatPercent || 0),
           repassePercent: Number(repassePercent || 0),
           rangeMinCents: Number(currencyDigits(rangeMinMasked) || 0),
@@ -378,13 +389,23 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
             </label>
 
             {fixedValueEnabled ? (
-              <div className="space-y-2">
-                <Label>Valor (Flat e Repasse)</Label>
-                <Input
-                  value={fixedMasked}
-                  onChange={(e) => setFixedMasked(maskCurrencyBrl(e.target.value))}
-                  placeholder="R$ 0,00"
-                />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Valor mínimo</Label>
+                  <Input
+                    value={fixedMinMasked}
+                    onChange={(e) => setFixedMinMasked(maskCurrencyBrl(e.target.value))}
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor máximo</Label>
+                  <Input
+                    value={fixedMaxMasked}
+                    onChange={(e) => setFixedMaxMasked(maskCurrencyBrl(e.target.value))}
+                    placeholder="R$ 0,00"
+                  />
+                </div>
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">

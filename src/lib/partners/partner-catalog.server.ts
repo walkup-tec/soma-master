@@ -128,6 +128,10 @@ export const upsertPartnerCommissionTableFn = createServerFn({ method: "POST" })
         value.fixedValueCents == null || value.fixedValueCents === ""
           ? null
           : Math.round(Number(value.fixedValueCents)),
+      fixedValueMaxCents:
+        value.fixedValueMaxCents == null || value.fixedValueMaxCents === ""
+          ? null
+          : Math.round(Number(value.fixedValueMaxCents)),
       flatPercent: Number(value.flatPercent || 0),
       repassePercent: Number(value.repassePercent || 0),
       rangeMinCents: Math.round(Number(value.rangeMinCents || 0)),

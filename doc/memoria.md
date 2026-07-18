@@ -1,4 +1,8 @@
-﻿## 2026-07-18 13:39 — Tabelas: Parceiros como multi-select
+﻿## 2026-07-18 13:41 — Tabelas: Valor fixo com mín/máx (R$)
+- Dois inputs BRL no lugar do valor único; salvos em flat_cents / repasse_cents.
+- LOG: `doc/LOG-2026-07-18__134100__tabelas-valor-fixo-min-max.md`.
+
+## 2026-07-18 13:39 — Tabelas: Parceiros como multi-select
 - Modal criar/editar tabela: `MultiSelectFilter` no lugar da lista de checkboxes.
 - LOG: `doc/LOG-2026-07-18__133929__tabelas-parceiros-multiselect.md`.
 
