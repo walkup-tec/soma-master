@@ -1,4 +1,8 @@
-﻿## 2026-07-18 13:59 — Tabelas: ação duplicar
+﻿## 2026-07-18 14:14 — Tabela padrão: categorias multi-select + Todos
+- Select único → MultiSelectFilter; opção `all`; storage legado-compatible.
+- LOG: `doc/LOG-2026-07-18__141300__tabela-padrao-categorias-multiselect.md`.
+
+## 2026-07-18 13:59 — Tabelas: ação duplicar
 - Ícone Copy cria linha `(cópia)` com mesmos dados (faixa ajustada se colidir).
 - LOG: `doc/LOG-2026-07-18__135954__tabelas-duplicar-acao.md`.
 

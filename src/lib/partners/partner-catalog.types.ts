@@ -10,7 +10,10 @@ export type PartnerCommissionTable = {
   productName: string;
   bankName: string;
   isDefault: boolean;
+  /** Legado: primeira categoria ou "all". Preferir partnerCategories. */
   partnerCategory: string | null;
+  /** Categorias da tabela padrão (inclui "all" = Todos). */
+  partnerCategories: string[];
   partnerUserIds: string[];
   fixedValueEnabled: boolean;
   fixedValueCents: number | null;
@@ -32,6 +35,7 @@ export type PartnerCommissionTableInput = {
   bankId: string;
   isDefault: boolean;
   partnerCategory?: string | null;
+  partnerCategories?: string[];
   partnerUserIds?: string[];
   fixedValueEnabled: boolean;
   /** Valor mínimo (R$) quando fixedValueEnabled — espelhado em flatCents. */

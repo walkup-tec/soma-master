@@ -5,7 +5,10 @@ import {
   clearSystemSettingsCache,
   loadSystemSettingsFromDisk,
 } from "@/lib/config/settings.repository";
-import type { PartnerCategory } from "@/lib/partners/partner.types";
+import {
+  parsePartnerCategories,
+  serializePartnerCategories,
+} from "@/lib/partners/partner.constants";
 import type {
   PartnerCommissionTable,
   PartnerCommissionTableInput,
@@ -107,6 +110,7 @@ function mapTable(
   productName: string,
   bankName: string,
 ): PartnerCommissionTable {
+  const partnerCategories = parsePartnerCategories(row.partner_category);
   return {
     id: row.id,
     name: row.name,
@@ -116,6 +120,7 @@ function mapTable(
     bankName,
     isDefault: Boolean(row.is_default),
     partnerCategory: row.partner_category,
+    partnerCategories,
     partnerUserIds: partnerIds,
     fixedValueEnabled: Boolean(row.fixed_value_enabled),
     fixedValueCents: row.fixed_value_cents == null ? null : asNumber(row.fixed_value_cents),
@@ -276,8 +281,13 @@ export async function upsertPartnerCommissionTable(
   }
 
   if (input.isDefault) {
-    const category = String(input.partnerCategory || "").trim();
-    if (!category) throw new Error("Selecione a categoria de parceiros para tabela padrão.");
+    const categories =
+      input.partnerCategories && input.partnerCategories.length > 0
+        ? input.partnerCategories
+        : parsePartnerCategories(input.partnerCategory);
+    if (!categories.length) {
+      throw new Error("Selecione ao menos uma categoria de parceiros para tabela padrão.");
+    }
   } else {
     const partners = input.partnerUserIds ?? [];
     if (!partners.length) throw new Error("Selecione ao menos um parceiro.");
@@ -327,8 +337,12 @@ export async function upsertPartnerCommissionTable(
   const flatCents = fixed ? fixedMinCents : null;
   const repasseCents = fixed ? fixedMaxCents : null;
   const fixedCents = fixed ? fixedMinCents : null;
-  const partnerCategory = input.isDefault
-    ? (String(input.partnerCategory || "").trim() as PartnerCategory)
+  const partnerCategoryStored = input.isDefault
+    ? serializePartnerCategories(
+        input.partnerCategories && input.partnerCategories.length > 0
+          ? input.partnerCategories
+          : parsePartnerCategories(input.partnerCategory),
+      )
     : null;
   const partnerUserIds = input.isDefault
     ? []
@@ -351,7 +365,7 @@ export async function upsertPartnerCommissionTable(
         flat_cents, repasse_cents, range_min_cents, range_max_cents,
         created_by_user_id, created_at, updated_at
       ) values (
-        ${id}, ${name}, ${input.productId}, ${input.bankId}, ${input.isDefault}, ${partnerCategory},
+        ${id}, ${name}, ${input.productId}, ${input.bankId}, ${input.isDefault}, ${partnerCategoryStored},
         ${fixed}, ${fixedCents}, ${flatPercent}, ${repassePercent},
         ${flatCents}, ${repasseCents}, ${input.rangeMinCents}, ${input.rangeMaxCents},
         ${actor.userId}, now(), now()

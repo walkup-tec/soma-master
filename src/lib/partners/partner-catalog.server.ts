@@ -122,6 +122,7 @@ export const upsertPartnerCommissionTableFn = createServerFn({ method: "POST" })
       bankId: stringValue(value.bankId),
       isDefault: value.isDefault === true,
       partnerCategory: stringValue(value.partnerCategory) || null,
+      partnerCategories: stringArray(value.partnerCategories),
       partnerUserIds: stringArray(value.partnerUserIds),
       fixedValueEnabled: value.fixedValueEnabled === true,
       fixedValueCents:

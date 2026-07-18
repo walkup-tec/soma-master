@@ -13,6 +13,56 @@ export const PARTNER_CATEGORIES: Array<{ value: PartnerCategory; label: string }
   { value: "atendente", label: "Atendente" },
 ];
 
+/** Valor especial: tabela padrão vale para todas as categorias. */
+export const PARTNER_CATEGORY_ALL = "all";
+
+export const PARTNER_CATEGORY_MULTI_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: PARTNER_CATEGORY_ALL, label: "Todos" },
+  ...PARTNER_CATEGORIES.map((cat) => ({ value: cat.value, label: cat.label })),
+];
+
+/** Lê `partner_category` (legado string única ou JSON / "all"). */
+export function parsePartnerCategories(raw: string | null | undefined): string[] {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return [];
+  if (trimmed === PARTNER_CATEGORY_ALL) return [PARTNER_CATEGORY_ALL];
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) {
+        const values = parsed.map((item) => String(item || "").trim()).filter(Boolean);
+        if (values.includes(PARTNER_CATEGORY_ALL)) return [PARTNER_CATEGORY_ALL];
+        return [...new Set(values)];
+      }
+    } catch {
+      /* legado */
+    }
+  }
+  return [trimmed];
+}
+
+export function serializePartnerCategories(categories: string[]): string | null {
+  const unique = [...new Set(categories.map((item) => String(item || "").trim()).filter(Boolean))];
+  if (!unique.length) return null;
+  if (unique.includes(PARTNER_CATEGORY_ALL)) return PARTNER_CATEGORY_ALL;
+  if (unique.length === 1) return unique[0]!;
+  return JSON.stringify(unique);
+}
+
+/** Toggle multi-select com opção Todos (mutuamente exclusiva). */
+export function togglePartnerCategorySelection(
+  current: string[],
+  next: string[],
+): string[] {
+  const hadAll = current.includes(PARTNER_CATEGORY_ALL);
+  const hasAll = next.includes(PARTNER_CATEGORY_ALL);
+  if (hasAll && !hadAll) return [PARTNER_CATEGORY_ALL];
+  if (hasAll && next.length > 1) {
+    return next.filter((value) => value !== PARTNER_CATEGORY_ALL);
+  }
+  return next.filter((value) => value !== PARTNER_CATEGORY_ALL);
+}
+
 /**
  * IDs em `crm.user_categories` usados só para FK de usuários-parceiro.
  * Não aparecem em Configurações → Categorias de usuário.

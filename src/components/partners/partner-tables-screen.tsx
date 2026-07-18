@@ -26,15 +26,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { currencyDigits, maskCurrencyBrl } from "@/lib/masks/br-currency";
-import { PARTNER_CATEGORIES } from "@/lib/partners/partner.constants";
+import {
+  PARTNER_CATEGORY_ALL,
+  PARTNER_CATEGORY_MULTI_OPTIONS,
+  parsePartnerCategories,
+  togglePartnerCategorySelection,
+} from "@/lib/partners/partner.constants";
 import {
   deletePartnerCommissionTableFn,
   listPartnerCommissionTablesFn,
@@ -89,7 +87,7 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
 
   const [name, setName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
-  const [partnerCategory, setPartnerCategory] = useState("atendente");
+  const [partnerCategories, setPartnerCategories] = useState<string[]>([PARTNER_CATEGORY_ALL]);
   const [partnerUserIds, setPartnerUserIds] = useState<string[]>([]);
   const [fixedValueEnabled, setFixedValueEnabled] = useState(false);
   const [fixedMinMasked, setFixedMinMasked] = useState("");
@@ -119,7 +117,13 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
     setContextRow(row ?? null);
     setName(table?.name ?? "");
     setIsDefault(table?.isDefault ?? false);
-    setPartnerCategory(table?.partnerCategory || "atendente");
+    {
+      const cats =
+        table?.partnerCategories && table.partnerCategories.length > 0
+          ? table.partnerCategories
+          : parsePartnerCategories(table?.partnerCategory);
+      setPartnerCategories(cats.length > 0 ? cats : [PARTNER_CATEGORY_ALL]);
+    }
     setPartnerUserIds(table?.partnerUserIds ?? []);
     setFixedValueEnabled(table?.fixedValueEnabled ?? false);
     if (table?.fixedValueEnabled) {
@@ -172,7 +176,7 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
           productId,
           bankId,
           isDefault,
-          partnerCategory: isDefault ? partnerCategory : null,
+          partnerCategories: isDefault ? partnerCategories : [],
           partnerUserIds: isDefault ? [] : partnerUserIds,
           fixedValueEnabled,
           fixedValueCents: fixedValueEnabled ? Number(currencyDigits(fixedMinMasked) || 0) : null,
@@ -244,7 +248,11 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
           productId: table.productId,
           bankId: table.bankId,
           isDefault: table.isDefault,
-          partnerCategory: table.isDefault ? table.partnerCategory : null,
+          partnerCategories: table.isDefault
+            ? table.partnerCategories?.length
+              ? table.partnerCategories
+              : parsePartnerCategories(table.partnerCategory)
+            : [],
           partnerUserIds: table.isDefault ? [] : table.partnerUserIds,
           fixedValueEnabled: table.fixedValueEnabled,
           fixedValueCents: table.fixedValueEnabled
@@ -420,18 +428,16 @@ export function PartnerTablesScreen({ initialRows, initialTables, initialPartner
             {isDefault ? (
               <div className="space-y-2">
                 <Label>Categoria de parceiros</Label>
-                <Select value={partnerCategory} onValueChange={setPartnerCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PARTNER_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MultiSelectFilter
+                  allLabel="Selecione as categorias"
+                  emptyLabel="Nenhuma categoria."
+                  values={partnerCategories}
+                  options={PARTNER_CATEGORY_MULTI_OPTIONS}
+                  onChange={(values) =>
+                    setPartnerCategories(togglePartnerCategorySelection(partnerCategories, values))
+                  }
+                  className="w-full sm:w-full"
+                />
               </div>
             ) : (
               <div className="space-y-2">
