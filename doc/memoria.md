@@ -1,4 +1,8 @@
-﻿## 2026-07-19 11:31 — Chat: menos delay envio/recebimento
+﻿## 2026-07-19 11:36 — Fix botão Atribuir clicável
+- Não usa mais disabled por !active/isAssignedToMe; badge Meu vs botão ativo.
+- LOG: `doc/LOG-2026-07-19__113601__fix-botao-atribuir-clicavel.md`.
+
+## 2026-07-19 11:31 — Chat: menos delay envio/recebimento
 - Poll thread 1,2s; lista 3s; Evolution texto em background; webhook sem listMessages.
 - LOG: `doc/LOG-2026-07-19__113158__chat-reduzir-delay-poll.md`.
 

@@ -114,7 +114,21 @@ export function ChatInboxScreen({
     phone: "",
   });
   const userId = bootstrap.currentUserId;
-  const isAssignedToMe = Boolean(active?.assignedUserId && active.assignedUserId === userId);
+  const selectedConversation = useMemo(() => {
+    if (!selectedId) return null;
+    if (active?.id === selectedId) return active;
+    return conversations.find((conversation) => conversation.id === selectedId) ?? active;
+  }, [active, conversations, selectedId]);
+  const isAssignedToMe = Boolean(
+    selectedConversation?.assignedUserId &&
+      userId &&
+      selectedConversation.assignedUserId === userId,
+  );
+  const assignedToOther = Boolean(
+    selectedConversation?.assignedUserId &&
+      userId &&
+      selectedConversation.assignedUserId !== userId,
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -226,14 +240,26 @@ export function ChatInboxScreen({
   }
 
   async function handleAssignToMe() {
-    if (!selectedId || assigning || isAssignedToMe) return;
+    if (!selectedId || assigning) return;
+    if (isAssignedToMe) {
+      toast.message("Este contato já está atribuído a você");
+      return;
+    }
     setAssigning(true);
     try {
       const next = await joinChat({ data: { conversationId: selectedId } });
-      if (next) {
-        setActive((current) => (current ? { ...current, ...next } : next));
+      const conversation =
+        next && typeof next === "object" && "id" in next
+          ? (next as ChatConversation)
+          : null;
+      if (conversation) {
+        setActive((current) =>
+          current?.id === conversation.id ? { ...current, ...conversation } : conversation,
+        );
         setConversations((current) =>
-          current.map((item) => (item.id === next.id ? { ...item, ...next } : item)),
+          current.map((item) =>
+            item.id === conversation.id ? { ...item, ...conversation } : item,
+          ),
         );
       }
       toast.success("Contato atribuído a você — aparece em Meus");
@@ -759,38 +785,55 @@ export function ChatInboxScreen({
           </div>
         ) : (
           <>
-            <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+            <header className="relative z-20 flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
               <div className="min-w-0 flex-1">
                 <h3 className="truncate font-display text-base font-semibold">
-                  {active?.clientName || active?.contactName || active?.phone}
+                  {selectedConversation?.clientName ||
+                    selectedConversation?.contactName ||
+                    selectedConversation?.phone ||
+                    active?.phone}
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  {active?.phone}
-                  {active?.assignedUserName
-                    ? ` · Atribuído: ${active.assignedUserName}`
+                  {selectedConversation?.phone ?? active?.phone}
+                  {selectedConversation?.assignedUserId
+                    ? ` · Atribuído: ${selectedConversation.assignedUserName || "atendente"}`
                     : " · Não atribuído"}
                 </p>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant={isAssignedToMe ? "secondary" : "default"}
-                className="cursor-pointer gap-1.5"
-                disabled={!active || assigning || isAssignedToMe}
-                onClick={() => void handleAssignToMe()}
-                title={
-                  isAssignedToMe
-                    ? "Já atribuído a você"
-                    : "Atribuir este contato a mim (aparece em Meus)"
-                }
-              >
-                {assigning ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <UserPlus className="size-3.5" />
-                )}
-                {isAssignedToMe ? "Meu" : "Atribuir"}
-              </Button>
+              {isAssignedToMe ? (
+                <span
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-3 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                  title="Contato atribuído a você"
+                >
+                  <Check className="size-3.5" aria-hidden />
+                  Meu
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="default"
+                  className="relative z-20 pointer-events-auto cursor-pointer gap-1.5"
+                  disabled={assigning || !selectedId}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void handleAssignToMe();
+                  }}
+                  title={
+                    assignedToOther
+                      ? "Reatribuir este contato a mim (aparece em Meus)"
+                      : "Atribuir este contato a mim (aparece em Meus)"
+                  }
+                >
+                  {assigning ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <UserPlus className="size-3.5" />
+                  )}
+                  {assignedToOther ? "Atribuir a mim" : "Atribuir"}
+                </Button>
+              )}
               <Button
                 type="button"
                 size="icon"
