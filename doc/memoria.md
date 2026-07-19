@@ -1,4 +1,8 @@
-﻿## 2026-07-19 00:16 — Modal deploy: cores fixas
+﻿## 2026-07-19 10:48 — Trigger deploy Easypanel
+- Empty commit `1de38ba`; sem codigo pendente.
+- LOG: `doc/LOG-2026-07-19__104858__trigger-deploy-easypanel.md`.
+
+## 2026-07-19 00:16 — Modal deploy: cores fixas
 - Sem troca magenta/lima nas fases; SW v6.
 - LOG: `doc/LOG-2026-07-19__001647__modal-deploy-cores-fixas.md`.
 
@@ -607,6 +611,7 @@
 - Build client/SSR, ESLint, endpoint oficial e HTTP local validados. Commit/push pendentes.
 - LOG: `doc/LOG-2026-07-17__154300__integracao-brasilapi-cnpj-parceiros.md`.
 - Keywords: BrasilAPI, CNPJ, PJ, lookupPartnerCnpjFn, brasil-api-cnpj.adapter.
+
 
 
 
