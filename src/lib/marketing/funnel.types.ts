@@ -178,10 +178,15 @@ export const FUNNEL_FEEDBACK_HANDLES: Array<{
 ];
 
 export const FUNNEL_STEP_CATALOG: Array<{
-  kind: Exclude<FunnelStepKind, "start">;
+  kind: FunnelStepKind;
   label: string;
   description: string;
 }> = [
+  {
+    kind: "start",
+    label: "Iniciar",
+    description: "Imediato ou agendado",
+  },
   {
     kind: "pause",
     label: "Pausa",
@@ -213,6 +218,42 @@ export const FUNNEL_STEP_CATALOG: Array<{
     description: "Encerra o funil",
   },
 ];
+
+/** Garante exatamente um nó Iniciar (obrigatório no funil). */
+export function ensureFunnelHasStart(draft: FunnelDraft): FunnelDraft {
+  const normalized = normalizeFunnelDraft(draft);
+  const startNodes = normalized.nodes.filter((node) => node.data.kind === "start");
+  if (startNodes.length === 1) {
+    return {
+      ...normalized,
+      nodes: normalized.nodes.map((node) =>
+        node.data.kind === "start" ? { ...node, deletable: false } : node,
+      ),
+    };
+  }
+  if (startNodes.length > 1) {
+    const keepId = startNodes[0]!.id;
+    return {
+      ...normalized,
+      nodes: normalized.nodes
+        .filter((node) => node.data.kind !== "start" || node.id === keepId)
+        .map((node) =>
+          node.data.kind === "start" ? { ...node, deletable: false } : node,
+        ),
+    };
+  }
+  const startNode = {
+    id: "step-start",
+    type: "funnelStep",
+    position: { x: 40, y: 220 },
+    deletable: false,
+    data: createStepData("start"),
+  };
+  return {
+    ...normalized,
+    nodes: [startNode, ...normalized.nodes],
+  };
+}
 
 export function defaultStartConfig(): FunnelStartConfig {
   return { mode: "immediate", scheduledAt: null, startedAt: null };

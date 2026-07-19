@@ -23,9 +23,11 @@ import {
   Mail,
   Megaphone,
   Pause,
+  Play,
   Split,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import { FunnelStepNode } from "@/components/marketing/funnel/funnel-step-node";
 import { FunnelStepEditor } from "@/components/marketing/funnel/funnel-step-editor";
 import {
@@ -40,7 +42,8 @@ import { cn } from "@/lib/utils";
 
 const nodeTypes = { funnelStep: FunnelStepNode };
 
-const PALETTE_ICONS: Record<Exclude<FunnelStepKind, "start">, typeof Pause> = {
+const PALETTE_ICONS: Record<FunnelStepKind, typeof Pause> = {
+  start: Play,
   pause: Pause,
   audience: Users,
   disparo: Megaphone,
@@ -163,10 +166,20 @@ function FunnelCanvasInner({
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
+      const startIds = new Set(
+        nodesRef.current
+          .filter((node) => (node.data as FunnelStepData | undefined)?.kind === "start")
+          .map((node) => node.id),
+      );
+      const safeChanges = changes.filter(
+        (change) => !(change.type === "remove" && startIds.has(change.id)),
+      );
+      if (safeChanges.length === 0) return;
+
       setNodes((current) => {
-        const next = applyNodeChanges(changes, current);
+        const next = applyNodeChanges(safeChanges, current);
         nodesRef.current = next;
-        const shouldPersist = changes.some(
+        const shouldPersist = safeChanges.some(
           (change) =>
             change.type === "remove" ||
             change.type === "add" ||
@@ -224,8 +237,18 @@ function FunnelCanvasInner({
   );
 
   const addStep = useCallback(
-    (kind: Exclude<FunnelStepKind, "start">) => {
-      const id = `step-${kind}-${crypto.randomUUID().slice(0, 6)}`;
+    (kind: FunnelStepKind) => {
+      if (kind === "start") {
+        const existing = nodesRef.current.find(
+          (node) => (node.data as FunnelStepData | undefined)?.kind === "start",
+        );
+        if (existing) {
+          setSelectedNodeId(existing.id);
+          toast.message("O funil já tem Iniciar — configure imediato ou agendado à direita.");
+          return;
+        }
+      }
+      const id = kind === "start" ? "step-start" : `step-${kind}-${crypto.randomUUID().slice(0, 6)}`;
       const position = screenToFlowPosition({
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
@@ -234,7 +257,7 @@ function FunnelCanvasInner({
         id,
         type: "funnelStep",
         position: { x: position.x - 100, y: position.y - 40 },
-        deletable: true,
+        deletable: kind !== "start",
         data: createStepData(kind),
       };
       setNodes((current) => {
@@ -267,7 +290,10 @@ function FunnelCanvasInner({
   const deleteSelected = useCallback(() => {
     if (!selectedNodeId) return;
     const node = nodesRef.current.find((item) => item.id === selectedNodeId);
-    if ((node?.data as FunnelStepData | undefined)?.kind === "start") return;
+    if ((node?.data as FunnelStepData | undefined)?.kind === "start") {
+      toast.message("O módulo Iniciar é obrigatório e não pode ser removido.");
+      return;
+    }
     const nextNodes = nodesRef.current.filter((item) => item.id !== selectedNodeId);
     const nextEdges = edgesRef.current.filter(
       (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId,

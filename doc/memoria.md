@@ -1,4 +1,8 @@
-﻿## 2026-07-19 19:05 — Fix reabrir funil (perda do fluxo salvo)
+﻿## 2026-07-19 19:15 — Funil: Iniciar na palette + Excluir na lista
+- Módulo Iniciar (imediato/agendado) obrigatório; botão excluir funis.
+- LOG: `doc/LOG-2026-07-19__191500__funil-iniciar-e-excluir.md`.
+
+## 2026-07-19 19:05 — Fix reabrir funil (perda do fluxo salvo)
 - Sync canvas→draft; load do localStorage no open; normalize.
 - LOG: `doc/LOG-2026-07-19__190500__fix-funil-reabrir-salvo.md`.
 

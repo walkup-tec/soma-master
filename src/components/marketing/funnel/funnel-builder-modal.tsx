@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { FunnelBuilderCanvas } from "@/components/marketing/funnel/funnel-builder-canvas";
 import {
   createDefaultFunnelDraft,
+  ensureFunnelHasStart,
   normalizeFunnelDraft,
   type FunnelDraft,
 } from "@/lib/marketing/funnel.types";
@@ -22,14 +23,17 @@ function readStoredFunnels(): FunnelDraft[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as FunnelDraft[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((item) => normalizeFunnelDraft(item));
+    return parsed.map((item) => ensureFunnelHasStart(normalizeFunnelDraft(item)));
   } catch {
     return [];
   }
 }
 
 function writeStoredFunnels(items: FunnelDraft[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items.map((item) => normalizeFunnelDraft(item))));
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(items.map((item) => ensureFunnelHasStart(normalizeFunnelDraft(item)))),
+  );
 }
 
 export function listStoredFunnels(): FunnelDraft[] {
@@ -38,7 +42,15 @@ export function listStoredFunnels(): FunnelDraft[] {
 
 export function getStoredFunnelById(id: string): FunnelDraft | null {
   const found = readStoredFunnels().find((item) => item.id === id);
-  return found ? normalizeFunnelDraft(found) : null;
+  return found ? ensureFunnelHasStart(normalizeFunnelDraft(found)) : null;
+}
+
+export function deleteStoredFunnel(id: string): boolean {
+  const current = readStoredFunnels();
+  const next = current.filter((item) => item.id !== id);
+  if (next.length === current.length) return false;
+  writeStoredFunnels(next);
+  return true;
 }
 
 /**
@@ -74,9 +86,9 @@ export function FunnelBuilderModal({
     if (initialDraft?.id) {
       next =
         getStoredFunnelById(initialDraft.id) ??
-        normalizeFunnelDraft(structuredClone(initialDraft));
+        ensureFunnelHasStart(normalizeFunnelDraft(structuredClone(initialDraft)));
     } else {
-      next = createDefaultFunnelDraft();
+      next = ensureFunnelHasStart(createDefaultFunnelDraft());
     }
     setDraft(next);
     setCanvasKey((value) => value + 1);
@@ -115,11 +127,13 @@ export function FunnelBuilderModal({
   function handleSave() {
     const current = draftRef.current;
     const name = current.name.trim() || "Novo funil";
-    const next = normalizeFunnelDraft({
-      ...current,
-      name,
-      updatedAt: new Date().toISOString(),
-    });
+    const next = ensureFunnelHasStart(
+      normalizeFunnelDraft({
+        ...current,
+        name,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
     if (next.nodes.length === 0) {
       toast.error("O funil está vazio — adicione etapas antes de salvar.");
       return;

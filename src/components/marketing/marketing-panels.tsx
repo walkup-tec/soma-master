@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Filter, Flame, Phone, Plus, RefreshCw, Zap } from "lucide-react";
+import { Filter, Flame, Phone, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import {
   FunnelBuilderModal,
+  deleteStoredFunnel,
   listStoredFunnels,
 } from "@/components/marketing/funnel/funnel-builder-modal";
 import { listWabaAquecedorInstancesFn } from "@/lib/waba/waba-aquecedor.server";
@@ -263,24 +264,62 @@ export function MarketingFunnelPanel() {
           ) : (
             <div className="space-y-2">
               {funnels.map((funnel) => (
-                <button
+                <div
                   key={funnel.id}
-                  type="button"
-                  onClick={() => {
-                    setEditing(funnel);
-                    setBuilderOpen(true);
-                  }}
-                  className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                  className="flex items-center gap-2 rounded-xl border border-border bg-card px-2 py-2 sm:px-3"
                 >
-                  <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(funnel);
+                      setBuilderOpen(true);
+                    }}
+                    className="min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/50"
+                  >
                     <p className="truncate font-medium text-foreground">{funnel.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {funnel.nodes.length} etapas · {funnel.edges.length} conexões · atualizado{" "}
                       {new Date(funnel.updatedAt).toLocaleString("pt-BR")}
                     </p>
-                  </div>
-                  <span className="shrink-0 text-xs font-medium text-primary">Editar</span>
-                </button>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 cursor-pointer"
+                    onClick={() => {
+                      setEditing(funnel);
+                      setBuilderOpen(true);
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 cursor-pointer gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => {
+                      const ok = window.confirm(
+                        `Excluir o funil "${funnel.name}"? Esta ação não pode ser desfeita.`,
+                      );
+                      if (!ok) return;
+                      if (!deleteStoredFunnel(funnel.id)) {
+                        toast.error("Não foi possível excluir o funil.");
+                        return;
+                      }
+                      if (editing?.id === funnel.id) {
+                        setEditing(null);
+                        setBuilderOpen(false);
+                      }
+                      reload();
+                      toast.success("Funil excluído");
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Excluir
+                  </Button>
+                </div>
               ))}
             </div>
           )}
