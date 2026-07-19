@@ -496,6 +496,52 @@ export async function joinConversationAsAgent(input: {
   return conv;
 }
 
+/** Remove atendente da conversa → volta para "Não atribuídos". */
+export async function unassignConversation(conversationId: string): Promise<ChatConversation> {
+  const before = await getConversation(conversationId);
+  if (!before) throw new Error("Conversa não encontrada.");
+
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) => sql`
+        update crm.chat_conversations
+        set
+          assigned_user_id = null,
+          assigned_user_name = null,
+          updated_at = now()
+        where id = ${conversationId}
+      `,
+    );
+  } else {
+    const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+    const next = convs.map((c) =>
+      c.id === conversationId
+        ? {
+            ...c,
+            assignedUserId: null,
+            assignedUserName: null,
+            updatedAt: new Date().toISOString(),
+          }
+        : c,
+    );
+    await writeJsonFile(CONV_FILE, next);
+  }
+
+  if (before.assignedUserName || before.assignedUserId) {
+    await appendMessage({
+      conversationId,
+      direction: "outbound",
+      body: "Atendimento desatribuído — conversa voltou para Não atribuídos.",
+      senderType: "system",
+      senderName: "Sistema",
+    });
+  }
+
+  const conv = await getConversation(conversationId);
+  if (!conv) throw new Error("Conversa não encontrada.");
+  return conv;
+}
+
 export async function setConversationAiEnabled(input: {
   conversationId: string;
   aiEnabled: boolean;

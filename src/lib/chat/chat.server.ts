@@ -19,6 +19,7 @@ import {
   saveChatAiSettings,
   setAiEnabledForAllConversations,
   setConversationAiEnabled,
+  unassignConversation,
   upsertAiExample,
   upsertAiKnowledge,
 } from "@/lib/chat/chat.repository";
@@ -225,6 +226,18 @@ export const joinChatConversationFn = createServerFn({ method: "POST" })
     });
   });
 
+/** Remove atribuição — conversa volta para o filtro Não atribuídos. */
+export const unassignChatConversationFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const conversationId = String((data as { conversationId?: string })?.conversationId ?? "").trim();
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    return { conversationId };
+  })
+  .handler(async ({ data }) => {
+    await requireChatUser();
+    return unassignConversation(data.conversationId);
+  });
+
 export const setChatConversationAiFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const body = data as { conversationId?: string; aiEnabled?: boolean };
@@ -262,12 +275,7 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const user = await requireChatUser();
-    // Enviar manualmente atribui o atendente e pausa apenas a IA desta conversa.
-    await joinConversationAsAgent({
-      conversationId: data.conversationId,
-      userId: user.userId,
-      userName: user.name || user.email || "Atendente",
-    });
+    // Enviar NÃO atribui — só o botão Atribuir coloca em Meus.
     await setConversationAiEnabled({
       conversationId: data.conversationId,
       aiEnabled: false,
@@ -374,11 +382,7 @@ export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
     if (!conversation) throw new Error("Conversa não encontrada.");
 
     const meta = await finalizeChatImageUpload(data.mediaId);
-    await joinConversationAsAgent({
-      conversationId: conversation.id,
-      userId: user.userId,
-      userName: user.name || user.email || "Atendente",
-    });
+    // Enviar imagem NÃO atribui — só o botão Atribuir coloca em Meus.
     await setConversationAiEnabled({ conversationId: conversation.id, aiEnabled: false });
 
     const message = await appendMessage({

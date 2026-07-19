@@ -14,6 +14,7 @@ import {
   Sparkles,
   StickyNote,
   UserPlus,
+  UserMinus,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ import {
   sendChatMessageFn,
   setChatAiGlobalEnabledFn,
   setChatConversationAiFn,
+  unassignChatConversationFn,
 } from "@/lib/chat/chat.server";
 import {
   CHAT_IMAGE_ACCEPT,
@@ -77,6 +79,7 @@ export function ChatInboxScreen({
   const listConversations = useServerFn(listChatConversationsFn);
   const getThread = useServerFn(getChatThreadFn);
   const joinChat = useServerFn(joinChatConversationFn);
+  const unassignChat = useServerFn(unassignChatConversationFn);
   const sendMessage = useServerFn(sendChatMessageFn);
   const initImageUpload = useServerFn(initChatImageUploadFn);
   const appendImageChunk = useServerFn(appendChatImageChunkFn);
@@ -239,33 +242,51 @@ export function ChatInboxScreen({
     }
   }
 
+  function applyConversationUpdate(conversation: ChatConversation) {
+    setActive((current) =>
+      current?.id === conversation.id || selectedId === conversation.id
+        ? { ...(current ?? conversation), ...conversation }
+        : current,
+    );
+    setConversations((current) =>
+      current.map((item) => (item.id === conversation.id ? { ...item, ...conversation } : item)),
+    );
+  }
+
   async function handleAssignToMe() {
     if (!selectedId || assigning) return;
-    if (isAssignedToMe) {
-      toast.message("Este contato já está atribuído a você");
-      return;
-    }
     setAssigning(true);
     try {
       const next = await joinChat({ data: { conversationId: selectedId } });
-      const conversation =
-        next && typeof next === "object" && "id" in next
-          ? (next as ChatConversation)
-          : null;
-      if (conversation) {
-        setActive((current) =>
-          current?.id === conversation.id ? { ...current, ...conversation } : conversation,
-        );
-        setConversations((current) =>
-          current.map((item) =>
-            item.id === conversation.id ? { ...item, ...conversation } : item,
-          ),
-        );
+      if (!next || typeof next !== "object" || !("id" in next)) {
+        throw new Error("Falha ao atribuir conversa.");
       }
-      toast.success("Contato atribuído a você — aparece em Meus");
+      const conversation = next as ChatConversation;
+      applyConversationUpdate(conversation);
+      setFilter("mine");
+      toast.success("Atribuído a você — agora em Meus");
       await refreshList();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao atribuir");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  async function handleUnassign() {
+    if (!selectedId || assigning) return;
+    setAssigning(true);
+    try {
+      const next = await unassignChat({ data: { conversationId: selectedId } });
+      if (!next || typeof next !== "object" || !("id" in next)) {
+        throw new Error("Falha ao remover atribuição.");
+      }
+      applyConversationUpdate(next as ChatConversation);
+      setFilter("unassigned");
+      toast.success("Removido de Meus — agora em Não atribuídos");
+      await refreshList();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao desatribuir");
     } finally {
       setAssigning(false);
     }
@@ -366,7 +387,6 @@ export function ChatInboxScreen({
             ...prev,
             lastMessageAt: now,
             lastMessagePreview: `📷 ${caption || "Imagem"}`,
-            assignedUserId: prev.assignedUserId ?? userId,
             aiEnabled: false,
           }
         : prev,
@@ -378,7 +398,6 @@ export function ChatInboxScreen({
               ...conversation,
               lastMessageAt: now,
               lastMessagePreview: `📷 ${caption || "Imagem"}`,
-              assignedUserId: conversation.assignedUserId ?? userId,
               aiEnabled: false,
             }
           : conversation,
@@ -467,7 +486,6 @@ export function ChatInboxScreen({
               ...c,
               lastMessageAt: now,
               lastMessagePreview: body.slice(0, 120),
-              assignedUserId: c.assignedUserId ?? userId,
               aiEnabled: false,
             }
           : c,
@@ -478,7 +496,6 @@ export function ChatInboxScreen({
         ...active,
         lastMessageAt: now,
         lastMessagePreview: body.slice(0, 120),
-        assignedUserId: active.assignedUserId ?? userId,
         aiEnabled: false,
       });
     }
@@ -801,13 +818,35 @@ export function ChatInboxScreen({
                 </p>
               </div>
               {isAssignedToMe ? (
-                <span
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-3 text-xs font-medium text-emerald-700 dark:text-emerald-400"
-                  title="Contato atribuído a você"
-                >
-                  <Check className="size-3.5" aria-hidden />
-                  Meu
-                </span>
+                <div className="relative z-20 flex items-center gap-2">
+                  <span
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-3 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                    title="Este contato está em Meus"
+                  >
+                    <Check className="size-3.5" aria-hidden />
+                    Meu
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="relative z-20 pointer-events-auto cursor-pointer gap-1.5"
+                    disabled={assigning || !selectedId}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void handleUnassign();
+                    }}
+                    title="Remover atribuição — volta para Não atribuídos"
+                  >
+                    {assigning ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <UserMinus className="size-3.5" />
+                    )}
+                    Remover
+                  </Button>
+                </div>
               ) : (
                 <Button
                   type="button"
@@ -822,8 +861,8 @@ export function ChatInboxScreen({
                   }}
                   title={
                     assignedToOther
-                      ? "Reatribuir este contato a mim (aparece em Meus)"
-                      : "Atribuir este contato a mim (aparece em Meus)"
+                      ? "Atribuir a mim — move para Meus"
+                      : "Atribuir a mim — move para Meus"
                   }
                 >
                   {assigning ? (
@@ -831,7 +870,7 @@ export function ChatInboxScreen({
                   ) : (
                     <UserPlus className="size-3.5" />
                   )}
-                  {assignedToOther ? "Atribuir a mim" : "Atribuir"}
+                  Atribuir
                 </Button>
               )}
               <Button

@@ -1,4 +1,8 @@
-﻿## 2026-07-19 11:36 — Fix botão Atribuir clicável
+﻿## 2026-07-19 11:47 — Atribuição só no botão Atribuir
+- Envio não atribui; Remover volta a Não atribuídos; Atribuir → Meus.
+- LOG: `doc/LOG-2026-07-19__114709__fix-atribuicao-so-no-botao.md`.
+
+## 2026-07-19 11:36 — Fix botão Atribuir clicável
 - Não usa mais disabled por !active/isAssignedToMe; badge Meu vs botão ativo.
 - LOG: `doc/LOG-2026-07-19__113601__fix-botao-atribuir-clicavel.md`.
 
