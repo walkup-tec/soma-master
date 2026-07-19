@@ -1,4 +1,8 @@
-﻿## 2026-07-19 14:25 — Funil: construtor arrasta/conecta v1
+﻿## 2026-07-19 14:40 — Fix bun.lock (deploy funil)
+- Atualizou bun.lock com @xyflow/react após falha frozen-lockfile no Easypanel.
+- LOG: `doc/LOG-2026-07-19__144000__fix-bun-lock-xyflow-deploy.md`.
+
+## 2026-07-19 14:25 — Funil: construtor arrasta/conecta v1
 - Novo Funil → modal 100% tela; React Flow; rascunho localStorage.
 - LOG: `doc/LOG-2026-07-19__142522__funil-construtor-fluxo-v1.md`.
 
