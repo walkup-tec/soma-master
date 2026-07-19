@@ -24,12 +24,15 @@ import {
   Megaphone,
   Pause,
   Play,
+  Settings2,
   Split,
+  Trash2,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { FunnelStepNode } from "@/components/marketing/funnel/funnel-step-node";
-import { FunnelStepEditor } from "@/components/marketing/funnel/funnel-step-editor";
+import { FunnelStepConfigModal } from "@/components/marketing/funnel/funnel-step-config-modal";
 import {
   FUNNEL_STEP_CATALOG,
   createStepData,
@@ -119,6 +122,7 @@ function FunnelCanvasInner({
   const [nodes, setNodes] = useState<Node[]>(() => toFlowNodes(draft));
   const [edges, setEdges] = useState<Edge[]>(() => toFlowEdges(draft));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
 
   const draftRef = useRef(draft);
   const nodesRef = useRef(nodes);
@@ -244,7 +248,8 @@ function FunnelCanvasInner({
         );
         if (existing) {
           setSelectedNodeId(existing.id);
-          toast.message("O funil já tem Iniciar — configure imediato ou agendado à direita.");
+          setConfigOpen(true);
+          toast.message("O funil já tem Iniciar — configure imediato ou agendado.");
           return;
         }
       }
@@ -267,6 +272,7 @@ function FunnelCanvasInner({
         return next;
       });
       setSelectedNodeId(id);
+      setConfigOpen(true);
       window.setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50);
     },
     [fitView, persistGraph, screenToFlowPosition],
@@ -304,6 +310,7 @@ function FunnelCanvasInner({
     setEdges(nextEdges);
     persistGraph(nextNodes, nextEdges);
     setSelectedNodeId(null);
+    setConfigOpen(false);
   }, [persistGraph, selectedNodeId]);
 
   return (
@@ -314,7 +321,7 @@ function FunnelCanvasInner({
             Módulos
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Funil de prospecção — arraste e conecte no canvas.
+            Clique para adicionar. Duplo clique no canvas abre a configuração.
           </p>
         </div>
         <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
@@ -350,8 +357,14 @@ function FunnelCanvasInner({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeDoubleClick={(_, node) => {
+            setSelectedNodeId(node.id);
+            setConfigOpen(true);
+          }}
           onSelectionChange={({ nodes: selected }) => {
-            setSelectedNodeId(selected[0]?.id ?? null);
+            const id = selected[0]?.id ?? null;
+            setSelectedNodeId(id);
+            if (!id) setConfigOpen(false);
           }}
           fitView
           fitViewOptions={{ padding: 0.25 }}
@@ -371,37 +384,58 @@ function FunnelCanvasInner({
             maskColor="color-mix(in oklab, var(--background) 70%, transparent)"
           />
         </ReactFlow>
-      </div>
 
-      <aside
-        className={cn(
-          "flex w-80 shrink-0 flex-col border-l border-border bg-card/80 transition-opacity",
-          !selectedNode && "opacity-70",
-        )}
-      >
-        <div className="border-b border-border px-3 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Propriedades
-          </p>
-        </div>
         {selectedNode ? (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <FunnelStepEditor
-              data={selectedNode.data as FunnelStepData}
-              onChange={updateSelectedData}
-              onDelete={deleteSelected}
-              canDelete={(selectedNode.data as FunnelStepData).kind !== "start"}
-              products={products}
-              attendanceStatuses={attendanceStatuses}
-              upstreamAudienceCount={upstreamAudienceCount}
-            />
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+            <div className="pointer-events-auto flex max-w-xl flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 px-3 py-2 shadow-elevated backdrop-blur">
+              <div className="min-w-0 flex-1 px-1">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {(selectedNode.data as FunnelStepData).label}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {(selectedNode.data as FunnelStepData).description ||
+                    "Duplo clique ou Configurar para editar"}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="cursor-pointer gap-1.5"
+                onClick={() => setConfigOpen(true)}
+              >
+                <Settings2 className="size-3.5" />
+                Configurar
+              </Button>
+              {(selectedNode.data as FunnelStepData).kind !== "start" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="cursor-pointer gap-1.5 text-destructive hover:text-destructive"
+                  onClick={deleteSelected}
+                >
+                  <Trash2 className="size-3.5" />
+                  Remover
+                </Button>
+              ) : null}
+            </div>
           </div>
-        ) : (
-          <p className="p-4 text-sm text-muted-foreground">
-            Selecione um módulo no canvas para configurar.
-          </p>
-        )}
-      </aside>
+        ) : null}
+
+        {selectedNode && configOpen ? (
+          <FunnelStepConfigModal
+            open={configOpen}
+            onOpenChange={setConfigOpen}
+            data={selectedNode.data as FunnelStepData}
+            onChange={updateSelectedData}
+            onDelete={deleteSelected}
+            canDelete={(selectedNode.data as FunnelStepData).kind !== "start"}
+            products={products}
+            attendanceStatuses={attendanceStatuses}
+            upstreamAudienceCount={upstreamAudienceCount}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

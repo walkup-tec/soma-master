@@ -38,6 +38,7 @@ export function FunnelStepEditor({
   products,
   attendanceStatuses,
   upstreamAudienceCount = null,
+  comfortable = false,
 }: {
   data: FunnelStepData;
   onChange: (next: FunnelStepData) => void;
@@ -47,6 +48,8 @@ export function FunnelStepEditor({
   attendanceStatuses: AttendanceStatusConfig[];
   /** Contagem do Público a montante — usada no modal de Disparo */
   upstreamAudienceCount?: number | null;
+  /** Layout mais espaçado (modal de configuração) */
+  comfortable?: boolean;
 }) {
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [disparoOpen, setDisparoOpen] = useState(false);
@@ -68,11 +71,11 @@ export function FunnelStepEditor({
   }
 
   return (
-    <div className="space-y-3 p-3">
+    <div className={comfortable ? "space-y-5" : "space-y-3 p-3"}>
       <div>
-        <Label className="text-[11px]">Título no canvas</Label>
+        <Label className={comfortable ? "text-sm" : "text-[11px]"}>Título no canvas</Label>
         <Input
-          className="mt-1 h-9"
+          className={comfortable ? "mt-1.5 h-10" : "mt-1 h-9"}
           value={data.label}
           onChange={(event) => onChange({ ...data, label: event.target.value })}
           disabled={data.kind === "start"}
