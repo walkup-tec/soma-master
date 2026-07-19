@@ -1,4 +1,8 @@
-﻿## 2026-07-18 23:43 — Parceiros: Solicitação Usuário (front)
+﻿## 2026-07-18 23:45 — Trigger deploy Easypanel
+- Empty commit `69d3b11` (`[0f29fdf]`); main já tinha as features.
+- LOG: `doc/LOG-2026-07-18__234501__trigger-deploy-easypanel.md`.
+
+## 2026-07-18 23:43 — Parceiros: Solicitação Usuário (front)
 - Menu em Gestão; listagem Parceiro/Produto/Banco (sem backend ainda).
 - LOG: `doc/LOG-2026-07-18__234318__parceiros-solicitacao-usuario-front.md`.
 
