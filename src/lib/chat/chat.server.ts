@@ -111,17 +111,22 @@ export const listChatConversationsFn = createServerFn({ method: "GET" }).handler
 });
 
 /**
- * Contatos aguardando no Chatbot: qualquer conversa com unread > 0.
- * (Antes filtrávamos sem assigned — abrir o chat atribuía o atendente e zerava o alerta.)
+ * Snapshot de alertas do Chatbot (topo = contato novo; menu = unread).
  */
 export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handler(async () => {
   await requireChatUser();
   const conversations = await listConversations(200);
-  const pending = conversations.filter((conversation) => conversation.unreadCount > 0);
+  const unreadByConversationId: Record<string, number> = {};
+  for (const conversation of conversations) {
+    if (conversation.unreadCount > 0) {
+      unreadByConversationId[conversation.id] = conversation.unreadCount;
+    }
+  }
+  const unreadIds = Object.keys(unreadByConversationId);
   return {
-    pendingCount: pending.length,
-    conversationIds: pending.map((conversation) => conversation.id),
-    /** Todos os IDs — detecta contato novo mesmo se o unread for zerado rápido. */
+    pendingCount: unreadIds.length,
+    conversationIds: unreadIds,
+    unreadByConversationId,
     allConversationIds: conversations.map((conversation) => conversation.id),
     newestCreatedAt:
       conversations

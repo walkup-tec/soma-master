@@ -12,23 +12,38 @@ import { useServerFn } from "@tanstack/react-start";
 import { getChatbotIncomingAlertFn } from "@/lib/chat/chat.server";
 
 export type ChatbotAlertState = {
+  /** Topbar: só contato novo. */
+  newContactActive: boolean;
+  /** Menu lateral: mensagem recebida (unread). */
+  unreadMessageActive: boolean;
+  newContactCount: number;
+  unreadConversationCount: number;
+  /** Compat: espelha newContactActive (ícone topbar). */
+  active: boolean;
   pendingCount: number;
   conversationIds: string[];
-  /** True enquanto há unread ou contato novo recente. */
-  active: boolean;
+  setViewingConversationId: (id: string | null) => void;
 };
 
+const noopSetViewing = (_id: string | null) => undefined;
+
 const EMPTY: ChatbotAlertState = {
+  newContactActive: false,
+  unreadMessageActive: false,
+  newContactCount: 0,
+  unreadConversationCount: 0,
+  active: false,
   pendingCount: 0,
   conversationIds: [],
-  active: false,
+  setViewingConversationId: noopSetViewing,
 };
 
 const ChatbotAlertContext = createContext<ChatbotAlertState>(EMPTY);
 
 const POLL_MS = 3_000;
-/** Mantém pulso/som visual por alguns segundos após contato novo (mesmo se abrir o chat). */
-const FRESH_CONTACT_HOLD_MS = 45_000;
+const NEW_CONTACT_HOLD_MS = 45_000;
+
+type UnreadMap = Record<string, number>;
 
 function playIncomingChime(): void {
   try {
@@ -53,7 +68,6 @@ function playIncomingChime(): void {
       osc.stop(start + duration + 0.02);
     };
 
-    // Um pouco mais audível que a versão anterior
     playTone(880, now, 0.14, 0.08);
     playTone(1174, now + 0.15, 0.18, 0.06);
 
@@ -61,7 +75,7 @@ function playIncomingChime(): void {
       void ctx.close().catch(() => undefined);
     }, 600);
   } catch {
-    /* autoplay bloqueado até interação */
+    /* autoplay bloqueado */
   }
 }
 
@@ -73,64 +87,96 @@ export function ChatbotAlertProvider({
   children: ReactNode;
 }) {
   const fetchAlert = useServerFn(getChatbotIncomingAlertFn);
-  const [state, setState] = useState<ChatbotAlertState>(EMPTY);
+  const [newContactActive, setNewContactActive] = useState(false);
+  const [unreadMessageActive, setUnreadMessageActive] = useState(false);
+  const [newContactCount, setNewContactCount] = useState(0);
+  const [unreadConversationCount, setUnreadConversationCount] = useState(0);
+  const [conversationIds, setConversationIds] = useState<string[]>([]);
+
+  const viewingIdRef = useRef<string | null>(null);
   const knownAllIdsRef = useRef<Set<string> | null>(null);
-  const knownUnreadIdsRef = useRef<Set<string> | null>(null);
+  const knownUnreadMapRef = useRef<UnreadMap | null>(null);
   const primedRef = useRef(false);
-  const freshUntilRef = useRef(0);
+  const newContactUntilRef = useRef(0);
   const [, setTick] = useState(0);
+
+  const setViewingConversationId = useCallback((id: string | null) => {
+    viewingIdRef.current = id;
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!enabled) {
-      setState(EMPTY);
+      setNewContactActive(false);
+      setUnreadMessageActive(false);
+      setNewContactCount(0);
+      setUnreadConversationCount(0);
+      setConversationIds([]);
       return;
     }
     try {
       const next = await fetchAlert();
-      const unreadIds = next.conversationIds ?? [];
-      const allIds = next.allConversationIds ?? unreadIds;
-      const pendingCount = next.pendingCount ?? unreadIds.length;
+      const viewingId = viewingIdRef.current;
+      const allIds = next.allConversationIds ?? [];
+      const unreadMap: UnreadMap = { ...(next.unreadByConversationId ?? {}) };
+      if (viewingId) delete unreadMap[viewingId];
+
+      const unreadIds = Object.keys(unreadMap).filter((id) => (unreadMap[id] ?? 0) > 0);
 
       const prevAll = knownAllIdsRef.current;
-      const prevUnread = knownUnreadIdsRef.current;
+      const prevUnread = knownUnreadMapRef.current;
+
+      let chime = false;
+      let brandNewCount = 0;
 
       if (prevAll === null || prevUnread === null) {
         knownAllIdsRef.current = new Set(allIds);
-        knownUnreadIdsRef.current = new Set(unreadIds);
+        knownUnreadMapRef.current = { ...unreadMap };
         primedRef.current = true;
       } else {
-        const newConversations = allIds.filter((id) => !prevAll.has(id));
-        const newUnread = unreadIds.filter((id) => !prevUnread.has(id));
-        const shouldChime =
-          primedRef.current && (newConversations.length > 0 || newUnread.length > 0);
-
-        if (shouldChime) {
-          playIncomingChime();
-          freshUntilRef.current = Date.now() + FRESH_CONTACT_HOLD_MS;
+        const brandNewIds = allIds.filter((id) => !prevAll.has(id) && id !== viewingId);
+        brandNewCount = brandNewIds.length;
+        if (brandNewIds.length > 0 && primedRef.current) {
+          chime = true;
+          newContactUntilRef.current = Date.now() + NEW_CONTACT_HOLD_MS;
         }
 
+        if (primedRef.current) {
+          for (const id of unreadIds) {
+            if (id === viewingId) continue;
+            const prevCount = prevUnread[id] ?? 0;
+            const nextCount = unreadMap[id] ?? 0;
+            if (nextCount > prevCount) {
+              chime = true;
+              break;
+            }
+          }
+        }
+
+        if (chime) playIncomingChime();
+
         knownAllIdsRef.current = new Set(allIds);
-        knownUnreadIdsRef.current = new Set(unreadIds);
+        knownUnreadMapRef.current = { ...unreadMap };
       }
 
-      const freshActive = Date.now() < freshUntilRef.current;
-      setState({
-        pendingCount,
-        conversationIds: unreadIds,
-        active: pendingCount > 0 || freshActive,
-      });
+      const holdNewContact = Date.now() < newContactUntilRef.current;
+      setNewContactCount(holdNewContact ? Math.max(brandNewCount, 1) : 0);
+      setNewContactActive(holdNewContact);
+      setUnreadConversationCount(unreadIds.length);
+      setUnreadMessageActive(unreadIds.length > 0);
+      setConversationIds(unreadIds);
     } catch {
-      /* sem permissão / rede — silencioso */
+      /* silencioso */
     }
   }, [enabled, fetchAlert]);
 
   useEffect(() => {
     if (!enabled) {
-      setState(EMPTY);
       knownAllIdsRef.current = null;
-      knownUnreadIdsRef.current = null;
+      knownUnreadMapRef.current = null;
       primedRef.current = false;
-      freshUntilRef.current = 0;
+      newContactUntilRef.current = 0;
+      setNewContactActive(false);
+      setUnreadMessageActive(false);
       return;
     }
 
@@ -139,13 +185,13 @@ export function ChatbotAlertProvider({
       if (document.visibilityState === "visible") void refresh();
     }, POLL_MS);
     const holdTick = window.setInterval(() => {
-      if (Date.now() < freshUntilRef.current) setTick((n) => n + 1);
-      else if (freshUntilRef.current > 0) {
-        freshUntilRef.current = 0;
-        setState((current) => ({
-          ...current,
-          active: current.pendingCount > 0,
-        }));
+      if (Date.now() < newContactUntilRef.current) {
+        setTick((n) => n + 1);
+        setNewContactActive(true);
+      } else if (newContactUntilRef.current > 0) {
+        newContactUntilRef.current = 0;
+        setNewContactActive(false);
+        setNewContactCount(0);
       }
     }, 2_000);
     const onFocus = () => void refresh();
@@ -157,7 +203,26 @@ export function ChatbotAlertProvider({
     };
   }, [enabled, refresh]);
 
-  const value = useMemo(() => state, [state]);
+  const value = useMemo<ChatbotAlertState>(
+    () => ({
+      newContactActive,
+      unreadMessageActive,
+      newContactCount,
+      unreadConversationCount,
+      active: newContactActive,
+      pendingCount: newContactCount || unreadConversationCount,
+      conversationIds,
+      setViewingConversationId,
+    }),
+    [
+      newContactActive,
+      unreadMessageActive,
+      newContactCount,
+      unreadConversationCount,
+      conversationIds,
+      setViewingConversationId,
+    ],
+  );
 
   return <ChatbotAlertContext.Provider value={value}>{children}</ChatbotAlertContext.Provider>;
 }

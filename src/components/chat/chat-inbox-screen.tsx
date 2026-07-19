@@ -13,10 +13,12 @@ import {
   Send,
   Sparkles,
   StickyNote,
+  UserPlus,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ChatContactPanel } from "@/components/chat/chat-contact-panel";
+import { useChatbotAlert } from "@/components/chat/chatbot-alert-context";
 import { StatusBadge } from "@/components/clients/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,20 +85,23 @@ export function ChatInboxScreen({
   const setConvAi = useServerFn(setChatConversationAiFn);
   const setAiGlobal = useServerFn(setChatAiGlobalEnabledFn);
   const addNote = useServerFn(addChatAttendanceNoteFn);
+  const { setViewingConversationId } = useChatbotAlert();
 
   const [conversations, setConversations] = useState(bootstrap.conversations);
-  const [selectedId, setSelectedId] = useState<string | null>(bootstrap.conversations[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [active, setActive] = useState<ChatConversation | null>(null);
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [attachingMediaId, setAttachingMediaId] = useState<string | null>(null);
   const [attachedMediaIds, setAttachedMediaIds] = useState<Set<string>>(() => new Set());
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [query, setQuery] = useState("");
   const [composer, setComposer] = useState<ComposerMode>("reply");
@@ -109,6 +114,7 @@ export function ChatInboxScreen({
     phone: "",
   });
   const userId = bootstrap.currentUserId;
+  const isAssignedToMe = Boolean(active?.assignedUserId && active.assignedUserId === userId);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -202,12 +208,12 @@ export function ChatInboxScreen({
 
   async function openConversation(id: string) {
     setSelectedId(id);
+    setViewingConversationId(id);
     setContactDraft({ name: "", phone: "" });
     clearSelectedImage();
     setLoadingThread(true);
     try {
-      // Abrir conversa atribui ao usuário, mas preserva o estado individual da IA.
-      await joinChat({ data: { conversationId: id } });
+      // Abrir só carrega o thread e marca como lido — atribuição é explícita (botão Atribuir).
       const thread = await getThread({ data: { conversationId: id } });
       setActive(thread.conversation);
       setMessages(thread.messages);
@@ -219,10 +225,35 @@ export function ChatInboxScreen({
     }
   }
 
+  async function handleAssignToMe() {
+    if (!selectedId || assigning || isAssignedToMe) return;
+    setAssigning(true);
+    try {
+      const next = await joinChat({ data: { conversationId: selectedId } });
+      if (next) {
+        setActive((current) => (current ? { ...current, ...next } : next));
+        setConversations((current) =>
+          current.map((item) => (item.id === next.id ? { ...item, ...next } : item)),
+        );
+      }
+      toast.success("Contato atribuído a você — aparece em Meus");
+      await refreshList();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao atribuir");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
   useEffect(() => {
-    if (selectedId) void openConversation(selectedId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setViewingConversationId(selectedId);
+    return () => setViewingConversationId(null);
+  }, [selectedId, setViewingConversationId]);
+
+  useEffect(() => {
+    if (loadingThread) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, selectedId, loadingThread]);
 
   // Poll leve — novas mensagens via webhook / teste (não reatribui)
   useEffect(() => {
@@ -235,7 +266,7 @@ export function ChatInboxScreen({
           });
         }
       });
-    }, 10_000);
+    }, 5_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
@@ -695,8 +726,33 @@ export function ChatInboxScreen({
                 <h3 className="truncate font-display text-base font-semibold">
                   {active?.clientName || active?.contactName || active?.phone}
                 </h3>
-                <p className="text-xs text-muted-foreground">{active?.phone}</p>
+                <p className="text-xs text-muted-foreground">
+                  {active?.phone}
+                  {active?.assignedUserName
+                    ? ` · Atribuído: ${active.assignedUserName}`
+                    : " · Não atribuído"}
+                </p>
               </div>
+              <Button
+                type="button"
+                size="sm"
+                variant={isAssignedToMe ? "secondary" : "default"}
+                className="cursor-pointer gap-1.5"
+                disabled={!active || assigning || isAssignedToMe}
+                onClick={() => void handleAssignToMe()}
+                title={
+                  isAssignedToMe
+                    ? "Já atribuído a você"
+                    : "Atribuir este contato a mim (aparece em Meus)"
+                }
+              >
+                {assigning ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <UserPlus className="size-3.5" />
+                )}
+                {isAssignedToMe ? "Meu" : "Atribuir"}
+              </Button>
               <Button
                 type="button"
                 size="icon"
@@ -844,6 +900,7 @@ export function ChatInboxScreen({
                       </div>
                     );
                   })}
+                  <div ref={messagesEndRef} aria-hidden className="h-px w-full shrink-0" />
                 </div>
               )}
             </ScrollArea>

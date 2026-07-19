@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * mensagem não lida no Chatbot WhatsApp.
  */
 export function ChatbotTopbarIcon() {
-  const { active, pendingCount } = useChatbotAlert();
+  const { newContactActive, newContactCount } = useChatbotAlert();
 
   return (
     <Button
@@ -17,17 +17,17 @@ export function ChatbotTopbarIcon() {
       size="icon"
       className="relative cursor-default"
       aria-label={
-        active
-          ? `${pendingCount} contato(s) aguardando no Chatbot WhatsApp`
+        newContactActive
+          ? `${newContactCount} contato(s) novo(s) no Chatbot WhatsApp`
           : "Chatbot WhatsApp — sem contatos novos"
       }
       title={
-        active
-          ? `${pendingCount} contato(s) aguardando no Chatbot`
+        newContactActive
+          ? `${newContactCount} contato(s) novo(s) no Chatbot`
           : "Chatbot WhatsApp"
       }
     >
-      {active ? (
+      {newContactActive ? (
         <>
           <span
             className="pointer-events-none absolute inset-0 m-auto size-7 animate-ping rounded-full bg-emerald-500/35"
@@ -42,7 +42,7 @@ export function ChatbotTopbarIcon() {
       <WhatsAppOutlineIcon
         className={cn(
           "relative size-[18px] transition-colors",
-          active ? "text-emerald-500" : "text-foreground/90",
+          newContactActive ? "text-emerald-500" : "text-foreground/90",
         )}
       />
     </Button>

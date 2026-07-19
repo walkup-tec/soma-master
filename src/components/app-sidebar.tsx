@@ -163,7 +163,7 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
                             {items.map((item) => {
                               const Icon = MENU_ICONS[item.id];
                               const chatIncoming =
-                                item.id === "chat" && chatbotAlert.active;
+                                item.id === "chat" && chatbotAlert.unreadMessageActive;
                               return (
                                 <SidebarMenuItem key={item.id}>
                                   <SidebarMenuButton
