@@ -41,12 +41,25 @@ export function FunnelDisparoModal({
 
   useEffect(() => {
     if (!open) return;
-    const next = {
-      ...value,
+    const next: FunnelDisparoConfig = {
+      campaignName: value.campaignName || "",
       plannedSendCount:
         value.plannedSendCount > 0
           ? value.plannedSendCount
           : Math.max(0, audienceCount ?? 0),
+      messageMode: "ai",
+      aiBriefing: value.aiBriefing || "",
+      aiTone: value.aiTone || "consultivo",
+      aiCta: value.aiCta || "Responda no link abaixo",
+      aiAudience: value.aiAudience || "CORBAN",
+      linkDestinationMode: value.linkDestinationMode === "url" ? "url" : "whatsapp",
+      whatsappTargetNumber: value.whatsappTargetNumber || "",
+      responseUrl: value.responseUrl || "",
+      startHour: value.startHour ?? 8,
+      endHour: value.endHour ?? 22,
+      selectedInstanceNames: value.selectedInstanceNames || [],
+      wabaCampaignId: value.wabaCampaignId,
+      lastGenerateError: value.lastGenerateError,
     };
     setDraft(next);
   }, [open, value, audienceCount]);
@@ -177,8 +190,8 @@ export function FunnelDisparoModal({
             Disparo · API Alternativa (WABA)
           </DialogTitle>
           <DialogDescription>
-            Mesma lógica de criação de campanha Alternativa. Ao gerar, os dados vão para a conta
-            WABA configurada e o envio segue o fluxo normal de lá.
+            Envie só os dados iniciais da campanha. Delay e ritmo de envio são calculados
+            automaticamente no WABA; o restante do fluxo segue no painel de lá.
           </DialogDescription>
         </DialogHeader>
 
@@ -209,68 +222,42 @@ export function FunnelDisparoModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label>Modo da mensagem</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={draft.messageMode === "ai" ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => patch({ messageMode: "ai" })}
-                >
-                  IA
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={draft.messageMode === "fixed" ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => patch({ messageMode: "fixed" })}
-                >
-                  Texto fixo
-                </Button>
-              </div>
+              <Label>Público-alvo (IA)</Label>
+              <Input
+                value={draft.aiAudience}
+                onChange={(event) => patch({ aiAudience: event.target.value })}
+                placeholder="CORBAN"
+              />
             </div>
           </div>
 
-          {draft.messageMode === "ai" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Briefing da IA</Label>
-                <Textarea
-                  value={draft.aiBriefing}
-                  onChange={(event) => patch({ aiBriefing: event.target.value })}
-                  placeholder="Contexto do produto, tom e objetivo do disparo…"
-                  className="min-h-[90px]"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tom</Label>
-                <Input
-                  value={draft.aiTone}
-                  onChange={(event) => patch({ aiTone: event.target.value })}
-                  placeholder="consultivo"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>CTA</Label>
-                <Input
-                  value={draft.aiCta}
-                  onChange={(event) => patch({ aiCta: event.target.value })}
-                  placeholder="Responda no link abaixo"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label>Mensagem fixa</Label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Briefing da IA</Label>
               <Textarea
-                value={draft.fixedMessage}
-                onChange={(event) => patch({ fixedMessage: event.target.value })}
-                className="min-h-[110px]"
+                value={draft.aiBriefing}
+                onChange={(event) => patch({ aiBriefing: event.target.value })}
+                placeholder="Contexto do produto, tom e objetivo do disparo…"
+                className="min-h-[90px]"
               />
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label>Tom</Label>
+              <Input
+                value={draft.aiTone}
+                onChange={(event) => patch({ aiTone: event.target.value })}
+                placeholder="consultivo"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>CTA</Label>
+              <Input
+                value={draft.aiCta}
+                onChange={(event) => patch({ aiCta: event.target.value })}
+                placeholder="Responda no link abaixo"
+              />
+            </div>
+          </div>
 
           <div className="space-y-2 rounded-lg border border-border p-3">
             <Label>Destino da resposta (link encurtado)</Label>
@@ -309,25 +296,9 @@ export function FunnelDisparoModal({
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Delay mín. (s)</Label>
-              <Input
-                type="number"
-                value={draft.delayMinSeconds}
-                onChange={(event) => patch({ delayMinSeconds: Number(event.target.value) || 0 })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Delay máx. (s)</Label>
-              <Input
-                type="number"
-                value={draft.delayMaxSeconds}
-                onChange={(event) => patch({ delayMaxSeconds: Number(event.target.value) || 0 })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Início (h)</Label>
+              <Label>Expediente · início (h)</Label>
               <Input
                 type="number"
                 min={0}
@@ -337,15 +308,18 @@ export function FunnelDisparoModal({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Fim (h)</Label>
+              <Label>Expediente · fim (h)</Label>
               <Input
                 type="number"
-                min={0}
-                max={23}
+                min={1}
+                max={24}
                 value={draft.endHour}
-                onChange={(event) => patch({ endHour: Number(event.target.value) || 0 })}
+                onChange={(event) => patch({ endHour: Number(event.target.value) || 22 })}
               />
             </div>
+            <p className="text-[11px] text-muted-foreground sm:col-span-2">
+              O WABA calcula automaticamente o intervalo entre envios a partir deste expediente.
+            </p>
           </div>
 
           <div className="space-y-2">

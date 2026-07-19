@@ -41,20 +41,20 @@ export type FunnelAudienceConfig = {
 export type FunnelDisparoConfig = {
   campaignName: string;
   plannedSendCount: number;
-  messageMode: "ai" | "fixed";
+  /** Alternativa WABA: modo IA (database existe no WABA; fixed não faz parte do motor Alternativa). */
+  messageMode: "ai";
   aiBriefing: string;
   aiTone: string;
   aiCta: string;
-  fixedMessage: string;
+  aiAudience: string;
   linkDestinationMode: "whatsapp" | "url";
   whatsappTargetNumber: string;
   responseUrl: string;
-  delayMinSeconds: number;
-  delayMaxSeconds: number;
+  /** Expediente — WABA calcula delays a partir destes horários */
   startHour: number;
   endHour: number;
+  /** [] = todas as instâncias conectadas */
   selectedInstanceNames: string[];
-  /** id da campanha criada no WABA (após Gerar Campanha) */
   wabaCampaignId: string | null;
   lastGenerateError: string | null;
 };
@@ -288,12 +288,10 @@ export function defaultDisparoConfig(): FunnelDisparoConfig {
     aiBriefing: "",
     aiTone: "consultivo",
     aiCta: "Responda no link abaixo",
-    fixedMessage: "",
+    aiAudience: "CORBAN",
     linkDestinationMode: "whatsapp",
     whatsappTargetNumber: "",
     responseUrl: "",
-    delayMinSeconds: 120,
-    delayMaxSeconds: 320,
     startHour: 8,
     endHour: 22,
     selectedInstanceNames: [],
