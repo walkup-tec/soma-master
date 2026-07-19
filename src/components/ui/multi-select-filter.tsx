@@ -15,6 +15,9 @@ type Props = {
   values: string[];
   onChange: (values: string[]) => void;
   className?: string;
+  contentClassName?: string;
+  /** Necessário quando o filtro fica dentro de Dialog (z-index + pointer-events) */
+  modal?: boolean;
   disabled?: boolean;
   emptyLabel?: string;
 };
@@ -33,6 +36,8 @@ export function MultiSelectFilter({
   values,
   onChange,
   className,
+  contentClassName,
+  modal = false,
   disabled,
   emptyLabel = "Nenhuma opção",
 }: Props) {
@@ -47,7 +52,7 @@ export function MultiSelectFilter({
   };
 
   return (
-    <Popover>
+    <Popover modal={modal}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -63,12 +68,19 @@ export function MultiSelectFilter({
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-2" align="start">
+      <PopoverContent
+        className={cn(
+          "w-[var(--radix-popover-trigger-width)] min-w-[220px] p-2",
+          contentClassName,
+        )}
+        align="start"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         {values.length > 0 ? (
           <div className="mb-1 flex justify-end px-1 pb-1">
             <button
               type="button"
-              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline"
               onClick={() => onChange([])}
             >
               Limpar ({allLabel})

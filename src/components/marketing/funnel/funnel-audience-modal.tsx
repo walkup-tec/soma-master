@@ -144,6 +144,18 @@ export function FunnelAudienceModal({
       <DialogContent
         className="flex z-[200] max-h-[90vh] w-[calc(100vw-2rem)] max-w-3xl flex-col gap-4 overflow-hidden"
         overlayClassName="z-[200]"
+        onPointerDownOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-radix-popper-content-wrapper], [data-slot=popover-content]")) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-radix-popper-content-wrapper], [data-slot=popover-content]")) {
+            event.preventDefault();
+          }
+        }}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -196,12 +208,18 @@ export function FunnelAudienceModal({
                 options={productOptions}
                 values={draft.filters.productIds ?? []}
                 onChange={(productIds) => patchFilters({ productIds })}
+                modal
+                contentClassName="z-[250]"
+                emptyLabel="Nenhum produto cadastrado nas configurações"
               />
               <MultiSelectFilter
                 allLabel="Todos os status"
                 options={statusOptions}
                 values={draft.filters.statuses ?? []}
                 onChange={(statuses) => patchFilters({ statuses })}
+                modal
+                contentClassName="z-[250]"
+                emptyLabel="Nenhum status cadastrado nas configurações"
               />
             </div>
             <div className="flex flex-wrap gap-2">
