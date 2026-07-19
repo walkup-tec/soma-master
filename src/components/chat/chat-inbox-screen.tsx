@@ -299,13 +299,11 @@ export function ChatInboxScreen({
   function handleTransferred(conversation: ChatConversation) {
     applyConversationUpdate(conversation);
     void refreshList();
-    // Sai da fila Meus do remetente — fecha o thread para reforçar a mudança.
-    if (filter === "mine") {
-      setSelectedId(null);
-      setActive(null);
-      setMessages([]);
-      setViewingConversationId(null);
-    }
+    // Sai da fila do remetente (Meus / Não atribuídos / Todos do agente).
+    setSelectedId(null);
+    setActive(null);
+    setMessages([]);
+    setViewingConversationId(null);
   }
 
   useEffect(() => {
