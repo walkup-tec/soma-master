@@ -1,4 +1,9 @@
-﻿## 2026-07-19 14:40 — Fix bun.lock (deploy funil)
+﻿## 2026-07-19 17:47 — Funil de prospecção (módulos)
+- Construtor deixou de ser “robô”: Iniciar/Pausa/Público/Disparo/Feedback/Fim/E-mail Mkt.
+- Disparo → WABA `POST /integrations/soma/alternativa-campaigns` (owner mozart).
+- LOG: `doc/LOG-2026-07-19__174734__funil-prospeccao-modulos.md`.
+
+## 2026-07-19 14:40 — Fix bun.lock (deploy funil)
 - Atualizou bun.lock com @xyflow/react após falha frozen-lockfile no Easypanel.
 - LOG: `doc/LOG-2026-07-19__144000__fix-bun-lock-xyflow-deploy.md`.
 

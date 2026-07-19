@@ -17,40 +17,46 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
-  GitBranch,
-  MessageSquareText,
   Flag,
-  Timer,
-  Plus,
-  Trash2,
+  Mail,
+  Megaphone,
+  Pause,
+  Split,
+  Users,
 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import { FunnelStepNode } from "@/components/marketing/funnel/funnel-step-node";
+import { FunnelStepEditor } from "@/components/marketing/funnel/funnel-step-editor";
 import {
   FUNNEL_STEP_CATALOG,
+  createStepData,
   type FunnelDraft,
   type FunnelStepData,
   type FunnelStepKind,
 } from "@/lib/marketing/funnel.types";
+import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
+import { cn } from "@/lib/utils";
 
 const nodeTypes = { funnelStep: FunnelStepNode };
 
-const PALETTE_ICONS: Record<Exclude<FunnelStepKind, "start">, typeof Plus> = {
-  message: MessageSquareText,
-  wait: Timer,
-  condition: GitBranch,
+const PALETTE_ICONS: Record<Exclude<FunnelStepKind, "start">, typeof Pause> = {
+  pause: Pause,
+  audience: Users,
+  disparo: Megaphone,
+  feedback: Split,
+  email_mkt: Mail,
   end: Flag,
 };
 
 function FunnelCanvasInner({
   draft,
   onChange,
+  products,
+  attendanceStatuses,
 }: {
   draft: FunnelDraft;
   onChange: (next: FunnelDraft) => void;
+  products: ProductConfig[];
+  attendanceStatuses: AttendanceStatusConfig[];
 }) {
   const { screenToFlowPosition, fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(draft.nodes as Node[]);
@@ -61,6 +67,32 @@ function FunnelCanvasInner({
     () => nodes.find((node) => node.id === selectedNodeId) ?? null,
     [nodes, selectedNodeId],
   );
+
+  /** Contagem do nó Público mais próximo a montante (para sugerir qtd. no Disparo). */
+  const upstreamAudienceCount = useMemo(() => {
+    if (!selectedNodeId) return null;
+    const visited = new Set<string>();
+    const queue = [selectedNodeId];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      for (const edge of edges) {
+        if (edge.target !== id) continue;
+        const source = nodes.find((node) => node.id === edge.source);
+        const data = source?.data as FunnelStepData | undefined;
+        if (data?.kind === "audience") {
+          return (
+            data.audience?.audienceCount ??
+            data.audience?.importRowCount ??
+            null
+          );
+        }
+        if (source) queue.push(source.id);
+      }
+    }
+    return null;
+  }, [selectedNodeId, nodes, edges]);
 
   const persist = useCallback(
     (nextNodes: Node[], nextEdges: Edge[]) => {
@@ -80,6 +112,7 @@ function FunnelCanvasInner({
           target: edge.target,
           sourceHandle: edge.sourceHandle,
           targetHandle: edge.targetHandle,
+          label: typeof edge.label === "string" ? edge.label : undefined,
         })),
       });
     },
@@ -106,7 +139,6 @@ function FunnelCanvasInner({
 
   const addStep = useCallback(
     (kind: Exclude<FunnelStepKind, "start">) => {
-      const catalog = FUNNEL_STEP_CATALOG.find((item) => item.kind === kind);
       const id = `step-${kind}-${crypto.randomUUID().slice(0, 6)}`;
       const position = screenToFlowPosition({
         x: window.innerWidth / 2,
@@ -117,11 +149,7 @@ function FunnelCanvasInner({
         type: "funnelStep",
         position: { x: position.x - 100, y: position.y - 40 },
         deletable: true,
-        data: {
-          kind,
-          label: catalog?.label ?? kind,
-          description: catalog?.description ?? "",
-        } satisfies FunnelStepData,
+        data: createStepData(kind),
       };
       setNodes((current) => {
         const next = [...current, node];
@@ -135,13 +163,11 @@ function FunnelCanvasInner({
   );
 
   const updateSelectedData = useCallback(
-    (patch: Partial<FunnelStepData>) => {
+    (nextData: FunnelStepData) => {
       if (!selectedNodeId) return;
       setNodes((current) => {
         const next = current.map((node) =>
-          node.id === selectedNodeId
-            ? { ...node, data: { ...(node.data as FunnelStepData), ...patch } }
-            : node,
+          node.id === selectedNodeId ? { ...node, data: nextData } : node,
         );
         persist(next, edges);
         return next;
@@ -153,10 +179,7 @@ function FunnelCanvasInner({
   const deleteSelected = useCallback(() => {
     if (!selectedNodeId) return;
     const node = nodes.find((item) => item.id === selectedNodeId);
-    if ((node?.data as FunnelStepData | undefined)?.kind === "start") {
-      toast.message("A etapa Início não pode ser removida.");
-      return;
-    }
+    if ((node?.data as FunnelStepData | undefined)?.kind === "start") return;
     setNodes((current) => {
       const nextNodes = current.filter((item) => item.id !== selectedNodeId);
       setEdges((currentEdges) => {
@@ -176,10 +199,10 @@ function FunnelCanvasInner({
       <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-card/80">
         <div className="border-b border-border px-3 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Etapas
+            Módulos
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Clique para adicionar no centro do canvas.
+            Funil de prospecção — arraste e conecte no canvas.
           </p>
         </div>
         <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
@@ -205,9 +228,6 @@ function FunnelCanvasInner({
             );
           })}
         </div>
-        <div className="border-t border-border p-2 text-[10px] leading-relaxed text-muted-foreground">
-          Arraste as etapas no canvas e conecte pelas bolinhas laterais.
-        </div>
       </aside>
 
       <div className="relative min-h-0 min-w-0 flex-1">
@@ -215,12 +235,8 @@ function FunnelCanvasInner({
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          onNodesChange={(changes) => {
-            onNodesChange(changes);
-          }}
-          onEdgesChange={(changes) => {
-            onEdgesChange(changes);
-          }}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDragStop={(_, __, nextNodes) => persist(nextNodes, edges)}
           onNodesDelete={(deleted) => {
@@ -249,17 +265,13 @@ function FunnelCanvasInner({
         >
           <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
           <Controls showInteractive={false} />
-          <MiniMap
-            pannable
-            zoomable
-            className="!rounded-lg !border !border-border !bg-card"
-          />
+          <MiniMap pannable zoomable className="!rounded-lg !border !border-border !bg-card" />
         </ReactFlow>
       </div>
 
       <aside
         className={cn(
-          "flex w-72 shrink-0 flex-col border-l border-border bg-card/80 transition-opacity",
+          "flex w-80 shrink-0 flex-col border-l border-border bg-card/80 transition-opacity",
           !selectedNode && "opacity-70",
         )}
       >
@@ -269,45 +281,20 @@ function FunnelCanvasInner({
           </p>
         </div>
         {selectedNode ? (
-          <div className="space-y-3 p-3">
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Título</label>
-              <Input
-                className="mt-1 h-9"
-                value={(selectedNode.data as FunnelStepData).label}
-                onChange={(event) => updateSelectedData({ label: event.target.value })}
-                disabled={(selectedNode.data as FunnelStepData).kind === "start"}
-              />
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground">
-                Descrição / conteúdo
-              </label>
-              <textarea
-                className="mt-1 min-h-[110px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={(selectedNode.data as FunnelStepData).description ?? ""}
-                onChange={(event) => updateSelectedData({ description: event.target.value })}
-              />
-            </div>
-            {(selectedNode.data as FunnelStepData).kind !== "start" ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full cursor-pointer gap-1.5 text-destructive hover:text-destructive"
-                onClick={deleteSelected}
-              >
-                <Trash2 className="size-3.5" />
-                Remover etapa
-              </Button>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                A etapa Início é fixa e marca a entrada do contato no funil.
-              </p>
-            )}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <FunnelStepEditor
+              data={selectedNode.data as FunnelStepData}
+              onChange={updateSelectedData}
+              onDelete={deleteSelected}
+              canDelete={(selectedNode.data as FunnelStepData).kind !== "start"}
+              products={products}
+              attendanceStatuses={attendanceStatuses}
+              upstreamAudienceCount={upstreamAudienceCount}
+            />
           </div>
         ) : (
           <p className="p-4 text-sm text-muted-foreground">
-            Selecione uma etapa no canvas para editar o conteúdo.
+            Selecione um módulo no canvas para configurar.
           </p>
         )}
       </aside>
@@ -318,13 +305,22 @@ function FunnelCanvasInner({
 export function FunnelBuilderCanvas({
   draft,
   onChange,
+  products,
+  attendanceStatuses,
 }: {
   draft: FunnelDraft;
   onChange: (next: FunnelDraft) => void;
+  products: ProductConfig[];
+  attendanceStatuses: AttendanceStatusConfig[];
 }) {
   return (
     <ReactFlowProvider>
-      <FunnelCanvasInner draft={draft} onChange={onChange} />
+      <FunnelCanvasInner
+        draft={draft}
+        onChange={onChange}
+        products={products}
+        attendanceStatuses={attendanceStatuses}
+      />
     </ReactFlowProvider>
   );
 }

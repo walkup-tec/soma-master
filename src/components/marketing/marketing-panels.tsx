@@ -218,10 +218,10 @@ export function MarketingFunnelPanel() {
       <Card className="border-border/60 shadow-soft">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle className="font-display text-base">Funis de marketing</CardTitle>
+            <CardTitle className="font-display text-base">Funis de prospecção</CardTitle>
             <CardDescription>
-              Monte fluxos arrastando e conectando etapas (estilo Typebot / BotConversa). Esta é a
-              primeira versão do construtor.
+              Monte jornadas com Iniciar, Pausa, Público, Disparo (WABA), Feedback, E-mail Mkt e Fim.
+              Arraste e conecte etapas em tela cheia.
             </CardDescription>
           </div>
           <Button

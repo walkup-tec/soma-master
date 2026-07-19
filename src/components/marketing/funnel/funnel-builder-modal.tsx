@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useServerFn } from "@tanstack/react-start";
 import { Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,8 @@ import {
   createDefaultFunnelDraft,
   type FunnelDraft,
 } from "@/lib/marketing/funnel.types";
+import { getSystemSettingsFn } from "@/lib/config/settings.server";
+import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
 
 const STORAGE_KEY = "soma-marketing-funnels-v1";
 
@@ -32,8 +35,7 @@ export function listStoredFunnels(): FunnelDraft[] {
 }
 
 /**
- * Modal em tela cheia (100% viewport) para construir o funil.
- * Primeira versão: arrastar etapas + conectar (estilo Typebot / BotConversa).
+ * Modal 100% viewport — funil de prospecção (não robô de atendimento).
  */
 export function FunnelBuilderModal({
   open,
@@ -46,12 +48,24 @@ export function FunnelBuilderModal({
   initialDraft?: FunnelDraft | null;
   onSaved?: (draft: FunnelDraft) => void;
 }) {
+  const loadSettings = useServerFn(getSystemSettingsFn);
   const [draft, setDraft] = useState<FunnelDraft>(() => createDefaultFunnelDraft());
+  const [products, setProducts] = useState<ProductConfig[]>([]);
+  const [attendanceStatuses, setAttendanceStatuses] = useState<AttendanceStatusConfig[]>([]);
 
   useEffect(() => {
     if (!open) return;
     setDraft(initialDraft ? structuredClone(initialDraft) : createDefaultFunnelDraft());
-  }, [open, initialDraft]);
+    void loadSettings()
+      .then((settings) => {
+        setProducts(settings.products || []);
+        setAttendanceStatuses(settings.attendanceStatuses || []);
+      })
+      .catch(() => {
+        setProducts([]);
+        setAttendanceStatuses([]);
+      });
+  }, [open, initialDraft, loadSettings]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,12 +106,12 @@ export function FunnelBuilderModal({
       className="fixed inset-0 z-[100] flex h-[100dvh] w-[100vw] flex-col bg-background"
       role="dialog"
       aria-modal="true"
-      aria-label="Construtor de funil"
+      aria-label="Construtor de funil de prospecção"
     >
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Construtor de funil
+            Funil de prospecção
           </p>
           <Input
             value={draft.name}
@@ -123,7 +137,13 @@ export function FunnelBuilderModal({
       </header>
 
       <div className="min-h-0 flex-1">
-        <FunnelBuilderCanvas key={draft.id} draft={draft} onChange={setDraft} />
+        <FunnelBuilderCanvas
+          key={draft.id}
+          draft={draft}
+          onChange={setDraft}
+          products={products}
+          attendanceStatuses={attendanceStatuses}
+        />
       </div>
     </div>,
     document.body,

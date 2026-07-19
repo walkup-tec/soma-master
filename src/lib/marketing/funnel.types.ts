@@ -1,9 +1,80 @@
-export type FunnelStepKind = "start" | "message" | "wait" | "condition" | "end";
+import type { ClientBulkFilters } from "@/lib/clients/client.types";
+
+/** Módulos do funil de prospecção (não é robô de atendimento). */
+export type FunnelStepKind =
+  | "start"
+  | "pause"
+  | "audience"
+  | "disparo"
+  | "feedback"
+  | "email_mkt"
+  | "end";
+
+export type FunnelPauseUnit = "minutes" | "hours" | "days" | "months";
+
+export type FunnelStartConfig = {
+  mode: "immediate" | "scheduled";
+  /** ISO datetime local quando mode === scheduled */
+  scheduledAt: string | null;
+  /** Preenchido em runtime quando o funil efetivamente inicia */
+  startedAt: string | null;
+};
+
+export type FunnelPauseConfig = {
+  amount: number;
+  unit: FunnelPauseUnit;
+};
+
+export type FunnelAudienceSource = "filters" | "import";
+
+export type FunnelAudienceConfig = {
+  source: FunnelAudienceSource;
+  filters: ClientBulkFilters;
+  /** Tags futuras — UI já captura labels */
+  tags: string[];
+  /** Contagem cacheada na última consulta */
+  audienceCount: number | null;
+  importFileName: string | null;
+  importRowCount: number | null;
+};
+
+export type FunnelDisparoConfig = {
+  campaignName: string;
+  plannedSendCount: number;
+  messageMode: "ai" | "fixed";
+  aiBriefing: string;
+  aiTone: string;
+  aiCta: string;
+  fixedMessage: string;
+  linkDestinationMode: "whatsapp" | "url";
+  whatsappTargetNumber: string;
+  responseUrl: string;
+  delayMinSeconds: number;
+  delayMaxSeconds: number;
+  startHour: number;
+  endHour: number;
+  selectedInstanceNames: string[];
+  /** id da campanha criada no WABA (após Gerar Campanha) */
+  wabaCampaignId: string | null;
+  lastGenerateError: string | null;
+};
+
+export type FunnelFeedbackBranch = "clicked" | "clicked_no_chat" | "not_clicked";
+
+export type FunnelEmailMktConfig = {
+  subject: string;
+  body: string;
+};
 
 export type FunnelStepData = {
   kind: FunnelStepKind;
   label: string;
   description?: string;
+  start?: FunnelStartConfig;
+  pause?: FunnelPauseConfig;
+  audience?: FunnelAudienceConfig;
+  disparo?: FunnelDisparoConfig;
+  emailMkt?: FunnelEmailMktConfig;
 };
 
 export type FunnelDraft = {
@@ -23,8 +94,31 @@ export type FunnelDraft = {
     target: string;
     sourceHandle?: string | null;
     targetHandle?: string | null;
+    label?: string;
   }>;
 };
+
+export const FUNNEL_FEEDBACK_HANDLES: Array<{
+  id: FunnelFeedbackBranch;
+  label: string;
+  hint: string;
+}> = [
+  {
+    id: "clicked",
+    label: "Quem clicou",
+    hint: "Recebeu, clicou no link encurtado",
+  },
+  {
+    id: "clicked_no_chat",
+    label: "Clicou e não chamou",
+    hint: "Clicou, mas não abriu Chat WhatsApp",
+  },
+  {
+    id: "not_clicked",
+    label: "Não clicou",
+    hint: "Recebeu e não clicou no link",
+  },
+];
 
 export const FUNNEL_STEP_CATALOG: Array<{
   kind: Exclude<FunnelStepKind, "start">;
@@ -32,19 +126,29 @@ export const FUNNEL_STEP_CATALOG: Array<{
   description: string;
 }> = [
   {
-    kind: "message",
-    label: "Mensagem",
-    description: "Envia texto no WhatsApp",
+    kind: "pause",
+    label: "Pausa",
+    description: "Aguarda minutos, horas, dias ou meses",
   },
   {
-    kind: "wait",
-    label: "Espera",
-    description: "Aguarda um tempo ou resposta",
+    kind: "audience",
+    label: "Público",
+    description: "Filtros, tags, importação e contagem",
   },
   {
-    kind: "condition",
-    label: "Condição",
-    description: "Ramifica o fluxo (sim/não)",
+    kind: "disparo",
+    label: "Disparo",
+    description: "Campanha API Alternativa no WABA",
+  },
+  {
+    kind: "feedback",
+    label: "Feedback",
+    description: "Ramifica por clique / chat",
+  },
+  {
+    kind: "email_mkt",
+    label: "E-mail Mkt",
+    description: "Assunto + texto com variáveis",
   },
   {
     kind: "end",
@@ -53,11 +157,134 @@ export const FUNNEL_STEP_CATALOG: Array<{
   },
 ];
 
-export function createDefaultFunnelDraft(name = "Novo funil"): FunnelDraft {
+export function defaultStartConfig(): FunnelStartConfig {
+  return { mode: "immediate", scheduledAt: null, startedAt: null };
+}
+
+export function defaultPauseConfig(): FunnelPauseConfig {
+  return { amount: 1, unit: "days" };
+}
+
+export function defaultAudienceConfig(): FunnelAudienceConfig {
+  return {
+    source: "filters",
+    filters: {
+      search: "",
+      productIds: [],
+      statuses: [],
+      attendance: "all",
+      schedule: "all",
+    },
+    tags: [],
+    audienceCount: null,
+    importFileName: null,
+    importRowCount: null,
+  };
+}
+
+export function defaultDisparoConfig(): FunnelDisparoConfig {
+  return {
+    campaignName: "",
+    plannedSendCount: 0,
+    messageMode: "ai",
+    aiBriefing: "",
+    aiTone: "consultivo",
+    aiCta: "Responda no link abaixo",
+    fixedMessage: "",
+    linkDestinationMode: "whatsapp",
+    whatsappTargetNumber: "",
+    responseUrl: "",
+    delayMinSeconds: 120,
+    delayMaxSeconds: 320,
+    startHour: 8,
+    endHour: 22,
+    selectedInstanceNames: [],
+    wabaCampaignId: null,
+    lastGenerateError: null,
+  };
+}
+
+export function defaultEmailMktConfig(): FunnelEmailMktConfig {
+  return {
+    subject: "Olá, {{nome}}",
+    body: "Olá {{nome}},\n\nTemos uma novidade para você.\n\nAtenciosamente,",
+  };
+}
+
+export function createStepData(kind: FunnelStepKind): FunnelStepData {
+  switch (kind) {
+    case "start":
+      return {
+        kind,
+        label: "Iniciar",
+        description: "Imediato ou agendado",
+        start: defaultStartConfig(),
+      };
+    case "pause":
+      return {
+        kind,
+        label: "Pausa",
+        description: "1 dia",
+        pause: defaultPauseConfig(),
+      };
+    case "audience":
+      return {
+        kind,
+        label: "Público",
+        description: "Definir audiência",
+        audience: defaultAudienceConfig(),
+      };
+    case "disparo":
+      return {
+        kind,
+        label: "Disparo",
+        description: "Campanha WhatsApp",
+        disparo: defaultDisparoConfig(),
+      };
+    case "feedback":
+      return {
+        kind,
+        label: "Feedback",
+        description: "Clique / chat",
+      };
+    case "email_mkt":
+      return {
+        kind,
+        label: "E-mail Mkt",
+        description: "Assunto + mensagem",
+        emailMkt: defaultEmailMktConfig(),
+      };
+    case "end":
+      return {
+        kind,
+        label: "Fim",
+        description: "Encerra o funil",
+      };
+  }
+}
+
+export function formatPauseLabel(config: FunnelPauseConfig): string {
+  const n = Math.max(1, Math.floor(config.amount || 1));
+  const map: Record<FunnelPauseUnit, [string, string]> = {
+    minutes: ["minuto", "minutos"],
+    hours: ["hora", "horas"],
+    days: ["dia", "dias"],
+    months: ["mês", "meses"],
+  };
+  const [one, many] = map[config.unit];
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+export function createDefaultFunnelDraft(name = "Novo funil de prospecção"): FunnelDraft {
   const id = `funnel-${crypto.randomUUID().slice(0, 8)}`;
   const startId = "step-start";
-  const messageId = "step-message-1";
-  const endId = "step-end";
+  const audienceId = "step-audience";
+  const disparoId = "step-disparo";
+  const feedbackId = "step-feedback";
+  const endClickedId = "step-end-clicked";
+  const endNoChatId = "step-end-no-chat";
+  const endNoClickId = "step-end-no-click";
+
   return {
     id,
     name,
@@ -66,38 +293,72 @@ export function createDefaultFunnelDraft(name = "Novo funil"): FunnelDraft {
       {
         id: startId,
         type: "funnelStep",
-        position: { x: 80, y: 180 },
+        position: { x: 40, y: 220 },
         deletable: false,
-        data: {
-          kind: "start",
-          label: "Início",
-          description: "Entrada do contato no funil",
-        },
+        data: createStepData("start"),
       },
       {
-        id: messageId,
+        id: audienceId,
         type: "funnelStep",
-        position: { x: 360, y: 160 },
-        data: {
-          kind: "message",
-          label: "Mensagem de boas-vindas",
-          description: "Olá! Bem-vindo ao atendimento.",
-        },
+        position: { x: 280, y: 200 },
+        data: createStepData("audience"),
       },
       {
-        id: endId,
+        id: disparoId,
         type: "funnelStep",
-        position: { x: 680, y: 180 },
-        data: {
-          kind: "end",
-          label: "Fim",
-          description: "Fluxo encerrado",
-        },
+        position: { x: 540, y: 200 },
+        data: createStepData("disparo"),
+      },
+      {
+        id: feedbackId,
+        type: "funnelStep",
+        position: { x: 820, y: 180 },
+        data: createStepData("feedback"),
+      },
+      {
+        id: endClickedId,
+        type: "funnelStep",
+        position: { x: 1120, y: 40 },
+        data: { ...createStepData("end"), label: "Fim · Clicou" },
+      },
+      {
+        id: endNoChatId,
+        type: "funnelStep",
+        position: { x: 1120, y: 200 },
+        data: { ...createStepData("end"), label: "Fim · Não chamou" },
+      },
+      {
+        id: endNoClickId,
+        type: "funnelStep",
+        position: { x: 1120, y: 360 },
+        data: { ...createStepData("end"), label: "Fim · Não clicou" },
       },
     ],
     edges: [
-      { id: "e-start-msg", source: startId, target: messageId },
-      { id: "e-msg-end", source: messageId, target: endId },
+      { id: "e-start-aud", source: startId, target: audienceId },
+      { id: "e-aud-disp", source: audienceId, target: disparoId },
+      { id: "e-disp-fb", source: disparoId, target: feedbackId },
+      {
+        id: "e-fb-clicked",
+        source: feedbackId,
+        sourceHandle: "clicked",
+        target: endClickedId,
+        label: "Quem clicou",
+      },
+      {
+        id: "e-fb-nochat",
+        source: feedbackId,
+        sourceHandle: "clicked_no_chat",
+        target: endNoChatId,
+        label: "Clicou e não chamou",
+      },
+      {
+        id: "e-fb-noclick",
+        source: feedbackId,
+        sourceHandle: "not_clicked",
+        target: endNoClickId,
+        label: "Não clicou",
+      },
     ],
   };
 }
