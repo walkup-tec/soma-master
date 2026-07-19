@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useServerFn } from "@tanstack/react-start";
 import { Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,8 +11,7 @@ import {
   normalizeFunnelDraft,
   type FunnelDraft,
 } from "@/lib/marketing/funnel.types";
-import { getSystemSettingsFn } from "@/lib/config/settings.server";
-import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
+import { useSystemSettings } from "@/hooks/use-system-settings";
 
 const STORAGE_KEY = "soma-marketing-funnels-v1";
 
@@ -67,11 +65,9 @@ export function FunnelBuilderModal({
   initialDraft?: FunnelDraft | null;
   onSaved?: (draft: FunnelDraft) => void;
 }) {
-  const loadSettings = useServerFn(getSystemSettingsFn);
+  const { settings } = useSystemSettings();
   const [draft, setDraft] = useState<FunnelDraft>(() => createDefaultFunnelDraft());
   const [canvasKey, setCanvasKey] = useState(0);
-  const [products, setProducts] = useState<ProductConfig[]>([]);
-  const [attendanceStatuses, setAttendanceStatuses] = useState<AttendanceStatusConfig[]>([]);
   const wasOpenRef = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -92,17 +88,7 @@ export function FunnelBuilderModal({
     }
     setDraft(next);
     setCanvasKey((value) => value + 1);
-
-    void loadSettings()
-      .then((settings) => {
-        setProducts(settings.products || []);
-        setAttendanceStatuses(settings.attendanceStatuses || []);
-      })
-      .catch(() => {
-        setProducts([]);
-        setAttendanceStatuses([]);
-      });
-  }, [open, initialDraft, loadSettings]);
+  }, [open, initialDraft]);
 
   useEffect(() => {
     if (!open) return;
@@ -192,8 +178,8 @@ export function FunnelBuilderModal({
           key={`${draft.id}-${canvasKey}`}
           draft={draft}
           onChange={setDraft}
-          products={products}
-          attendanceStatuses={attendanceStatuses}
+          products={settings.products}
+          attendanceStatuses={settings.attendanceStatuses}
         />
       </div>
     </div>,

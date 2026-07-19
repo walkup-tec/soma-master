@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSystemSettings } from "@/hooks/use-system-settings";
 import { countBulkClientsFn } from "@/lib/clients/clients.server";
 import type { ClientAttendanceFilter, ClientBulkFilters } from "@/lib/clients/client.types";
 import {
@@ -22,7 +23,6 @@ import {
   type RegistrationDatePreset,
 } from "@/lib/dates/local-date";
 import type { FunnelAudienceConfig } from "@/lib/marketing/funnel.types";
-import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
 import { cn } from "@/lib/utils";
 
 const DATE_PRESETS: Array<{ id: RegistrationDatePreset; label: string }> = [
@@ -39,16 +39,13 @@ export function FunnelAudienceModal({
   onOpenChange,
   value,
   onSave,
-  products,
-  attendanceStatuses,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   value: FunnelAudienceConfig;
   onSave: (next: FunnelAudienceConfig) => void;
-  products: ProductConfig[];
-  attendanceStatuses: AttendanceStatusConfig[];
 }) {
+  const { settings, loading: loadingSettings } = useSystemSettings();
   const countBulk = useServerFn(countBulkClientsFn);
   const [draft, setDraft] = useState<FunnelAudienceConfig>(value);
   const [counting, setCounting] = useState(false);
@@ -86,13 +83,14 @@ export function FunnelAudienceModal({
     };
   }, [open, draft.source, draft.filters, countBulk]);
 
+  /** Mesma fonte da tela de Clientes (`useSystemSettings`) */
   const productOptions = useMemo(
-    () => products.map((item) => ({ value: item.id, label: item.name })),
-    [products],
+    () => settings.products.map((item) => ({ value: item.id, label: item.name })),
+    [settings.products],
   );
   const statusOptions = useMemo(
-    () => attendanceStatuses.map((item) => ({ value: item.id, label: item.label })),
-    [attendanceStatuses],
+    () => settings.attendanceStatuses.map((item) => ({ value: item.id, label: item.label })),
+    [settings.attendanceStatuses],
   );
 
   function patchFilters(patch: Partial<ClientBulkFilters>) {
@@ -210,7 +208,12 @@ export function FunnelAudienceModal({
                 onChange={(productIds) => patchFilters({ productIds })}
                 modal
                 contentClassName="z-[250]"
-                emptyLabel="Nenhum produto cadastrado nas configurações"
+                disabled={loadingSettings}
+                emptyLabel={
+                  loadingSettings
+                    ? "Carregando produtos…"
+                    : "Nenhum produto cadastrado nas configurações"
+                }
               />
               <MultiSelectFilter
                 allLabel="Todos os status"
@@ -219,7 +222,12 @@ export function FunnelAudienceModal({
                 onChange={(statuses) => patchFilters({ statuses })}
                 modal
                 contentClassName="z-[250]"
-                emptyLabel="Nenhum status cadastrado nas configurações"
+                disabled={loadingSettings}
+                emptyLabel={
+                  loadingSettings
+                    ? "Carregando status…"
+                    : "Nenhum status cadastrado nas configurações"
+                }
               />
             </div>
             <div className="flex flex-wrap gap-2">

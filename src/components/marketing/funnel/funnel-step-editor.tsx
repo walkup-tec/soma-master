@@ -241,8 +241,6 @@ export function FunnelStepEditor({
             open={audienceOpen}
             onOpenChange={setAudienceOpen}
             value={data.audience ?? defaultAudienceConfig()}
-            products={products}
-            attendanceStatuses={attendanceStatuses}
             onSave={(audience) =>
               onChange({
                 ...data,
