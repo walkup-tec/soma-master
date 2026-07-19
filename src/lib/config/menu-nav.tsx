@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Bell,
   CalendarDays,
+  ClipboardList,
   Columns3,
   Landmark,
   LayoutDashboard,
@@ -22,6 +23,7 @@ export const MENU_ICONS: Record<MenuItemId, ComponentType<{ className?: string }
   "parceiros-bancos": Landmark,
   "parceiros-produtos": Package,
   "parceiros-tabelas": Table2,
+  "parceiros-solicitacao-usuario": ClipboardList,
   dashboard: LayoutDashboard,
   clientes: Users,
   kanban: Columns3,

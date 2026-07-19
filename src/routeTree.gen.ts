@@ -29,6 +29,7 @@ import { Route as AppClientesNovoRouteImport } from './routes/app/clientes.novo'
 import { Route as AppParceirosIndexRouteImport } from './routes/app/parceiros.index'
 import { Route as AppParceirosBancosRouteImport } from './routes/app/parceiros.bancos'
 import { Route as AppParceirosProdutosRouteImport } from './routes/app/parceiros.produtos'
+import { Route as AppParceirosSolicitacaoUsuarioRouteImport } from './routes/app/parceiros.solicitacao-usuario'
 import { Route as AppParceirosTabelasRouteImport } from './routes/app/parceiros.tabelas'
 import { Route as ApiBanksGuidesStorageIdRouteImport } from './routes/api/banks/guides.$storageId'
 import { Route as ApiChatMediaMediaIdRouteImport } from './routes/api/chat/media.$mediaId'
@@ -136,6 +137,12 @@ const AppParceirosProdutosRoute = AppParceirosProdutosRouteImport.update({
   path: '/produtos',
   getParentRoute: () => AppParceirosRoute,
 } as any)
+const AppParceirosSolicitacaoUsuarioRoute =
+  AppParceirosSolicitacaoUsuarioRouteImport.update({
+    id: '/solicitacao-usuario',
+    path: '/solicitacao-usuario',
+    getParentRoute: () => AppParceirosRoute,
+  } as any)
 const AppParceirosTabelasRoute = AppParceirosTabelasRouteImport.update({
   id: '/tabelas',
   path: '/tabelas',
@@ -189,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/app/clientes/novo': typeof AppClientesNovoRoute
   '/app/parceiros/bancos': typeof AppParceirosBancosRoute
   '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/solicitacao-usuario': typeof AppParceirosSolicitacaoUsuarioRoute
   '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
   '/app/parceiros/': typeof AppParceirosIndexRoute
   '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
@@ -215,6 +223,7 @@ export interface FileRoutesByTo {
   '/app/clientes/novo': typeof AppClientesNovoRoute
   '/app/parceiros/bancos': typeof AppParceirosBancosRoute
   '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/solicitacao-usuario': typeof AppParceirosSolicitacaoUsuarioRoute
   '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
   '/app/parceiros': typeof AppParceirosIndexRoute
   '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
@@ -244,6 +253,7 @@ export interface FileRoutesById {
   '/app/clientes/novo': typeof AppClientesNovoRoute
   '/app/parceiros/bancos': typeof AppParceirosBancosRoute
   '/app/parceiros/produtos': typeof AppParceirosProdutosRoute
+  '/app/parceiros/solicitacao-usuario': typeof AppParceirosSolicitacaoUsuarioRoute
   '/app/parceiros/tabelas': typeof AppParceirosTabelasRoute
   '/app/parceiros/': typeof AppParceirosIndexRoute
   '/api/banks/guides/$storageId': typeof ApiBanksGuidesStorageIdRoute
@@ -274,6 +284,7 @@ export interface FileRouteTypes {
     | '/app/clientes/novo'
     | '/app/parceiros/bancos'
     | '/app/parceiros/produtos'
+    | '/app/parceiros/solicitacao-usuario'
     | '/app/parceiros/tabelas'
     | '/app/parceiros/'
     | '/api/banks/guides/$storageId'
@@ -300,6 +311,7 @@ export interface FileRouteTypes {
     | '/app/clientes/novo'
     | '/app/parceiros/bancos'
     | '/app/parceiros/produtos'
+    | '/app/parceiros/solicitacao-usuario'
     | '/app/parceiros/tabelas'
     | '/app/parceiros'
     | '/api/banks/guides/$storageId'
@@ -328,6 +340,7 @@ export interface FileRouteTypes {
     | '/app/clientes/novo'
     | '/app/parceiros/bancos'
     | '/app/parceiros/produtos'
+    | '/app/parceiros/solicitacao-usuario'
     | '/app/parceiros/tabelas'
     | '/app/parceiros/'
     | '/api/banks/guides/$storageId'
@@ -491,6 +504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppParceirosProdutosRouteImport
       parentRoute: typeof AppParceirosRoute
     }
+    '/app/parceiros/solicitacao-usuario': {
+      id: '/app/parceiros/solicitacao-usuario'
+      path: '/solicitacao-usuario'
+      fullPath: '/app/parceiros/solicitacao-usuario'
+      preLoaderRoute: typeof AppParceirosSolicitacaoUsuarioRouteImport
+      parentRoute: typeof AppParceirosRoute
+    }
     '/app/parceiros/tabelas': {
       id: '/app/parceiros/tabelas'
       path: '/tabelas'
@@ -562,6 +582,7 @@ const AppClientesRouteWithChildren = AppClientesRoute._addFileChildren(
 interface AppParceirosRouteChildren {
   AppParceirosBancosRoute: typeof AppParceirosBancosRoute
   AppParceirosProdutosRoute: typeof AppParceirosProdutosRoute
+  AppParceirosSolicitacaoUsuarioRoute: typeof AppParceirosSolicitacaoUsuarioRoute
   AppParceirosTabelasRoute: typeof AppParceirosTabelasRoute
   AppParceirosIndexRoute: typeof AppParceirosIndexRoute
 }
@@ -569,6 +590,7 @@ interface AppParceirosRouteChildren {
 const AppParceirosRouteChildren: AppParceirosRouteChildren = {
   AppParceirosBancosRoute: AppParceirosBancosRoute,
   AppParceirosProdutosRoute: AppParceirosProdutosRoute,
+  AppParceirosSolicitacaoUsuarioRoute: AppParceirosSolicitacaoUsuarioRoute,
   AppParceirosTabelasRoute: AppParceirosTabelasRoute,
   AppParceirosIndexRoute: AppParceirosIndexRoute,
 }

@@ -23,6 +23,10 @@ import {
 const TITLES: Record<string, string> = {
   "/app": "Dashboard",
   "/app/parceiros": "Parceiros",
+  "/app/parceiros/bancos": "Bancos",
+  "/app/parceiros/produtos": "Produtos",
+  "/app/parceiros/tabelas": "Tabelas",
+  "/app/parceiros/solicitacao-usuario": "Solicitação Usuário",
   "/app/clientes": "Clientes",
   "/app/clientes/novo": "Novo cliente",
   "/app/kanban": "Kanban",

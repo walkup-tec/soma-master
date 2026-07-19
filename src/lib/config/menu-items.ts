@@ -3,6 +3,7 @@ export type MenuItemId =
   | "parceiros-bancos"
   | "parceiros-produtos"
   | "parceiros-tabelas"
+  | "parceiros-solicitacao-usuario"
   | "dashboard"
   | "clientes"
   | "kanban"
@@ -68,6 +69,13 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
     section: "parceiros",
     group: "Gestão",
     path: "/app/parceiros/tabelas",
+  },
+  {
+    id: "parceiros-solicitacao-usuario",
+    label: "Solicitação Usuário",
+    section: "parceiros",
+    group: "Gestão",
+    path: "/app/parceiros/solicitacao-usuario",
   },
   {
     id: "dashboard",
