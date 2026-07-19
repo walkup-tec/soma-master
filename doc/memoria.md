@@ -1,4 +1,8 @@
-﻿## 2026-07-19 12:20 — Números WhatsApp: só conectadas
+﻿## 2026-07-19 14:25 — Funil: construtor arrasta/conecta v1
+- Novo Funil → modal 100% tela; React Flow; rascunho localStorage.
+- LOG: `doc/LOG-2026-07-19__142522__funil-construtor-fluxo-v1.md`.
+
+## 2026-07-19 12:20 — Números WhatsApp: só conectadas
 - Filtro connectionStatus open/connected no adapter WABA.
 - LOG: `doc/LOG-2026-07-19__122044__numeros-whatsapp-so-conectadas.md`.
 

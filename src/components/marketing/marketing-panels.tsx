@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Filter, Flame, Phone, RefreshCw, Zap } from "lucide-react";
+import { Filter, Flame, Phone, Plus, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,11 +12,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  FunnelBuilderModal,
+  listStoredFunnels,
+} from "@/components/marketing/funnel/funnel-builder-modal";
 import { listWabaAquecedorInstancesFn } from "@/lib/waba/waba-aquecedor.server";
 import {
   wabaAvatarProxyUrl,
   type WabaAquecedorInstance,
 } from "@/lib/waba/waba-aquecedor.adapter";
+import type { FunnelDraft } from "@/lib/marketing/funnel.types";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 45_000;
@@ -196,16 +201,99 @@ export function MarketingWhatsAppNumbersPanel() {
 }
 
 export function MarketingFunnelPanel() {
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [editing, setEditing] = useState<FunnelDraft | null>(null);
+  const [funnels, setFunnels] = useState<FunnelDraft[]>([]);
+
+  const reload = useCallback(() => {
+    setFunnels(listStoredFunnels());
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
   return (
-    <div className="rounded-xl border border-border/60 bg-card p-6">
-      <div className="mb-2 flex items-center gap-2 text-primary">
-        <Filter className="size-4" />
-        <h3 className="font-display text-lg font-semibold tracking-tight">Funil</h3>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Configuração do funil de marketing e etapas de conversão.
-      </p>
-    </div>
+    <>
+      <Card className="border-border/60 shadow-soft">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="font-display text-base">Funis de marketing</CardTitle>
+            <CardDescription>
+              Monte fluxos arrastando e conectando etapas (estilo Typebot / BotConversa). Esta é a
+              primeira versão do construtor.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            className="cursor-pointer gap-1.5"
+            onClick={() => {
+              setEditing(null);
+              setBuilderOpen(true);
+            }}
+          >
+            <Plus className="size-4" />
+            Novo Funil
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {funnels.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-6 py-16 text-center">
+              <Filter className="size-10 text-muted-foreground/50" aria-hidden />
+              <div>
+                <p className="font-medium text-foreground">Nenhum funil ainda</p>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Clique em <span className="font-medium text-foreground">Novo Funil</span> para abrir
+                  o construtor em tela cheia.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="cursor-pointer gap-1.5"
+                onClick={() => {
+                  setEditing(null);
+                  setBuilderOpen(true);
+                }}
+              >
+                <Plus className="size-4" />
+                Novo Funil
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {funnels.map((funnel) => (
+                <button
+                  key={funnel.id}
+                  type="button"
+                  onClick={() => {
+                    setEditing(funnel);
+                    setBuilderOpen(true);
+                  }}
+                  className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{funnel.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {funnel.nodes.length} etapas · {funnel.edges.length} conexões · atualizado{" "}
+                      {new Date(funnel.updatedAt).toLocaleString("pt-BR")}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-medium text-primary">Editar</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <FunnelBuilderModal
+        open={builderOpen}
+        onOpenChange={setBuilderOpen}
+        initialDraft={editing}
+        onSaved={() => reload()}
+      />
+    </>
   );
 }
 
