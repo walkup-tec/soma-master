@@ -2,6 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Filter, Flame, Phone, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -205,6 +215,7 @@ export function MarketingFunnelPanel() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editing, setEditing] = useState<FunnelDraft | null>(null);
   const [funnels, setFunnels] = useState<FunnelDraft[]>([]);
+  const [funnelPendingDelete, setFunnelPendingDelete] = useState<FunnelDraft | null>(null);
 
   const reload = useCallback(() => {
     setFunnels(listStoredFunnels());
@@ -213,6 +224,23 @@ export function MarketingFunnelPanel() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  function confirmDeleteFunnel() {
+    const funnel = funnelPendingDelete;
+    if (!funnel) return;
+    if (!deleteStoredFunnel(funnel.id)) {
+      toast.error("Não foi possível excluir o funil.");
+      setFunnelPendingDelete(null);
+      return;
+    }
+    if (editing?.id === funnel.id) {
+      setEditing(null);
+      setBuilderOpen(false);
+    }
+    setFunnelPendingDelete(null);
+    reload();
+    toast.success("Funil excluído");
+  }
 
   return (
     <>
@@ -299,22 +327,7 @@ export function MarketingFunnelPanel() {
                     variant="outline"
                     size="sm"
                     className="shrink-0 cursor-pointer gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => {
-                      const ok = window.confirm(
-                        `Excluir o funil "${funnel.name}"? Esta ação não pode ser desfeita.`,
-                      );
-                      if (!ok) return;
-                      if (!deleteStoredFunnel(funnel.id)) {
-                        toast.error("Não foi possível excluir o funil.");
-                        return;
-                      }
-                      if (editing?.id === funnel.id) {
-                        setEditing(null);
-                        setBuilderOpen(false);
-                      }
-                      reload();
-                      toast.success("Funil excluído");
-                    }}
+                    onClick={() => setFunnelPendingDelete(funnel)}
                   >
                     <Trash2 className="size-3.5" />
                     Excluir
@@ -338,6 +351,34 @@ export function MarketingFunnelPanel() {
           reload();
         }}
       />
+
+      <AlertDialog
+        open={Boolean(funnelPendingDelete)}
+        onOpenChange={(open) => !open && setFunnelPendingDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir funil?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {funnelPendingDelete
+                ? `Excluir o funil "${funnelPendingDelete.name}"? Esta ação não pode ser desfeita.`
+                : "Esta ação não pode ser desfeita."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                confirmDeleteFunnel();
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
