@@ -2,26 +2,20 @@ import type { SVGProps } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * WhatsApp em contorno, estilo Lucide (stroke 2, round).
- * Evita stroke em glyph de marca preenchido — isso borrava em 16px.
+ * Marca WhatsApp sólida (currentColor) — legível em 16–18px.
+ * Contorno com path de marca preenchida ficava borrado no topbar.
  */
 export function WhatsAppOutlineIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
       className={cn("size-4 shrink-0", className)}
       aria-hidden
       {...props}
     >
-      {/* Balão (MessageCircle) */}
-      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-      {/* Fone geométrico limpo */}
-      <path d="M9.55 8.7c.4-1.05 1.15-1.4 1.95-1.4.5 0 .85.25 1.05.8l.35 1.05c.1.3 0 .55-.25.8l-.55.45c.6 1.05 1.5 1.95 2.55 2.55l.45-.55c.25-.25.5-.35.8-.25l1.05.35c.55.2.8.55.8 1.05 0 .8-.4 1.55-1.4 1.95-1.2.45-2.75.1-4.3-1.45-1.55-1.55-1.9-3.1-1.45-4.3Z" />
+      <path d="M19.05 4.91A9.82 9.82 0 0 0 12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.91-7.01Zm-7.01 15.24h-.01a8.23 8.23 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.23 8.23 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.83c0 4.54-3.7 8.23-8.23 8.23Zm4.52-6.16c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.16.24-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.13-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42h-.48c-.17 0-.43.06-.66.31-.23.24-.87.85-.87 2.07 0 1.22.89 2.39 1.01 2.56.12.17 1.75 2.67 4.23 3.74 1.64.71 2.07.62 2.46.58.39-.04 1.27-.52 1.45-1.02.18-.5.18-.93.12-1.02-.05-.09-.22-.15-.47-.27Z" />
     </svg>
   );
 }

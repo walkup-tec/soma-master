@@ -1,4 +1,8 @@
-﻿## 2026-07-18 23:53 — Ícone WhatsApp topbar redesenhado
+﻿## 2026-07-19 00:07 — Fix alerta Chatbot + ícone + delete 51999666841
+- Contato teste apagado no DB; alerta por unread + novo ID; ícone sólido; poll 3s.
+- LOG: `doc/LOG-2026-07-19__000723__fix-alerta-chatbot-icone-delete-contato.md`.
+
+## 2026-07-18 23:53 — Ícone WhatsApp topbar redesenhado
 - Contorno Lucide limpo; pulso só no anel (sem pulse no traço).
 - LOG: `doc/LOG-2026-07-18__235350__whatsapp-icone-redesenho.md`.
 

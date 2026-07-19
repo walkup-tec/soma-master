@@ -111,22 +111,24 @@ export const listChatConversationsFn = createServerFn({ method: "GET" }).handler
 });
 
 /**
- * Contatos novos no Chatbot: unread > 0 e ainda sem atendente humano (assigned).
- * Usado pelo ícone do topbar / destaque no menu.
+ * Contatos aguardando no Chatbot: qualquer conversa com unread > 0.
+ * (Antes filtrávamos sem assigned — abrir o chat atribuía o atendente e zerava o alerta.)
  */
 export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handler(async () => {
   await requireChatUser();
   const conversations = await listConversations(200);
-  const pending = conversations.filter(
-    (conversation) => conversation.unreadCount > 0 && !conversation.assignedUserId,
-  );
+  const pending = conversations.filter((conversation) => conversation.unreadCount > 0);
   return {
     pendingCount: pending.length,
     conversationIds: pending.map((conversation) => conversation.id),
-    newestCreatedAt: pending
-      .map((conversation) => conversation.createdAt)
-      .sort()
-      .at(-1) ?? null,
+    /** Todos os IDs — detecta contato novo mesmo se o unread for zerado rápido. */
+    allConversationIds: conversations.map((conversation) => conversation.id),
+    newestCreatedAt:
+      conversations
+        .map((conversation) => conversation.createdAt)
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? null,
   };
 });
 

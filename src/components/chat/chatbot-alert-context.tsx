@@ -14,7 +14,7 @@ import { getChatbotIncomingAlertFn } from "@/lib/chat/chat.server";
 export type ChatbotAlertState = {
   pendingCount: number;
   conversationIds: string[];
-  /** True enquanto há contato novo aguardando no Chatbot. */
+  /** True enquanto há unread ou contato novo recente. */
   active: boolean;
 };
 
@@ -26,12 +26,15 @@ const EMPTY: ChatbotAlertState = {
 
 const ChatbotAlertContext = createContext<ChatbotAlertState>(EMPTY);
 
-const POLL_MS = 8_000;
+const POLL_MS = 3_000;
+/** Mantém pulso/som visual por alguns segundos após contato novo (mesmo se abrir o chat). */
+const FRESH_CONTACT_HOLD_MS = 45_000;
 
-/** Tom curto e discreto (Web Audio) — sem arquivo externo. */
 function playIncomingChime(): void {
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const now = ctx.currentTime;
@@ -50,14 +53,15 @@ function playIncomingChime(): void {
       osc.stop(start + duration + 0.02);
     };
 
-    playTone(880, now, 0.12, 0.045);
-    playTone(1174, now + 0.14, 0.16, 0.035);
+    // Um pouco mais audível que a versão anterior
+    playTone(880, now, 0.14, 0.08);
+    playTone(1174, now + 0.15, 0.18, 0.06);
 
     window.setTimeout(() => {
       void ctx.close().catch(() => undefined);
-    }, 500);
+    }, 600);
   } catch {
-    /* autoplay / contexto bloqueado */
+    /* autoplay bloqueado até interação */
   }
 }
 
@@ -70,8 +74,11 @@ export function ChatbotAlertProvider({
 }) {
   const fetchAlert = useServerFn(getChatbotIncomingAlertFn);
   const [state, setState] = useState<ChatbotAlertState>(EMPTY);
-  const knownIdsRef = useRef<Set<string> | null>(null);
+  const knownAllIdsRef = useRef<Set<string> | null>(null);
+  const knownUnreadIdsRef = useRef<Set<string> | null>(null);
   const primedRef = useRef(false);
+  const freshUntilRef = useRef(0);
+  const [, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
     if (!enabled) {
@@ -80,33 +87,50 @@ export function ChatbotAlertProvider({
     }
     try {
       const next = await fetchAlert();
-      const ids = next.conversationIds ?? [];
-      const pendingCount = next.pendingCount ?? ids.length;
-      const active = pendingCount > 0;
+      const unreadIds = next.conversationIds ?? [];
+      const allIds = next.allConversationIds ?? unreadIds;
+      const pendingCount = next.pendingCount ?? unreadIds.length;
 
-      const prev = knownIdsRef.current;
-      if (prev === null) {
-        knownIdsRef.current = new Set(ids);
+      const prevAll = knownAllIdsRef.current;
+      const prevUnread = knownUnreadIdsRef.current;
+
+      if (prevAll === null || prevUnread === null) {
+        knownAllIdsRef.current = new Set(allIds);
+        knownUnreadIdsRef.current = new Set(unreadIds);
         primedRef.current = true;
       } else {
-        const newcomers = ids.filter((id) => !prev.has(id));
-        if (newcomers.length > 0 && primedRef.current) {
+        const newConversations = allIds.filter((id) => !prevAll.has(id));
+        const newUnread = unreadIds.filter((id) => !prevUnread.has(id));
+        const shouldChime =
+          primedRef.current && (newConversations.length > 0 || newUnread.length > 0);
+
+        if (shouldChime) {
           playIncomingChime();
+          freshUntilRef.current = Date.now() + FRESH_CONTACT_HOLD_MS;
         }
-        knownIdsRef.current = new Set(ids);
+
+        knownAllIdsRef.current = new Set(allIds);
+        knownUnreadIdsRef.current = new Set(unreadIds);
       }
 
-      setState({ pendingCount, conversationIds: ids, active });
+      const freshActive = Date.now() < freshUntilRef.current;
+      setState({
+        pendingCount,
+        conversationIds: unreadIds,
+        active: pendingCount > 0 || freshActive,
+      });
     } catch {
-      /* sem permissão / rede */
+      /* sem permissão / rede — silencioso */
     }
   }, [enabled, fetchAlert]);
 
   useEffect(() => {
     if (!enabled) {
       setState(EMPTY);
-      knownIdsRef.current = null;
+      knownAllIdsRef.current = null;
+      knownUnreadIdsRef.current = null;
       primedRef.current = false;
+      freshUntilRef.current = 0;
       return;
     }
 
@@ -114,10 +138,21 @@ export function ChatbotAlertProvider({
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, POLL_MS);
+    const holdTick = window.setInterval(() => {
+      if (Date.now() < freshUntilRef.current) setTick((n) => n + 1);
+      else if (freshUntilRef.current > 0) {
+        freshUntilRef.current = 0;
+        setState((current) => ({
+          ...current,
+          active: current.pendingCount > 0,
+        }));
+      }
+    }, 2_000);
     const onFocus = () => void refresh();
     window.addEventListener("focus", onFocus);
     return () => {
       window.clearInterval(interval);
+      window.clearInterval(holdTick);
       window.removeEventListener("focus", onFocus);
     };
   }, [enabled, refresh]);
