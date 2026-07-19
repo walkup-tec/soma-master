@@ -18,7 +18,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   var COMPLETE_RELOAD_DELAY_MS = 600;
   var LONG_WAIT_MS = 120000;
   var OVERLAY_ID = "soma-deploy-overlay";
-  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=5";
+  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=6";
   var PRODUCTION_HOST = "app.somaconecta.com.br";
 
   var pollTimer = null;
@@ -53,27 +53,27 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
 
   function ensureStyles() {
     var STYLE_ID = "soma-deploy-overlay-style";
-    var STYLE_VERSION = "soma-brand-v3";
+    var STYLE_VERSION = "soma-brand-v4-fixed";
     var existing = document.getElementById(STYLE_ID);
     if (existing && existing.getAttribute("data-version") === STYLE_VERSION) return;
     if (existing) existing.remove();
     var style = document.createElement("style");
     style.id = STYLE_ID;
     style.setAttribute("data-version", STYLE_VERSION);
+    // Paleta fixa SOMA: magenta #be1c6a + lima #ecf759 só no texto de apoio.
+    // Sem troca de cor entre fases (deploying / stabilizing / complete).
     style.textContent =
       "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,9,18,.94);backdrop-filter:blur(8px)}" +
       "#" + OVERLAY_ID + "[hidden]{display:none!important}" +
-      ".soma-deploy-card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(190,28,106,.5);background:#0e1828;color:#eef3fb;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.5);font-family:Manrope,ui-sans-serif,system-ui,sans-serif;transition:border-color .35s ease}" +
-      ".soma-deploy-card.is-stabilizing{border-color:rgba(236,247,89,.6)}" +
+      ".soma-deploy-card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(190,28,106,.5);background:#0e1828;color:#eef3fb;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.5);font-family:Manrope,ui-sans-serif,system-ui,sans-serif}" +
       ".soma-deploy-brand{margin:0 0 14px;font-family:Sora,Manrope,ui-sans-serif,system-ui,sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#be1c6a}" +
       ".soma-deploy-visual{margin-bottom:18px}" +
-      ".soma-deploy-spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:3px solid rgba(39,117,229,.22);border-top-color:#be1c6a;animation:soma-deploy-orbit 1.2s linear infinite}" +
+      ".soma-deploy-spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:3px solid rgba(190,28,106,.22);border-top-color:#be1c6a;animation:soma-deploy-orbit 1.2s linear infinite}" +
+      ".soma-deploy-card.is-complete .soma-deploy-spinner{animation:none;border-top-color:#be1c6a}" +
       ".soma-deploy-progress-track{height:4px;border-radius:999px;background:rgba(245,245,245,.14);overflow:hidden;margin:0 auto;max-width:180px}" +
       ".soma-deploy-progress-bar{height:100%;width:42%;border-radius:inherit;background:#be1c6a;animation:soma-deploy-progress-slide 1.35s ease-in-out infinite}" +
-      ".soma-deploy-card.is-stabilizing .soma-deploy-progress-bar{width:100%;animation:soma-deploy-progress-fill .9s ease-out forwards;background:#ecf759}" +
-      ".soma-deploy-card.is-complete .soma-deploy-spinner{border-top-color:#ecf759;animation:none}" +
+      ".soma-deploy-card.is-stabilizing .soma-deploy-progress-bar,.soma-deploy-card.is-complete .soma-deploy-progress-bar{width:100%;animation:soma-deploy-progress-fill .9s ease-out forwards;background:#be1c6a}" +
       ".soma-deploy-title{margin:0 0 12px;font-family:Sora,Manrope,ui-sans-serif,system-ui,sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#be1c6a}" +
-      ".soma-deploy-card.is-stabilizing .soma-deploy-title{color:#ecf759}" +
       ".soma-deploy-card p{margin:0 0 10px;color:#eef3fb;line-height:1.55;font-size:.92rem}" +
       ".soma-deploy-accent{margin-bottom:0!important;color:#ecf759!important;font-size:.88rem}" +
       "@keyframes soma-deploy-orbit{to{transform:rotate(360deg)}}" +

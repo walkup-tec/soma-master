@@ -3,8 +3,8 @@
  * Em outros hosts o bootstrap desregistra este SW.
  * Em navegação 502/bad-gateway devolve shell em cache ou fallback com modal.
  */
-const CACHE_SHELL = "soma-deploy-shell-v5";
-const SW_VERSION = "v5";
+const CACHE_SHELL = "soma-deploy-shell-v6";
+const SW_VERSION = "v6";
 const PRODUCTION_HOST = "app.somaconecta.com.br";
 
 const FALLBACK_HTML = `<!DOCTYPE html>
@@ -18,7 +18,7 @@ const FALLBACK_HTML = `<!DOCTYPE html>
     #wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,9,18,.94)}
     .card{max-width:22rem;width:100%;padding:28px 24px 24px;border-radius:18px;border:1px solid rgba(190,28,106,.5);background:#0e1828;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.5)}
     .brand{margin:0 0 14px;font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#be1c6a}
-    .spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:3px solid rgba(39,117,229,.22);border-top-color:#be1c6a;animation:orbit 1.2s linear infinite}
+    .spinner{width:56px;height:56px;margin:0 auto 16px;border-radius:50%;border:3px solid rgba(190,28,106,.22);border-top-color:#be1c6a;animation:orbit 1.2s linear infinite}
     .title{margin:0 0 12px;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#be1c6a}
     p{margin:0 0 10px;line-height:1.55;font-size:.92rem;color:#eef3fb}
     .accent{color:#ecf759;font-size:.88rem;margin-bottom:0}

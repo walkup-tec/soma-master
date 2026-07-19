@@ -1,4 +1,8 @@
-﻿## 2026-07-19 00:07 — Fix alerta Chatbot + ícone + delete 51999666841
+﻿## 2026-07-19 00:16 — Modal deploy: cores fixas
+- Sem troca magenta/lima nas fases; SW v6.
+- LOG: `doc/LOG-2026-07-19__001647__modal-deploy-cores-fixas.md`.
+
+## 2026-07-19 00:07 — Fix alerta Chatbot + ícone + delete 51999666841
 - Contato teste apagado no DB; alerta por unread + novo ID; ícone sólido; poll 3s.
 - LOG: `doc/LOG-2026-07-19__000723__fix-alerta-chatbot-icone-delete-contato.md`.
 
