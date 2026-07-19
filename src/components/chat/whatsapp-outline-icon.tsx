@@ -1,27 +1,27 @@
+import type { SVGProps } from "react";
 import { cn } from "@/lib/utils";
 
-/** Ícone WhatsApp só contorno (stroke), alinhado ao Bell do topbar. */
-export function WhatsAppOutlineIcon({ className }: { className?: string }) {
+/**
+ * WhatsApp em contorno, estilo Lucide (stroke 2, round).
+ * Evita stroke em glyph de marca preenchido — isso borrava em 16px.
+ */
+export function WhatsAppOutlineIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={cn("size-4", className)}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("size-4 shrink-0", className)}
       aria-hidden
+      {...props}
     >
-      <path
-        d="M12 2.5c-5.1 0-9.25 4.01-9.25 8.95 0 1.58.43 3.06 1.18 4.35L3 21.5l5.9-1.55A9.1 9.1 0 0 0 12 20.4c5.1 0 9.25-4.01 9.25-8.95S17.1 2.5 12 2.5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9.2 8.85c.18-.4.37-.42.54-.43h.46c.15 0 .36-.06.56.43.2.49.68 1.66.74 1.78.06.12.1.26.02.42-.08.16-.12.26-.24.4-.12.14-.25.31-.36.42-.12.11-.24.23-.1.45.14.22.62 1.02 1.33 1.65.91.81 1.68 1.06 1.92 1.18.24.12.38.1.52-.06.14-.16.6-.7.76-.94.16-.24.32-.2.54-.12.22.08 1.4.66 1.64.78.24.12.4.18.46.28.06.1.06.58-.14 1.14-.2.56-1.16 1.08-1.6 1.15-.44.07-.85.2-2.86-.6-2.42-.96-3.96-3.4-4.08-3.56-.12-.16-.96-1.28-.96-2.44 0-1.16.61-1.73.82-1.97Z"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinejoin="round"
-      />
+      {/* Balão (MessageCircle) */}
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+      {/* Fone geométrico limpo */}
+      <path d="M9.55 8.7c.4-1.05 1.15-1.4 1.95-1.4.5 0 .85.25 1.05.8l.35 1.05c.1.3 0 .55-.25.8l-.55.45c.6 1.05 1.5 1.95 2.55 2.55l.45-.55c.25-.25.5-.35.8-.25l1.05.35c.55.2.8.55.8 1.05 0 .8-.4 1.55-1.4 1.95-1.2.45-2.75.1-4.3-1.45-1.55-1.55-1.9-3.1-1.45-4.3Z" />
     </svg>
   );
 }

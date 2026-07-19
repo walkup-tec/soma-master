@@ -1,4 +1,8 @@
-﻿## 2026-07-18 23:45 — Trigger deploy Easypanel
+﻿## 2026-07-18 23:53 — Ícone WhatsApp topbar redesenhado
+- Contorno Lucide limpo; pulso só no anel (sem pulse no traço).
+- LOG: `doc/LOG-2026-07-18__235350__whatsapp-icone-redesenho.md`.
+
+## 2026-07-18 23:45 — Trigger deploy Easypanel
 - Empty commit `69d3b11` (`[0f29fdf]`); main já tinha as features.
 - LOG: `doc/LOG-2026-07-18__234501__trigger-deploy-easypanel.md`.
 

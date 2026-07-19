@@ -28,15 +28,21 @@ export function ChatbotTopbarIcon() {
       }
     >
       {active ? (
-        <span
-          className="absolute inset-0 m-auto size-7 animate-ping rounded-full bg-emerald-500/25"
-          aria-hidden
-        />
+        <>
+          <span
+            className="pointer-events-none absolute inset-0 m-auto size-6 animate-ping rounded-full bg-emerald-500/25"
+            aria-hidden
+          />
+          <span
+            className="pointer-events-none absolute inset-0 m-auto size-6 rounded-full ring-2 ring-emerald-500/50"
+            aria-hidden
+          />
+        </>
       ) : null}
       <WhatsAppOutlineIcon
         className={cn(
-          "relative size-4 transition-colors",
-          active ? "animate-pulse text-emerald-500" : "text-foreground",
+          "relative size-[18px] transition-colors",
+          active ? "text-emerald-500" : "text-foreground",
         )}
       />
     </Button>
