@@ -41,7 +41,6 @@ import {
   type FunnelStepKind,
 } from "@/lib/marketing/funnel.types";
 import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
-import { cn } from "@/lib/utils";
 
 const nodeTypes = { funnelStep: FunnelStepNode };
 
