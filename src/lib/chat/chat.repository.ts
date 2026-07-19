@@ -542,6 +542,66 @@ export async function unassignConversation(conversationId: string): Promise<Chat
   return conv;
 }
 
+/** Transfere atendimento para outro usuário → sai de Meus do remetente e entra em Meus do destinatário. */
+export async function transferConversation(input: {
+  conversationId: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+}): Promise<ChatConversation> {
+  const before = await getConversation(input.conversationId);
+  if (!before) throw new Error("Conversa não encontrada.");
+  if (!input.toUserId.trim()) throw new Error("Selecione o usuário de destino.");
+  if (input.toUserId === input.fromUserId) {
+    throw new Error("Não é possível transferir para você mesmo.");
+  }
+
+  if (before.assignedUserId === input.toUserId) {
+    return before;
+  }
+
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) => sql`
+        update crm.chat_conversations
+        set
+          assigned_user_id = ${input.toUserId},
+          assigned_user_name = ${input.toUserName},
+          unread_count = unread_count + 1,
+          updated_at = now()
+        where id = ${input.conversationId}
+      `,
+    );
+  } else {
+    const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+    const next = convs.map((c) =>
+      c.id === input.conversationId
+        ? {
+            ...c,
+            assignedUserId: input.toUserId,
+            assignedUserName: input.toUserName,
+            unreadCount: (c.unreadCount ?? 0) + 1,
+            updatedAt: new Date().toISOString(),
+          }
+        : c,
+    );
+    await writeJsonFile(CONV_FILE, next);
+  }
+
+  await appendMessage({
+    conversationId: input.conversationId,
+    direction: "outbound",
+    body: `${input.fromUserName} transferiu o atendimento para ${input.toUserName}.`,
+    senderType: "system",
+    senderName: "Sistema",
+  });
+
+  const conv = await getConversation(input.conversationId);
+  if (!conv) throw new Error("Conversa não encontrada.");
+  return conv;
+}
+
 export async function setConversationAiEnabled(input: {
   conversationId: string;
   aiEnabled: boolean;

@@ -19,6 +19,7 @@ import {
   saveChatAiSettings,
   setAiEnabledForAllConversations,
   setConversationAiEnabled,
+  transferConversation,
   unassignConversation,
   upsertAiExample,
   upsertAiKnowledge,
@@ -64,6 +65,7 @@ import {
 import { isValidAttendanceStatus } from "@/lib/clients/client-status";
 import type { ClientFieldId } from "@/lib/config/client-fields";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
+import { findUserById, listAllUsers } from "@/lib/users/user.repository";
 
 async function requireChatUser(): Promise<SessionData> {
   const session = await getSession(sessionConfig);
@@ -103,6 +105,7 @@ export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(asyn
     evolutionConfigured: isEvolutionConfigured(),
     openAiConfigured: isOpenAiConfigured(),
     currentUserId: user.userId,
+    currentUserRole: user.role,
   };
 });
 
@@ -236,6 +239,47 @@ export const unassignChatConversationFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireChatUser();
     return unassignConversation(data.conversationId);
+  });
+
+/** Usuários que podem receber transferência (acesso ao menu Chat, exceto o atual). */
+export const listChatTransferTargetsFn = createServerFn({ method: "GET" }).handler(async () => {
+  const user = await requireChatUser();
+  const [users, settings] = await Promise.all([listAllUsers(), loadSystemSettingsFromDisk()]);
+  const chatCategoryIds = new Set(
+    settings.categories.filter((category) => category.menuIds.includes("chat")).map((c) => c.id),
+  );
+  return users
+    .filter((candidate) => candidate.id !== user.userId)
+    .filter((candidate) => candidate.role === "master" || chatCategoryIds.has(candidate.categoryId))
+    .map((candidate) => ({
+      id: candidate.id,
+      name: candidate.name,
+      email: candidate.email,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+});
+
+/** Transfere conversa para outro atendente → Meus do destinatário. */
+export const transferChatConversationFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { conversationId?: string; toUserId?: string };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const toUserId = String(body.toUserId ?? "").trim();
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    if (!toUserId) throw new Error("Selecione o usuário de destino.");
+    return { conversationId, toUserId };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const target = await findUserById(data.toUserId);
+    if (!target) throw new Error("Usuário de destino não encontrado.");
+    return transferConversation({
+      conversationId: data.conversationId,
+      fromUserId: user.userId,
+      fromUserName: user.name || user.email || "Atendente",
+      toUserId: target.id,
+      toUserName: target.name || target.email || "Atendente",
+    });
   });
 
 export const setChatConversationAiFn = createServerFn({ method: "POST" })

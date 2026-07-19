@@ -15,10 +15,12 @@ import {
   StickyNote,
   UserPlus,
   UserMinus,
+  ArrowRightLeft,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ChatContactPanel } from "@/components/chat/chat-contact-panel";
+import { ChatTransferDialog } from "@/components/chat/chat-transfer-dialog";
 import { useChatbotAlert } from "@/components/chat/chatbot-alert-context";
 import { StatusBadge } from "@/components/clients/status-badge";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,7 @@ type Bootstrap = {
   evolutionConfigured: boolean;
   openAiConfigured: boolean;
   currentUserId: string;
+  currentUserRole?: "master" | "user";
 };
 
 type FilterTab = "mine" | "unassigned" | "all";
@@ -99,6 +102,7 @@ export function ChatInboxScreen({
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [attachingMediaId, setAttachingMediaId] = useState<string | null>(null);
   const [attachedMediaIds, setAttachedMediaIds] = useState<Set<string>>(() => new Set());
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -117,6 +121,7 @@ export function ChatInboxScreen({
     phone: "",
   });
   const userId = bootstrap.currentUserId;
+  const isMaster = bootstrap.currentUserRole === "master";
   const selectedConversation = useMemo(() => {
     if (!selectedId) return null;
     if (active?.id === selectedId) return active;
@@ -126,11 +131,6 @@ export function ChatInboxScreen({
     selectedConversation?.assignedUserId &&
       userId &&
       selectedConversation.assignedUserId === userId,
-  );
-  const assignedToOther = Boolean(
-    selectedConversation?.assignedUserId &&
-      userId &&
-      selectedConversation.assignedUserId !== userId,
   );
 
   const filtered = useMemo(() => {
@@ -142,14 +142,18 @@ export function ChatInboxScreen({
       .filter((conv) => {
         if (filter === "mine" && userId) return conv.assignedUserId === userId;
         if (filter === "unassigned") return !conv.assignedUserId;
-        return true;
+        // Todos = fila do agente: não atribuídos + meus.
+        // Após transferir, some daqui também (exceto master, que vê tudo).
+        if (isMaster) return true;
+        if (!userId) return true;
+        return !conv.assignedUserId || conv.assignedUserId === userId;
       })
       .filter((conv) => {
         if (!q) return true;
         const hay = `${conv.clientName ?? ""} ${conv.contactName ?? ""} ${conv.phone} ${conv.lastMessagePreview ?? ""}`.toLowerCase();
         return hay.includes(q);
       });
-  }, [conversations, filter, query, userId]);
+  }, [conversations, filter, query, userId, isMaster]);
 
   function clearSelectedImage() {
     if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
@@ -289,6 +293,18 @@ export function ChatInboxScreen({
       toast.error(error instanceof Error ? error.message : "Falha ao desatribuir");
     } finally {
       setAssigning(false);
+    }
+  }
+
+  function handleTransferred(conversation: ChatConversation) {
+    applyConversationUpdate(conversation);
+    void refreshList();
+    // Sai da fila Meus do remetente — fecha o thread para reforçar a mudança.
+    if (filter === "mine") {
+      setSelectedId(null);
+      setActive(null);
+      setMessages([]);
+      setViewingConversationId(null);
     }
   }
 
@@ -818,7 +834,7 @@ export function ChatInboxScreen({
                 </p>
               </div>
               {isAssignedToMe ? (
-                <div className="relative z-20 flex items-center gap-2">
+                <div className="relative z-20 flex flex-wrap items-center gap-2">
                   <span
                     className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-600/30 bg-emerald-600/10 px-3 text-xs font-medium text-emerald-700 dark:text-emerald-400"
                     title="Este contato está em Meus"
@@ -826,6 +842,22 @@ export function ChatInboxScreen({
                     <Check className="size-3.5" aria-hidden />
                     Meu
                   </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="relative z-20 pointer-events-auto cursor-pointer gap-1.5"
+                    disabled={assigning || !selectedId}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setTransferOpen(true);
+                    }}
+                    title="Transferir para outro usuário"
+                  >
+                    <ArrowRightLeft className="size-3.5" />
+                    Transferir
+                  </Button>
                   <Button
                     type="button"
                     size="sm"
@@ -848,30 +880,44 @@ export function ChatInboxScreen({
                   </Button>
                 </div>
               ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="default"
-                  className="relative z-20 pointer-events-auto cursor-pointer gap-1.5"
-                  disabled={assigning || !selectedId}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void handleAssignToMe();
-                  }}
-                  title={
-                    assignedToOther
-                      ? "Atribuir a mim — move para Meus"
-                      : "Atribuir a mim — move para Meus"
-                  }
-                >
-                  {assigning ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <UserPlus className="size-3.5" />
-                  )}
-                  Atribuir
-                </Button>
+                <div className="relative z-20 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    className="relative z-20 pointer-events-auto cursor-pointer gap-1.5"
+                    disabled={assigning || !selectedId}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void handleAssignToMe();
+                    }}
+                    title="Atribuir a mim — move para Meus"
+                  >
+                    {assigning ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <UserPlus className="size-3.5" />
+                    )}
+                    Atribuir
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="relative z-20 pointer-events-auto cursor-pointer gap-1.5"
+                    disabled={assigning || !selectedId}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setTransferOpen(true);
+                    }}
+                    title="Transferir direto para outro usuário"
+                  >
+                    <ArrowRightLeft className="size-3.5" />
+                    Transferir
+                  </Button>
+                </div>
               )}
               <Button
                 type="button"
@@ -1171,6 +1217,19 @@ export function ChatInboxScreen({
           </div>
         </aside>
       ) : null}
+
+      <ChatTransferDialog
+        open={transferOpen}
+        onOpenChange={setTransferOpen}
+        conversationId={selectedId}
+        contactLabel={
+          selectedConversation?.clientName ||
+          selectedConversation?.contactName ||
+          selectedConversation?.phone ||
+          "contato"
+        }
+        onTransferred={handleTransferred}
+      />
     </div>
   );
 }

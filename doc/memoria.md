@@ -1,4 +1,9 @@
-﻿## 2026-07-19 11:47 — Atribuição só no botão Atribuir
+﻿## 2026-07-19 12:04 — Transferir chat WhatsApp
+- Botão Transferir no header; some da fila do remetente; entra em Meus do destino.
+- Todos (agente) = não atribuídos + meus.
+- LOG: `doc/LOG-2026-07-19__120412__chat-transferir-atendimento.md`.
+
+## 2026-07-19 11:47 — Atribuição só no botão Atribuir
 - Envio não atribui; Remover volta a Não atribuídos; Atribuir → Meus.
 - LOG: `doc/LOG-2026-07-19__114709__fix-atribuicao-so-no-botao.md`.
 
