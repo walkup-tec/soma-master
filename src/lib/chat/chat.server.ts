@@ -284,12 +284,18 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
       senderName: user.name || user.email || "Atendente",
     });
 
-    // Evolution é a parte lenta — timeout curto; UI já mostra otimista no cliente
-    const send = await evolutionSendText({ phone: conversation.phone, text: data.text });
+    // Evolution em background: UI já mostra otimista; falha vira aviso no thread no próximo poll.
+    void sendChatTextViaEvolutionInBackground({
+      conversationId: data.conversationId,
+      phone: conversation.phone,
+      text: data.text,
+    });
+
+    const updatedConversation = await getConversation(data.conversationId);
     return {
       message,
-      conversation,
-      evolution: { ok: send.ok, error: send.error },
+      conversation: updatedConversation ?? conversation,
+      evolution: { ok: true, error: undefined as string | undefined },
     };
   });
 
@@ -404,6 +410,37 @@ export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
       evolution: { ok: true, error: undefined as string | undefined },
     };
   });
+
+async function sendChatTextViaEvolutionInBackground(input: {
+  conversationId: string;
+  phone: string;
+  text: string;
+}): Promise<void> {
+  try {
+    const send = await evolutionSendText({ phone: input.phone, text: input.text });
+    if (!send.ok) {
+      await appendMessage({
+        conversationId: input.conversationId,
+        direction: "outbound",
+        body: `⚠️ Mensagem salva no CRM, mas não foi entregue no WhatsApp: ${send.error ?? "erro desconhecido"}. Envie novamente.`,
+        senderType: "system",
+        senderName: "Sistema",
+      });
+    }
+  } catch (error) {
+    console.error(
+      `[chat] Falha no envio de texto via Evolution (conversa ${input.conversationId}):`,
+      error instanceof Error ? error.message : error,
+    );
+    await appendMessage({
+      conversationId: input.conversationId,
+      direction: "outbound",
+      body: "⚠️ Mensagem salva no CRM, mas não foi entregue no WhatsApp. Envie novamente.",
+      senderType: "system",
+      senderName: "Sistema",
+    }).catch(() => undefined);
+  }
+}
 
 async function sendChatImageViaEvolutionInBackground(input: {
   mediaId: string;

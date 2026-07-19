@@ -450,7 +450,7 @@ export async function evolutionSendText(input: {
     const result = await evolutionFetch(`/message/sendText/${encodeURIComponent(instance)}`, {
       method: "POST",
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(12_000),
     });
     if (result.ok) return { ok: true, raw: result.raw };
     lastError = result.error || lastError;

@@ -255,19 +255,57 @@ export function ChatInboxScreen({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, selectedId, loadingThread]);
 
-  // Poll leve — novas mensagens via webhook / teste (não reatribui)
+  // Poll rápido do thread aberto + lista em paralelo (antes era 5s em série = atraso perceptível).
   useEffect(() => {
-    const id = window.setInterval(() => {
-      void refreshList().then(() => {
-        if (selectedId) {
-          void getThread({ data: { conversationId: selectedId } }).then((thread) => {
-            setActive(thread.conversation);
-            setMessages(thread.messages);
+    const THREAD_POLL_MS = 1_200;
+    const LIST_POLL_MS = 3_000;
+
+    const refreshThread = () => {
+      if (!selectedId || document.visibilityState !== "visible") return;
+      void getThread({ data: { conversationId: selectedId } })
+        .then((thread) => {
+          setActive(thread.conversation);
+          setMessages((prev) => {
+            // Evita re-render inútil quando nada mudou (mesmo tamanho + mesmo último id).
+            const next = thread.messages;
+            if (
+              prev.length === next.length &&
+              prev.at(-1)?.id === next.at(-1)?.id &&
+              prev.at(-1)?.body === next.at(-1)?.body
+            ) {
+              return prev;
+            }
+            return next;
           });
-        }
-      });
-    }, 5_000);
-    return () => window.clearInterval(id);
+        })
+        .catch(() => undefined);
+    };
+
+    const refreshConversations = () => {
+      if (document.visibilityState !== "visible") return;
+      void refreshList().catch(() => undefined);
+    };
+
+    refreshThread();
+    refreshConversations();
+
+    const threadTimer = window.setInterval(refreshThread, THREAD_POLL_MS);
+    const listTimer = window.setInterval(refreshConversations, LIST_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshThread();
+        refreshConversations();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      window.clearInterval(threadTimer);
+      window.clearInterval(listTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 

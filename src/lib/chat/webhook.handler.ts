@@ -2,7 +2,6 @@ import {
   appendMessage,
   getConversation,
   getOrCreateConversationByPhone,
-  listMessages,
 } from "@/lib/chat/chat.repository";
 import {
   evolutionGetMediaBase64,
@@ -178,10 +177,7 @@ export async function handleEvolutionWebhook(request: Request): Promise<Response
       phone: msg.phone,
       contactName: msg.pushName ?? null,
     });
-    if (msg.messageId) {
-      const existing = await listMessages(conversation.id);
-      if (existing.some((message) => message.waMessageId === msg.messageId)) continue;
-    }
+    // Dedupe por wa_message_id fica em appendMessage — evita listMessages completo (lento).
 
     let media:
       | { mediaId: string; mimeType: string; fileName: string }

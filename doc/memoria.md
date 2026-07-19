@@ -1,4 +1,8 @@
-﻿## 2026-07-19 11:21 — Chat: scroll, alertas, Atribuir
+﻿## 2026-07-19 11:31 — Chat: menos delay envio/recebimento
+- Poll thread 1,2s; lista 3s; Evolution texto em background; webhook sem listMessages.
+- LOG: `doc/LOG-2026-07-19__113158__chat-reduzir-delay-poll.md`.
+
+## 2026-07-19 11:21 — Chat: scroll, alertas, Atribuir
 - Topbar = contato novo; menu = unread; som em ambos; silêncio no chat ativo.
 - Auto-scroll; Atribuir explícito (abrir não atribui mais).
 - LOG: `doc/LOG-2026-07-19__112155__chat-scroll-alertas-atribuir.md`.
