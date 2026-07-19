@@ -36,9 +36,9 @@ function MarketingPage() {
       <div>
         <div className="mb-2 flex items-center gap-2 text-primary">
           <Target className="size-5" />
-          <span className="text-sm font-medium">Marketing</span>
+          <span className="text-sm font-medium">Funil e WhatsApp</span>
         </div>
-        <h2 className="font-display text-2xl font-bold tracking-tight">Marketing</h2>
+        <h2 className="font-display text-2xl font-bold tracking-tight">Funil e WhatsApp</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Números WhatsApp, funil e API Alternativa.
         </p>

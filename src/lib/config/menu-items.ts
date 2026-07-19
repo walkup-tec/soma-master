@@ -19,7 +19,7 @@ export type MenuItemId =
 export type MenuSectionId = "parceiros" | "producao-propria";
 
 /** Subgrupos internos (usados em Produção própria e nas categorias de usuário). */
-export type MenuGroupId = "Operação" | "Comercial" | "Marketing" | "Gestão";
+export type MenuGroupId = "Operação" | "Comercial" | "Funil e WhatsApp" | "Gestão";
 
 export type MenuSectionDefinition = {
   id: MenuSectionId;
@@ -121,9 +121,9 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
   },
   {
     id: "marketing",
-    label: "Marketing",
+    label: "Funil e WhatsApp",
     section: "producao-propria",
-    group: "Marketing",
+    group: "Funil e WhatsApp",
     path: "/app/marketing",
   },
   {
@@ -154,7 +154,7 @@ export const ALL_MENU_ITEM_IDS = MENU_ITEMS.map((m) => m.id);
 export const MENU_GROUPS: MenuGroupId[] = [
   "Operação",
   "Comercial",
-  "Marketing",
+  "Funil e WhatsApp",
   "Gestão",
 ];
 

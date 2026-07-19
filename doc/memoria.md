@@ -1,4 +1,9 @@
-﻿## 2026-07-19 10:48 — Trigger deploy Easypanel
+﻿## 2026-07-19 11:10 — Funil e WhatsApp + Números aquecedor WABA
+- Menu renomeado; tabela Quente/Número/Nomes/Contatos/Mensagens via API WABA.
+- Config Easypanel: chave compartilhada + WABA_API_BASE_URL.
+- LOG: `doc/LOG-2026-07-19__111015__funil-whatsapp-numeros-aquecedor-waba.md`.
+
+## 2026-07-19 10:48 — Trigger deploy Easypanel
 - Empty commit `1de38ba`; sem codigo pendente.
 - LOG: `doc/LOG-2026-07-19__104858__trigger-deploy-easypanel.md`.
 
