@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -7,13 +7,15 @@ import {
   ReactFlow,
   ReactFlowProvider,
   addEdge,
-  useEdgesState,
-  useNodesState,
+  applyEdgeChanges,
+  applyNodeChanges,
   useReactFlow,
   type Connection,
   type Edge,
   type Node,
   type OnConnect,
+  type OnEdgesChange,
+  type OnNodesChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -47,6 +49,58 @@ const PALETTE_ICONS: Record<Exclude<FunnelStepKind, "start">, typeof Pause> = {
   end: Flag,
 };
 
+function toFlowNodes(draft: FunnelDraft): Node[] {
+  return draft.nodes.map((node) => ({
+    id: node.id,
+    type: node.type || "funnelStep",
+    position: { ...node.position },
+    deletable: node.deletable,
+    data: { ...node.data },
+  }));
+}
+
+function toFlowEdges(draft: FunnelDraft): Edge[] {
+  return draft.edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle ?? undefined,
+    targetHandle: edge.targetHandle ?? undefined,
+    label: edge.label,
+    animated: true,
+  }));
+}
+
+function serializeDraftGraph(
+  base: FunnelDraft,
+  nextNodes: Node[],
+  nextEdges: Edge[],
+): FunnelDraft {
+  return {
+    id: base.id,
+    name: base.name,
+    updatedAt: new Date().toISOString(),
+    nodes: nextNodes.map((node) => ({
+      id: node.id,
+      type: node.type || "funnelStep",
+      position: {
+        x: Number(node.position?.x) || 0,
+        y: Number(node.position?.y) || 0,
+      },
+      deletable: node.deletable,
+      data: { ...(node.data as FunnelStepData) },
+    })),
+    edges: nextEdges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle ?? null,
+      targetHandle: edge.targetHandle ?? null,
+      label: typeof edge.label === "string" ? edge.label : undefined,
+    })),
+  };
+}
+
 function FunnelCanvasInner({
   draft,
   onChange,
@@ -59,16 +113,29 @@ function FunnelCanvasInner({
   attendanceStatuses: AttendanceStatusConfig[];
 }) {
   const { screenToFlowPosition, fitView } = useReactFlow();
-  const [nodes, setNodes, onNodesChange] = useNodesState(draft.nodes as Node[]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(draft.edges as Edge[]);
+  const [nodes, setNodes] = useState<Node[]>(() => toFlowNodes(draft));
+  const [edges, setEdges] = useState<Edge[]>(() => toFlowEdges(draft));
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  const draftRef = useRef(draft);
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  draftRef.current = draft;
+  nodesRef.current = nodes;
+  edgesRef.current = edges;
+
+  const persistGraph = useCallback(
+    (nextNodes: Node[], nextEdges: Edge[]) => {
+      onChange(serializeDraftGraph(draftRef.current, nextNodes, nextEdges));
+    },
+    [onChange],
+  );
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) ?? null,
     [nodes, selectedNodeId],
   );
 
-  /** Contagem do nó Público mais próximo a montante (para sugerir qtd. no Disparo). */
   const upstreamAudienceCount = useMemo(() => {
     if (!selectedNodeId) return null;
     const visited = new Set<string>();
@@ -94,29 +161,47 @@ function FunnelCanvasInner({
     return null;
   }, [selectedNodeId, nodes, edges]);
 
-  const persist = useCallback(
-    (nextNodes: Node[], nextEdges: Edge[]) => {
-      onChange({
-        ...draft,
-        updatedAt: new Date().toISOString(),
-        nodes: nextNodes.map((node) => ({
-          id: node.id,
-          type: node.type || "funnelStep",
-          position: node.position,
-          deletable: node.deletable,
-          data: node.data as FunnelStepData,
-        })),
-        edges: nextEdges.map((edge) => ({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle,
-          label: typeof edge.label === "string" ? edge.label : undefined,
-        })),
+  const onNodesChange: OnNodesChange = useCallback(
+    (changes) => {
+      setNodes((current) => {
+        const next = applyNodeChanges(changes, current);
+        nodesRef.current = next;
+        const shouldPersist = changes.some(
+          (change) =>
+            change.type === "remove" ||
+            change.type === "add" ||
+            change.type === "replace" ||
+            change.type === "reset" ||
+            (change.type === "position" && change.dragging === false),
+        );
+        if (shouldPersist) {
+          persistGraph(next, edgesRef.current);
+        }
+        return next;
       });
     },
-    [draft, onChange],
+    [persistGraph],
+  );
+
+  const onEdgesChange: OnEdgesChange = useCallback(
+    (changes) => {
+      setEdges((current) => {
+        const next = applyEdgeChanges(changes, current);
+        edgesRef.current = next;
+        const shouldPersist = changes.some(
+          (change) =>
+            change.type === "remove" ||
+            change.type === "add" ||
+            change.type === "replace" ||
+            change.type === "reset",
+        );
+        if (shouldPersist) {
+          persistGraph(nodesRef.current, next);
+        }
+        return next;
+      });
+    },
+    [persistGraph],
   );
 
   const onConnect: OnConnect = useCallback(
@@ -130,11 +215,12 @@ function FunnelCanvasInner({
           },
           current,
         );
-        persist(nodes, next);
+        edgesRef.current = next;
+        persistGraph(nodesRef.current, next);
         return next;
       });
     },
-    [nodes, persist, setEdges],
+    [persistGraph],
   );
 
   const addStep = useCallback(
@@ -153,13 +239,14 @@ function FunnelCanvasInner({
       };
       setNodes((current) => {
         const next = [...current, node];
-        persist(next, edges);
+        nodesRef.current = next;
+        persistGraph(next, edgesRef.current);
         return next;
       });
       setSelectedNodeId(id);
       window.setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50);
     },
-    [edges, fitView, persist, screenToFlowPosition, setNodes],
+    [fitView, persistGraph, screenToFlowPosition],
   );
 
   const updateSelectedData = useCallback(
@@ -169,30 +256,29 @@ function FunnelCanvasInner({
         const next = current.map((node) =>
           node.id === selectedNodeId ? { ...node, data: nextData } : node,
         );
-        persist(next, edges);
+        nodesRef.current = next;
+        persistGraph(next, edgesRef.current);
         return next;
       });
     },
-    [edges, persist, selectedNodeId, setNodes],
+    [persistGraph, selectedNodeId],
   );
 
   const deleteSelected = useCallback(() => {
     if (!selectedNodeId) return;
-    const node = nodes.find((item) => item.id === selectedNodeId);
+    const node = nodesRef.current.find((item) => item.id === selectedNodeId);
     if ((node?.data as FunnelStepData | undefined)?.kind === "start") return;
-    setNodes((current) => {
-      const nextNodes = current.filter((item) => item.id !== selectedNodeId);
-      setEdges((currentEdges) => {
-        const nextEdges = currentEdges.filter(
-          (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId,
-        );
-        persist(nextNodes, nextEdges);
-        return nextEdges;
-      });
-      return nextNodes;
-    });
+    const nextNodes = nodesRef.current.filter((item) => item.id !== selectedNodeId);
+    const nextEdges = edgesRef.current.filter(
+      (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId,
+    );
+    nodesRef.current = nextNodes;
+    edgesRef.current = nextEdges;
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    persistGraph(nextNodes, nextEdges);
     setSelectedNodeId(null);
-  }, [nodes, persist, selectedNodeId, setEdges, setNodes]);
+  }, [persistGraph, selectedNodeId]);
 
   return (
     <div className="flex h-full min-h-0 w-full">
@@ -238,34 +324,26 @@ function FunnelCanvasInner({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeDragStop={(_, __, nextNodes) => persist(nextNodes, edges)}
-          onNodesDelete={(deleted) => {
-            const deletedIds = new Set(deleted.map((node) => node.id));
-            setNodes((currentNodes) => {
-              const nextNodes = currentNodes.filter((node) => !deletedIds.has(node.id));
-              setEdges((currentEdges) => {
-                const nextEdges = currentEdges.filter(
-                  (edge) => !deletedIds.has(edge.source) && !deletedIds.has(edge.target),
-                );
-                persist(nextNodes, nextEdges);
-                return nextEdges;
-              });
-              return nextNodes;
-            });
-            setSelectedNodeId(null);
-          }}
           onSelectionChange={({ nodes: selected }) => {
             setSelectedNodeId(selected[0]?.id ?? null);
           }}
           fitView
           fitViewOptions={{ padding: 0.25 }}
-          deleteKeyCode={["Backspace", "Delete"]}
+          deleteKeyCode={["Delete"]}
           proOptions={{ hideAttribution: true }}
           className="bg-muted/20"
         >
           <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
-          <Controls showInteractive={false} />
-          <MiniMap pannable zoomable className="!rounded-lg !border !border-border !bg-card" />
+          <Controls
+            showInteractive={false}
+            className="!overflow-hidden !rounded-lg !border !border-border !bg-card !shadow-soft"
+          />
+          <MiniMap
+            pannable
+            zoomable
+            className="!rounded-lg !border !border-border !bg-card"
+            maskColor="color-mix(in oklab, var(--background) 70%, transparent)"
+          />
         </ReactFlow>
       </div>
 

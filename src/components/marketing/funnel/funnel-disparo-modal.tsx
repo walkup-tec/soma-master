@@ -140,7 +140,10 @@ export function FunnelDisparoModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-4xl flex-col gap-4 overflow-hidden">
+      <DialogContent
+        className="flex z-[200] max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-4xl flex-col gap-4 overflow-hidden"
+        overlayClassName="z-[200]"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Megaphone className="size-4" />

@@ -141,7 +141,10 @@ export function FunnelAudienceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-3xl flex-col gap-4 overflow-hidden">
+      <DialogContent
+        className="flex z-[200] max-h-[90vh] w-[calc(100vw-2rem)] max-w-3xl flex-col gap-4 overflow-hidden"
+        overlayClassName="z-[200]"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="size-4" />

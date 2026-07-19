@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useServerFn } from "@tanstack/react-start";
 import { Save, X } from "lucide-react";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { FunnelBuilderCanvas } from "@/components/marketing/funnel/funnel-builder-canvas";
 import {
   createDefaultFunnelDraft,
+  normalizeFunnelDraft,
   type FunnelDraft,
 } from "@/lib/marketing/funnel.types";
 import { getSystemSettingsFn } from "@/lib/config/settings.server";
@@ -20,18 +21,24 @@ function readStoredFunnels(): FunnelDraft[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as FunnelDraft[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => normalizeFunnelDraft(item));
   } catch {
     return [];
   }
 }
 
 function writeStoredFunnels(items: FunnelDraft[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items.map((item) => normalizeFunnelDraft(item))));
 }
 
 export function listStoredFunnels(): FunnelDraft[] {
   return readStoredFunnels().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function getStoredFunnelById(id: string): FunnelDraft | null {
+  const found = readStoredFunnels().find((item) => item.id === id);
+  return found ? normalizeFunnelDraft(found) : null;
 }
 
 /**
@@ -50,12 +57,30 @@ export function FunnelBuilderModal({
 }) {
   const loadSettings = useServerFn(getSystemSettingsFn);
   const [draft, setDraft] = useState<FunnelDraft>(() => createDefaultFunnelDraft());
+  const [canvasKey, setCanvasKey] = useState(0);
   const [products, setProducts] = useState<ProductConfig[]>([]);
   const [attendanceStatuses, setAttendanceStatuses] = useState<AttendanceStatusConfig[]>([]);
+  const wasOpenRef = useRef(false);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
+  // Carrega o rascunho só na abertura (evita reset no meio da edição)
   useEffect(() => {
-    if (!open) return;
-    setDraft(initialDraft ? structuredClone(initialDraft) : createDefaultFunnelDraft());
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!justOpened) return;
+
+    let next: FunnelDraft;
+    if (initialDraft?.id) {
+      next =
+        getStoredFunnelById(initialDraft.id) ??
+        normalizeFunnelDraft(structuredClone(initialDraft));
+    } else {
+      next = createDefaultFunnelDraft();
+    }
+    setDraft(next);
+    setCanvasKey((value) => value + 1);
+
     void loadSettings()
       .then((settings) => {
         setProducts(settings.products || []);
@@ -79,24 +104,31 @@ export function FunnelBuilderModal({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
+      if (event.key !== "Escape") return;
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+      onOpenChange(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
   function handleSave() {
-    const name = draft.name.trim() || "Novo funil";
-    const next: FunnelDraft = {
-      ...draft,
+    const current = draftRef.current;
+    const name = current.name.trim() || "Novo funil";
+    const next = normalizeFunnelDraft({
+      ...current,
       name,
       updatedAt: new Date().toISOString(),
-    };
-    const current = readStoredFunnels().filter((item) => item.id !== next.id);
-    writeStoredFunnels([next, ...current]);
+    });
+    if (next.nodes.length === 0) {
+      toast.error("O funil está vazio — adicione etapas antes de salvar.");
+      return;
+    }
+    const others = readStoredFunnels().filter((item) => item.id !== next.id);
+    writeStoredFunnels([next, ...others]);
     setDraft(next);
     onSaved?.(next);
-    toast.success("Funil salvo (rascunho local)");
+    toast.success(`Funil salvo · ${next.nodes.length} etapa(s)`);
   }
 
   if (!open || typeof document === "undefined") return null;
@@ -115,11 +147,16 @@ export function FunnelBuilderModal({
           </p>
           <Input
             value={draft.name}
-            onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, name: event.target.value }))
+            }
             className="mt-0.5 h-8 max-w-md border-0 bg-transparent px-0 text-base font-semibold shadow-none focus-visible:ring-0"
             placeholder="Nome do funil"
           />
         </div>
+        <p className="hidden text-xs text-muted-foreground sm:block">
+          {draft.nodes.length} etapa(s) · {draft.edges.length} conexão(ões)
+        </p>
         <Button type="button" variant="outline" className="cursor-pointer gap-1.5" onClick={handleSave}>
           <Save className="size-4" />
           Salvar
@@ -138,7 +175,7 @@ export function FunnelBuilderModal({
 
       <div className="min-h-0 flex-1">
         <FunnelBuilderCanvas
-          key={draft.id}
+          key={`${draft.id}-${canvasKey}`}
           draft={draft}
           onChange={setDraft}
           products={products}

@@ -289,9 +289,15 @@ export function MarketingFunnelPanel() {
 
       <FunnelBuilderModal
         open={builderOpen}
-        onOpenChange={setBuilderOpen}
+        onOpenChange={(next) => {
+          setBuilderOpen(next);
+          if (!next) setEditing(null);
+        }}
         initialDraft={editing}
-        onSaved={() => reload()}
+        onSaved={(saved) => {
+          setEditing(saved);
+          reload();
+        }}
       />
     </>
   );

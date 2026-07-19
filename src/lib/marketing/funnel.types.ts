@@ -98,6 +98,63 @@ export type FunnelDraft = {
   }>;
 };
 
+const FUNNEL_KINDS = new Set<FunnelStepKind>([
+  "start",
+  "pause",
+  "audience",
+  "disparo",
+  "feedback",
+  "email_mkt",
+  "end",
+]);
+
+/** Garante shape válido após localStorage / clones. */
+export function normalizeFunnelDraft(raw: FunnelDraft): FunnelDraft {
+  const nodes = Array.isArray(raw?.nodes)
+    ? raw.nodes
+        .filter((node) => node && typeof node.id === "string")
+        .map((node) => {
+          const rawData = (node.data ?? {}) as Partial<FunnelStepData>;
+          const kind = FUNNEL_KINDS.has(rawData.kind as FunnelStepKind)
+            ? (rawData.kind as FunnelStepKind)
+            : "end";
+          const fallback = createStepData(kind);
+          return {
+            id: node.id,
+            type: node.type || "funnelStep",
+            position: {
+              x: Number(node.position?.x) || 0,
+              y: Number(node.position?.y) || 0,
+            },
+            deletable: node.deletable,
+            data: {
+              ...fallback,
+              ...rawData,
+              kind,
+              label: String(rawData.label || fallback.label),
+            } as FunnelStepData,
+          };
+        })
+    : [];
+  const edges = Array.isArray(raw?.edges)
+    ? raw.edges.filter(
+        (edge) =>
+          edge &&
+          typeof edge.id === "string" &&
+          typeof edge.source === "string" &&
+          typeof edge.target === "string",
+      )
+    : [];
+  return {
+    id: String(raw?.id || `funnel-${crypto.randomUUID().slice(0, 8)}`),
+    name: String(raw?.name || "Funil sem nome"),
+    updatedAt: String(raw?.updatedAt || new Date().toISOString()),
+    nodes,
+    edges,
+  };
+}
+
+
 export const FUNNEL_FEEDBACK_HANDLES: Array<{
   id: FunnelFeedbackBranch;
   label: string;

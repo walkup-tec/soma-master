@@ -354,3 +354,31 @@ html.soma-is-processing body {
     transform: rotate(360deg);
   }
 }
+
+/* React Flow — controles de zoom alinhados ao tema (evita bloco branco no dark) */
+.react-flow__controls {
+  box-shadow: var(--shadow-soft);
+}
+.react-flow__controls-button {
+  background: var(--card) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
+  fill: var(--foreground) !important;
+}
+.react-flow__controls-button:hover {
+  background: var(--muted) !important;
+}
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+  max-width: 14px;
+  max-height: 14px;
+}
+.react-flow__controls-button:disabled {
+  opacity: 0.4;
+}
+.react-flow__minimap {
+  background: var(--card) !important;
+}
+.react-flow__attribution {
+  display: none !important;
+}

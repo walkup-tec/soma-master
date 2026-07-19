@@ -1,4 +1,16 @@
-﻿## 2026-07-19 17:47 — Funil de prospecção (módulos)
+﻿## 2026-07-19 19:05 — Fix reabrir funil (perda do fluxo salvo)
+- Sync canvas→draft; load do localStorage no open; normalize.
+- LOG: `doc/LOG-2026-07-19__190500__fix-funil-reabrir-salvo.md`.
+
+## 2026-07-19 18:52 — Fix modais Público/Disparo (z-index)
+- Dialog abria atrás do construtor z-100; agora z-200 + Escape aninhado.
+- LOG: `doc/LOG-2026-07-19__185200__fix-funil-modais-zindex.md`.
+
+## 2026-07-19 18:49 — Fix zoom controls dark no funil
+- Controles React Flow usavam fundo branco padrão; alinhados a --card/--foreground.
+- LOG: `doc/LOG-2026-07-19__184900__fix-funil-controls-dark.md`.
+
+## 2026-07-19 17:47 — Funil de prospecção (módulos)
 - Construtor deixou de ser “robô”: Iniciar/Pausa/Público/Disparo/Feedback/Fim/E-mail Mkt.
 - Disparo → WABA `POST /integrations/soma/alternativa-campaigns` (owner mozart).
 - LOG: `doc/LOG-2026-07-19__174734__funil-prospeccao-modulos.md`.
