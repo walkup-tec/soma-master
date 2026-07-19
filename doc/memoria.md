@@ -1,4 +1,8 @@
-﻿## 2026-07-18 15:04 — Menu: Funil e WhatsApp em Produção própria
+﻿## 2026-07-18 23:26 — Marketing: submenu + abas (padrão Configurações)
+- Grupo Marketing (abaixo de Comercial); tela `/app/marketing` com Números WhatsApp, Funil, API Alternativa.
+- LOG: `doc/LOG-2026-07-18__232611__marketing-submenu-abas.md`.
+
+## 2026-07-18 15:04 — Menu: Funil e WhatsApp em Produção própria
 - Novo subgrupo; Chat WhatsApp movido para ele. Sem port de Aquecedor.
 - LOG: `doc/LOG-2026-07-18__150455__submenu-funil-e-whatsapp.md`.
 

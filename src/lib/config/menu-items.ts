@@ -8,6 +8,7 @@ export type MenuItemId =
   | "kanban"
   | "remarketing"
   | "agenda"
+  | "marketing"
   | "chat"
   | "usuarios"
   | "push"
@@ -17,7 +18,7 @@ export type MenuItemId =
 export type MenuSectionId = "parceiros" | "producao-propria";
 
 /** Subgrupos internos (usados em Produção própria e nas categorias de usuário). */
-export type MenuGroupId = "Operação" | "Comercial" | "Funil e WhatsApp" | "Gestão";
+export type MenuGroupId = "Operação" | "Comercial" | "Marketing" | "Gestão";
 
 export type MenuSectionDefinition = {
   id: MenuSectionId;
@@ -104,10 +105,17 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
     path: "/app/agenda",
   },
   {
+    id: "marketing",
+    label: "Marketing",
+    section: "producao-propria",
+    group: "Marketing",
+    path: "/app/marketing",
+  },
+  {
     id: "chat",
     label: "Chat WhatsApp",
     section: "producao-propria",
-    group: "Funil e WhatsApp",
+    group: "Marketing",
     path: "/app/chat",
   },
   {
@@ -138,7 +146,7 @@ export const ALL_MENU_ITEM_IDS = MENU_ITEMS.map((m) => m.id);
 export const MENU_GROUPS: MenuGroupId[] = [
   "Operação",
   "Comercial",
-  "Funil e WhatsApp",
+  "Marketing",
   "Gestão",
 ];
 

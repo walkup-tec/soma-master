@@ -11,6 +11,7 @@ import {
   Settings,
   Network,
   Table2,
+  Target,
   UserCog,
   Users,
 } from "lucide-react";
@@ -26,6 +27,7 @@ export const MENU_ICONS: Record<MenuItemId, ComponentType<{ className?: string }
   kanban: Columns3,
   remarketing: Megaphone,
   agenda: CalendarDays,
+  marketing: Target,
   chat: MessageCircle,
   usuarios: UserCog,
   push: Bell,
