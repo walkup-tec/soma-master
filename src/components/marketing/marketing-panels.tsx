@@ -108,14 +108,14 @@ export function MarketingWhatsAppNumbersPanel() {
         <div>
           <CardTitle className="font-display text-base">Números WhatsApp</CardTitle>
           <CardDescription>
-            Instâncias do aquecedor WABA
+            Instâncias <span className="text-foreground">conectadas</span> do aquecedor WABA
             {ownerEmail ? (
               <>
                 {" "}
                 · conta <span className="text-foreground">{ownerEmail}</span>
               </>
             ) : null}
-            . Novas instâncias da conta aparecem automaticamente neste painel.
+            . Desconectadas não aparecem nesta lista.
           </CardDescription>
         </div>
         <Button
@@ -160,7 +160,7 @@ export function MarketingWhatsAppNumbersPanel() {
                 ) : items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-40 text-center text-muted-foreground">
-                      Nenhuma instância do aquecedor encontrada para esta conta.
+                      Nenhuma instância conectada no aquecedor desta conta.
                     </TableCell>
                   </TableRow>
                 ) : (

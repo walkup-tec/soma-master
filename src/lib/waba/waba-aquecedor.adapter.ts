@@ -39,6 +39,11 @@ export function wabaAvatarProxyUrl(profilePicUrl: string): string | null {
   return `${base}/instancias/avatar?url=${encodeURIComponent(pic)}`;
 }
 
+function isConnectedInstance(item: WabaAquecedorInstance): boolean {
+  const status = String(item.connectionStatus || "").trim().toLowerCase();
+  return status === "open" || status.includes("open") || status === "connected";
+}
+
 /**
  * Lista instâncias do aquecedor WABA do owner configurado no servidor WABA
  * (padrão mozart.pmo@gmail.com).
@@ -90,12 +95,13 @@ export async function fetchWabaAquecedorInstances(): Promise<WabaAquecedorInstan
         error: data?.error || `WABA respondeu ${response.status}.`,
       };
     }
+    const connected = (Array.isArray(data.items) ? data.items : []).filter(isConnectedInstance);
     return {
       ok: true,
       ownerEmail: data.ownerEmail || "",
-      total: data.total ?? data.items?.length ?? 0,
+      total: connected.length,
       cacheUpdatedAt: data.cacheUpdatedAt || "",
-      items: Array.isArray(data.items) ? data.items : [],
+      items: connected,
     };
   } catch (error) {
     const message =

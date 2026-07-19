@@ -1,4 +1,8 @@
-﻿## 2026-07-19 12:04 — Transferir chat WhatsApp
+﻿## 2026-07-19 12:20 — Números WhatsApp: só conectadas
+- Filtro connectionStatus open/connected no adapter WABA.
+- LOG: `doc/LOG-2026-07-19__122044__numeros-whatsapp-so-conectadas.md`.
+
+## 2026-07-19 12:04 — Transferir chat WhatsApp
 - Botão Transferir no header; some da fila do remetente; entra em Meus do destino.
 - Todos (agente) = não atribuídos + meus.
 - LOG: `doc/LOG-2026-07-19__120412__chat-transferir-atendimento.md`.
