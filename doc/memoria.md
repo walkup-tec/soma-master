@@ -1,4 +1,8 @@
-﻿## 2026-07-18 23:32 — Chat WhatsApp de volta em Comercial
+﻿## 2026-07-18 23:40 — Topbar WhatsApp: pulso verde + som + menu
+- Ícone outline ao lado do sino (sem link); alerta em unread sem atendente; chime só em contato novo; destaque discreto no menu Chat.
+- LOG: `doc/LOG-2026-07-18__234050__chatbot-icone-pulso-som.md`.
+
+## 2026-07-18 23:32 — Chat WhatsApp de volta em Comercial
 - Chat sai do grupo Marketing; permanece sob Comercial (Kanban/Remarketing/Agenda).
 - LOG: `doc/LOG-2026-07-18__233234__chat-voltar-comercial.md`.
 

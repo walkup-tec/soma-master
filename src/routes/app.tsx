@@ -4,8 +4,10 @@ import { useEffect, useRef } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppTopbar } from "@/components/app-topbar";
+import { ChatbotAlertProvider } from "@/components/chat/chatbot-alert-context";
 import { getAuthSessionFn } from "@/lib/auth/auth.server";
 import { guardAppMenuAccess } from "@/lib/auth/menu-guard.server";
+import { sessionCanAccessMenu } from "@/lib/auth/menu-access";
 
 const SESSION_SYNC_MS = 120_000;
 
@@ -60,17 +62,21 @@ function AppLayout() {
     };
   }, [refreshSession, router]);
 
+  const chatbotAlertsEnabled = sessionCanAccessMenu(auth, "chat");
+
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar auth={auth} />
-        <SidebarInset className="flex min-w-0 flex-1 flex-col">
-          <AppTopbar user={auth} />
-          <main className="flex-1 p-4 md:p-6">
-            <Outlet />
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+    <ChatbotAlertProvider enabled={chatbotAlertsEnabled}>
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-background">
+          <AppSidebar auth={auth} />
+          <SidebarInset className="flex min-w-0 flex-1 flex-col">
+            <AppTopbar user={auth} />
+            <main className="flex-1 p-4 md:p-6">
+              <Outlet />
+            </main>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </ChatbotAlertProvider>
   );
 }

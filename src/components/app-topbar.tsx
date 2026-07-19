@@ -2,6 +2,7 @@ import { useRouterState, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AgendaTopbarAlerts } from "@/components/agenda/agenda-topbar-alerts";
+import { ChatbotTopbarIcon } from "@/components/chat/chatbot-topbar-icon";
 import { PushTopbarBell } from "@/components/push/push-topbar-bell";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon, Plus } from "lucide-react";
@@ -27,6 +28,8 @@ const TITLES: Record<string, string> = {
   "/app/kanban": "Kanban",
   "/app/remarketing": "Remarketing",
   "/app/agenda": "Agenda & Follow-up",
+  "/app/chat": "Chat WhatsApp",
+  "/app/marketing": "Marketing",
   "/app/usuarios": "Usuários",
   "/app/push": "Push",
   "/app/configuracoes": "Configurações",
@@ -87,6 +90,7 @@ export function AppTopbar({ user }: { user: SessionData }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {sessionCanAccessMenu(user, "chat") ? <ChatbotTopbarIcon /> : null}
         <PushTopbarBell />
         {sessionCanAccessMenu(user, "agenda") ? <AgendaTopbarAlerts /> : null}
         {sessionCanAccessMenu(user, "clientes") ? (

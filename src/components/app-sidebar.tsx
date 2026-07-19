@@ -14,6 +14,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/logo";
+import { useChatbotAlert } from "@/components/chat/chatbot-alert-context";
 import {
   filterMenuItemsByIds,
   getMenuItemById,
@@ -53,6 +54,7 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const chatbotAlert = useChatbotAlert();
 
   const allowedItems = filterMenuItemsByIds(auth.menuIds);
 
@@ -160,21 +162,48 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
                           <SidebarMenu>
                             {items.map((item) => {
                               const Icon = MENU_ICONS[item.id];
+                              const chatIncoming =
+                                item.id === "chat" && chatbotAlert.active;
                               return (
                                 <SidebarMenuItem key={item.id}>
                                   <SidebarMenuButton
                                     asChild
                                     isActive={isActive(item.path)}
                                     tooltip={item.label}
-                                    className="data-[active=true]:bg-sidebar-primary/15 data-[active=true]:text-sidebar-primary data-[active=true]:font-semibold"
+                                    className={cn(
+                                      "data-[active=true]:bg-sidebar-primary/15 data-[active=true]:text-sidebar-primary data-[active=true]:font-semibold",
+                                      chatIncoming &&
+                                        "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                                    )}
                                   >
                                     <Link
                                       to={item.path}
                                       preload="intent"
                                       className="flex items-center gap-3"
                                     >
-                                      <Icon className="size-4 shrink-0" />
-                                      <span>{item.label}</span>
+                                      <span className="relative shrink-0">
+                                        <Icon
+                                          className={cn(
+                                            "size-4",
+                                            chatIncoming && "text-emerald-500",
+                                          )}
+                                        />
+                                        {chatIncoming ? (
+                                          <span
+                                            className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_2px] shadow-sidebar"
+                                            aria-hidden
+                                          />
+                                        ) : null}
+                                      </span>
+                                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                                        <span className="truncate">{item.label}</span>
+                                        {chatIncoming ? (
+                                          <span
+                                            className="size-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500"
+                                            aria-hidden
+                                          />
+                                        ) : null}
+                                      </span>
                                     </Link>
                                   </SidebarMenuButton>
                                 </SidebarMenuItem>

@@ -110,6 +110,26 @@ export const listChatConversationsFn = createServerFn({ method: "GET" }).handler
   return listConversations();
 });
 
+/**
+ * Contatos novos no Chatbot: unread > 0 e ainda sem atendente humano (assigned).
+ * Usado pelo ícone do topbar / destaque no menu.
+ */
+export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handler(async () => {
+  await requireChatUser();
+  const conversations = await listConversations(200);
+  const pending = conversations.filter(
+    (conversation) => conversation.unreadCount > 0 && !conversation.assignedUserId,
+  );
+  return {
+    pendingCount: pending.length,
+    conversationIds: pending.map((conversation) => conversation.id),
+    newestCreatedAt: pending
+      .map((conversation) => conversation.createdAt)
+      .sort()
+      .at(-1) ?? null,
+  };
+});
+
 export const getChatThreadFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const conversationId = String((data as { conversationId?: string })?.conversationId ?? "").trim();
