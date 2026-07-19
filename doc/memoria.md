@@ -1,4 +1,8 @@
-﻿## 2026-07-19 19:15 — Funil: Iniciar na palette + Excluir na lista
+﻿## 2026-07-19 19:25 — Fix filtros produto/status no Público
+- Popover atrás do Dialog; modal+z-250.
+- LOG: `doc/LOG-2026-07-19__192500__fix-funil-filtros-produto-status.md`.
+
+## 2026-07-19 19:15 — Funil: Iniciar na palette + Excluir na lista
 - Módulo Iniciar (imediato/agendado) obrigatório; botão excluir funis.
 - LOG: `doc/LOG-2026-07-19__191500__funil-iniciar-e-excluir.md`.
 
