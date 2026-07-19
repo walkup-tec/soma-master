@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
@@ -14,10 +14,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { listWabaAquecedorInstancesFn } from "@/lib/waba/waba-aquecedor.server";
 import { createWabaAlternativaCampaignFn } from "@/lib/waba/waba-alternativa-campaign.server";
 import type { FunnelDisparoConfig } from "@/lib/marketing/funnel.types";
-import { cn } from "@/lib/utils";
 
 export function FunnelDisparoModal({
   open,
@@ -75,17 +75,23 @@ export function FunnelDisparoModal({
       .finally(() => setLoadingInstances(false));
   }, [open, listInstances]);
 
-  function patch(partial: Partial<FunnelDisparoConfig>) {
-    setDraft((current) => ({ ...current, ...partial }));
+  const instanceOptions = useMemo(
+    () =>
+      instances.map((item) => ({
+        value: item.name,
+        label: item.number ? `${item.name} · ${item.number}` : item.name,
+      })),
+    [instances],
+  );
+
+  /** [] = Todos (todas as instâncias conectadas). */
+  function resolveSelectedInstances(names: string[]): string[] {
+    if (names.length === 0) return instances.map((item) => item.name);
+    return names.filter((name) => instances.some((item) => item.name === name));
   }
 
-  function toggleInstance(name: string) {
-    setDraft((current) => {
-      const selected = new Set(current.selectedInstanceNames);
-      if (selected.has(name)) selected.delete(name);
-      else selected.add(name);
-      return { ...current, selectedInstanceNames: [...selected] };
-    });
+  function patch(partial: Partial<FunnelDisparoConfig>) {
+    setDraft((current) => ({ ...current, ...partial }));
   }
 
   async function handleGenerate() {
@@ -97,8 +103,9 @@ export function FunnelDisparoModal({
       toast.error("Informe a quantidade planejada de envios.");
       return;
     }
-    if (draft.selectedInstanceNames.length === 0) {
-      toast.error("Selecione ao menos uma instância conectada.");
+    const selectedInstances = resolveSelectedInstances(draft.selectedInstanceNames);
+    if (selectedInstances.length === 0) {
+      toast.error("Nenhuma instância conectada disponível.");
       return;
     }
     if (draft.linkDestinationMode === "whatsapp" && !draft.whatsappTargetNumber.trim()) {
@@ -110,17 +117,25 @@ export function FunnelDisparoModal({
       return;
     }
 
+    const payload: FunnelDisparoConfig = {
+      ...draft,
+      selectedInstanceNames: selectedInstances,
+    };
+
     setGenerating(true);
     try {
-      const result = await createCampaign({ data: draft });
+      const result = await createCampaign({ data: payload });
       if (!result.ok) {
-        const next = { ...draft, lastGenerateError: result.error || "Falha ao gerar campanha" };
+        const next = { ...payload, lastGenerateError: result.error || "Falha ao gerar campanha" };
         setDraft(next);
         toast.error(next.lastGenerateError);
         return;
       }
       const next: FunnelDisparoConfig = {
-        ...draft,
+        ...payload,
+        // Mantém [] no draft se era "Todos", só envia a lista resolvida na API
+        selectedInstanceNames:
+          draft.selectedInstanceNames.length === 0 ? [] : selectedInstances,
         wabaCampaignId: result.campaignId || null,
         lastGenerateError: null,
       };
@@ -143,6 +158,18 @@ export function FunnelDisparoModal({
       <DialogContent
         className="flex z-[200] max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-4xl flex-col gap-4 overflow-hidden"
         overlayClassName="z-[200]"
+        onPointerDownOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-radix-popper-content-wrapper], [data-slot=popover-content]")) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-radix-popper-content-wrapper], [data-slot=popover-content]")) {
+            event.preventDefault();
+          }
+        }}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -330,29 +357,23 @@ export function FunnelDisparoModal({
             ) : instances.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma instância conectada disponível.</p>
             ) : (
-              <div className="grid max-h-40 gap-1.5 overflow-y-auto sm:grid-cols-2">
-                {instances.map((item) => {
-                  const selected = draft.selectedInstanceNames.includes(item.name);
-                  return (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => toggleInstance(item.name)}
-                      className={cn(
-                        "cursor-pointer rounded-lg border px-3 py-2 text-left text-sm transition-colors",
-                        selected
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:bg-muted/50",
-                      )}
-                    >
-                      <span className="font-medium">{item.name}</span>
-                      <span className="mt-0.5 block font-mono text-[11px] text-muted-foreground">
-                        {item.number || "—"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <MultiSelectFilter
+                  allLabel="Todos"
+                  options={instanceOptions}
+                  values={draft.selectedInstanceNames}
+                  onChange={(selectedInstanceNames) => patch({ selectedInstanceNames })}
+                  modal
+                  contentClassName="z-[250]"
+                  className="w-full sm:w-full max-w-xl"
+                  emptyLabel="Nenhuma instância conectada"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {draft.selectedInstanceNames.length === 0
+                    ? `Todos · ${instances.length} instância(s) serão usadas no disparo`
+                    : `${draft.selectedInstanceNames.length} de ${instances.length} selecionada(s)`}
+                </p>
+              </>
             )}
           </div>
 
