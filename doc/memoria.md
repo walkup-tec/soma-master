@@ -1,4 +1,9 @@
-﻿## 2026-07-19 19:25 — Fix filtros produto/status no Público
+﻿## 2026-07-19 20:35 — Exclusão de funil com AlertDialog
+- Removido `window.confirm` nativo; modal in-app Cancelar/Excluir.
+- Commit `7b86fe5`
+- LOG: `doc/LOG-2026-07-19__203500__funil-excluir-alert-dialog.md`.
+
+## 2026-07-19 19:25 — Fix filtros produto/status no Público
 - Popover atrás do Dialog; modal+z-250.
 - LOG: `doc/LOG-2026-07-19__192500__fix-funil-filtros-produto-status.md`.
 
