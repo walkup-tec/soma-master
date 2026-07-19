@@ -1,4 +1,8 @@
-﻿## 2026-07-18 23:26 — Marketing: submenu + abas (padrão Configurações)
+﻿## 2026-07-18 23:32 — Chat WhatsApp de volta em Comercial
+- Chat sai do grupo Marketing; permanece sob Comercial (Kanban/Remarketing/Agenda).
+- LOG: `doc/LOG-2026-07-18__233234__chat-voltar-comercial.md`.
+
+## 2026-07-18 23:26 — Marketing: submenu + abas (padrão Configurações)
 - Grupo Marketing (abaixo de Comercial); tela `/app/marketing` com Números WhatsApp, Funil, API Alternativa.
 - LOG: `doc/LOG-2026-07-18__232611__marketing-submenu-abas.md`.
 

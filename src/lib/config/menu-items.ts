@@ -105,18 +105,18 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
     path: "/app/agenda",
   },
   {
+    id: "chat",
+    label: "Chat WhatsApp",
+    section: "producao-propria",
+    group: "Comercial",
+    path: "/app/chat",
+  },
+  {
     id: "marketing",
     label: "Marketing",
     section: "producao-propria",
     group: "Marketing",
     path: "/app/marketing",
-  },
-  {
-    id: "chat",
-    label: "Chat WhatsApp",
-    section: "producao-propria",
-    group: "Marketing",
-    path: "/app/chat",
   },
   {
     id: "usuarios",
