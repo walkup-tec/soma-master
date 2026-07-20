@@ -693,3 +693,8 @@
 - Modal Disparo = WABA (inicio/fim + Seg-Dom)
 - LOG: doc/LOG-2026-07-20__115000__disparo-expediente-working-days.md
 
+
+## 2026-07-20 11:55 — Produtos cards separados
+- Wizard em cima; listagem embaixo (nao dentro das etapas)
+- LOG: doc/LOG-2026-07-20__115500__produtos-wizard-lista-cards.md
+

@@ -464,101 +464,41 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
         </div>
       ) : null}
 
-    <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-      <Card className="border-border/60 shadow-soft h-fit">
-        <CardHeader className="pb-3">
-          <CardTitle className="font-display text-base">
-            {isPartnersCatalog ? "Produtos (parceiros)" : "Produtos"}
-          </CardTitle>
-          <CardDescription>
-            Marque um ou mais para excluir em lote. Clique no nome para editar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {products.map((product) => {
-            const isSelected = selected?.id === product.id;
-            const isChecked = checkedIds.includes(product.id);
-            return (
-              <div
-                key={product.id}
-                className={`flex items-start gap-2 rounded-lg border px-2 py-1.5 transition-colors ${
-                  isSelected
-                    ? "border-primary/40 bg-primary/10"
-                    : "border-border/60 hover:bg-muted/50"
-                }`}
-              >
-                <Checkbox
-                  className="mt-1.5"
-                  checked={isChecked}
-                  disabled={saving}
-                  onCheckedChange={(value) => toggleChecked(product.id, Boolean(value))}
-                  aria-label={`Selecionar ${product.name || "produto"}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(product.id);
-                    setStepIndex(0);
-                  }}
-                  className="min-w-0 flex-1 rounded-md px-1 py-1 text-left text-sm"
-                >
-                  <span className="flex flex-col items-start gap-1">
-                    <StatusBadge
-                      label={resolveProductTagLabel(product)}
-                      color={product.color}
-                      className="max-w-full"
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {(product.bankIds ?? []).length} banco(s) · {product.requiredFieldIds.length}{" "}
-                      obrigatório(s)
-                    </span>
-                  </span>
-                </button>
-              </div>
-            );
-          })}
-
-          <div className="flex flex-col gap-2 pt-2">
-            {checkedIds.length > 0 ? (
+      {/* Card superior: apenas etapas de criação/edição */}
+      <Card className="border-border/60 shadow-soft">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="font-display text-base">
+              {selected ? "Configurar produto" : "Cadastrar produto"}
+            </CardTitle>
+            <CardDescription>
+              {selected
+                ? `Etapa ${stepIndex + 1} de ${wizardSteps.length}: ${currentStep.label}`
+                : "Use Novo produto para iniciar o cadastro. As etapas ficam só neste card."}
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {selected ? (
               <Button
                 type="button"
-                variant="destructive"
-                className="w-full"
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => requestDeleteIds([selected.id])}
                 disabled={saving}
-                onClick={() => requestDeleteIds(checkedIds)}
+                title="Excluir produto em edição"
               >
                 <Trash2 className="size-4" />
-                Excluir selecionados ({checkedIds.length})
+                Excluir
               </Button>
             ) : null}
-            <Button type="button" variant="outline" className="w-full" onClick={addProduct} disabled={saving}>
+            <Button type="button" size="sm" onClick={addProduct} disabled={saving}>
               <Plus className="size-4" /> Novo produto
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </CardHeader>
 
-      {selected ? (
-        <Card className="border-border/60 shadow-soft">
-          <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-            <div>
-              <CardTitle className="font-display text-base">Configurar produto</CardTitle>
-              <CardDescription>
-                Etapa {stepIndex + 1} de {wizardSteps.length}: {currentStep.label}
-              </CardDescription>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => requestDeleteIds([selected.id])}
-              disabled={saving}
-              title="Excluir produto"
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </CardHeader>
+        {selected ? (
           <CardContent className="space-y-6">
             <div className="flex flex-wrap gap-2">
               {wizardSteps.map((step, index) => (
@@ -579,151 +519,53 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
             </div>
 
             {currentStep.id === "identity" ? (
-              <div className="space-y-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <Label htmlFor="product-name">Nome do produto</Label>
-                    <Input
-                      id="product-name"
-                      value={selected.name}
-                      onChange={(e) => {
-                        const nextProducts = products.map((product) =>
-                          product.id === selected.id
-                            ? { ...product, name: e.target.value, tag: e.target.value }
-                            : product,
-                        );
-                        setProducts(nextProducts);
-                        productsRef.current = nextProducts;
-                      }}
-                      onBlur={() => persistSelectedQuiet()}
-                      placeholder="Ex.: Empréstimo CLT, FGTS, Cartão consignado"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="product-color">Cor da tag</Label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        id="product-color"
-                        type="color"
-                        value={normalizeStatusColor(selected.color, DEFAULT_STATUS_COLOR)}
-                        onFocus={() => {
-                          colorEditingRef.current = true;
-                        }}
-                        onInput={(event) => {
-                          colorEditingRef.current = true;
-                          patchSelectedLocal({ color: event.currentTarget.value });
-                        }}
-                        onChange={(event) => {
-                          colorEditingRef.current = true;
-                          patchSelectedLocal({ color: event.currentTarget.value });
-                        }}
-                        onBlur={() => {
-                          colorEditingRef.current = false;
-                          persistSelectedQuiet();
-                        }}
-                        className="h-9 w-9 shrink-0 cursor-pointer appearance-none border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-0"
-                        aria-label="Cor da tag do produto"
-                        title="Cor da tag"
-                      />
-                      <StatusBadge label={resolveProductTagLabel(selected)} color={selected.color} />
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Label htmlFor="product-name">Nome do produto</Label>
+                  <Input
+                    id="product-name"
+                    value={selected.name}
+                    onChange={(e) => {
+                      const nextProducts = products.map((product) =>
+                        product.id === selected.id
+                          ? { ...product, name: e.target.value, tag: e.target.value }
+                          : product,
+                      );
+                      setProducts(nextProducts);
+                      productsRef.current = nextProducts;
+                    }}
+                    onBlur={() => persistSelectedQuiet()}
+                    placeholder="Ex.: Empréstimo CLT, FGTS, Cartão consignado"
+                  />
                 </div>
-
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Produtos cadastrados</p>
-                  <p className="text-xs text-muted-foreground">
-                    {isPartnersCatalog
-                      ? "Cada banco vinculado aparece em uma linha. Use editar ou excluir nas ações."
-                      : "Cada banco vinculado aparece em uma linha. Marque Parceiros para exibir na seção Parceiros; desmarque para ocultar. Edite ou exclua pelas ações."}
-                  </p>
-                  {productBankRows.length === 0 ? (
-                    <p className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-                      Nenhum produto cadastrado ainda.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto rounded-xl border border-border/60">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-                          <tr>
-                            <th className="px-4 py-3 font-medium">Nome do produto</th>
-                            <th className="px-4 py-3 font-medium">Banco</th>
-                            {isPartnersCatalog ? null : (
-                              <th className="px-4 py-3 font-medium text-center">Parceiros</th>
-                            )}
-                            <th className="px-4 py-3 font-medium text-right">Ação</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {productBankRows.map((row) => {
-                            const isActive = row.productId === selected.id;
-                            return (
-                              <tr
-                                key={row.key}
-                                className={cn(
-                                  "border-t border-border/60 transition-colors",
-                                  isActive && "bg-primary/10",
-                                )}
-                              >
-                                <td className="px-4 py-3 font-medium">{row.productName}</td>
-                                <td className="px-4 py-3 text-muted-foreground">{row.bankName}</td>
-                                {isPartnersCatalog ? null : (
-                                  <td className="px-4 py-3">
-                                    <div className="flex justify-center">
-                                      <Checkbox
-                                        checked={row.availableForPartners}
-                                        disabled={saving}
-                                        onCheckedChange={(value) =>
-                                          setAvailableForPartners(row.productId, value === true)
-                                        }
-                                        aria-label={
-                                          row.availableForPartners
-                                            ? `Remover ${row.productName} da seção Parceiros`
-                                            : `Exibir ${row.productName} na seção Parceiros`
-                                        }
-                                        title={
-                                          row.availableForPartners
-                                            ? "Marcado: aparece em Parceiros. Clique para remover."
-                                            : "Desmarcado: não aparece em Parceiros. Clique para liberar."
-                                        }
-                                      />
-                                    </div>
-                                  </td>
-                                )}
-                                <td className="px-4 py-3">
-                                  <div className="flex justify-end gap-1">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      disabled={saving}
-                                      title="Editar produto"
-                                      aria-label={`Editar ${row.productName}`}
-                                      onClick={() => editProductFromList(row.productId)}
-                                    >
-                                      <Pencil className="size-3.5" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-destructive hover:text-destructive"
-                                      disabled={saving}
-                                      title="Excluir produto"
-                                      aria-label={`Excluir ${row.productName}`}
-                                      onClick={() => requestDeleteIds([row.productId])}
-                                    >
-                                      <Trash2 className="size-3.5" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  <Label htmlFor="product-color">Cor da tag</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="product-color"
+                      type="color"
+                      value={normalizeStatusColor(selected.color, DEFAULT_STATUS_COLOR)}
+                      onFocus={() => {
+                        colorEditingRef.current = true;
+                      }}
+                      onInput={(event) => {
+                        colorEditingRef.current = true;
+                        patchSelectedLocal({ color: event.currentTarget.value });
+                      }}
+                      onChange={(event) => {
+                        colorEditingRef.current = true;
+                        patchSelectedLocal({ color: event.currentTarget.value });
+                      }}
+                      onBlur={() => {
+                        colorEditingRef.current = false;
+                        persistSelectedQuiet();
+                      }}
+                      className="h-9 w-9 shrink-0 cursor-pointer appearance-none border-0 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-md [&::-moz-color-swatch]:border-0"
+                      aria-label="Cor da tag do produto"
+                      title="Cor da tag"
+                    />
+                    <StatusBadge label={resolveProductTagLabel(selected)} color={selected.color} />
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -872,16 +714,138 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
               )}
             </div>
           </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-border/60 shadow-soft">
+        ) : (
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             {isPartnersCatalog
               ? 'Clique em "Novo produto" para cadastrar um produto exclusivo dos parceiros.'
-              : "Nenhum produto selecionado."}
+              : 'Clique em "Novo produto" para iniciar as etapas de cadastro.'}
           </CardContent>
-        </Card>
-      )}
+        )}
+      </Card>
+
+      {/* Card inferior: listagem independente do wizard */}
+      <Card className="border-border/60 shadow-soft">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="font-display text-base">Produtos cadastrados</CardTitle>
+            <CardDescription>
+              {isPartnersCatalog
+                ? "Cada banco vinculado aparece em uma linha. Use editar ou excluir nas ações."
+                : "Cada banco vinculado aparece em uma linha. Marque Parceiros para exibir na seção Parceiros. Edite ou exclua pelas ações."}
+            </CardDescription>
+          </div>
+          {checkedIds.length > 0 ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={saving}
+              onClick={() => requestDeleteIds(checkedIds)}
+            >
+              <Trash2 className="size-4" />
+              Excluir selecionados ({checkedIds.length})
+            </Button>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          {productBankRows.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              Nenhum produto cadastrado ainda.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-border/60">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="w-10 px-3 py-3 font-medium">
+                      <span className="sr-only">Selecionar</span>
+                    </th>
+                    <th className="px-4 py-3 font-medium">Nome do produto</th>
+                    <th className="px-4 py-3 font-medium">Banco</th>
+                    {isPartnersCatalog ? null : (
+                      <th className="px-4 py-3 font-medium text-center">Parceiros</th>
+                    )}
+                    <th className="px-4 py-3 font-medium text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productBankRows.map((row) => {
+                    const isActive = row.productId === selected?.id;
+                    const isChecked = checkedIds.includes(row.productId);
+                    return (
+                      <tr
+                        key={row.key}
+                        className={cn(
+                          "border-t border-border/60 transition-colors",
+                          isActive && "bg-primary/10",
+                        )}
+                      >
+                        <td className="px-3 py-3">
+                          <Checkbox
+                            checked={isChecked}
+                            disabled={saving}
+                            onCheckedChange={(value) =>
+                              toggleChecked(row.productId, Boolean(value))
+                            }
+                            aria-label={`Selecionar ${row.productName}`}
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-medium">{row.productName}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.bankName}</td>
+                        {isPartnersCatalog ? null : (
+                          <td className="px-4 py-3">
+                            <div className="flex justify-center">
+                              <Checkbox
+                                checked={row.availableForPartners}
+                                disabled={saving}
+                                onCheckedChange={(value) =>
+                                  setAvailableForPartners(row.productId, value === true)
+                                }
+                                aria-label={
+                                  row.availableForPartners
+                                    ? `Remover ${row.productName} da seção Parceiros`
+                                    : `Exibir ${row.productName} na seção Parceiros`
+                                }
+                              />
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={saving}
+                              title="Editar produto"
+                              aria-label={`Editar ${row.productName}`}
+                              onClick={() => editProductFromList(row.productId)}
+                            >
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              disabled={saving}
+                              title="Excluir produto"
+                              aria-label={`Excluir ${row.productName}`}
+                              onClick={() => requestDeleteIds([row.productId])}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <AlertDialog
         open={pendingDeleteIds !== null}
@@ -915,7 +879,6 @@ export function ProductsSettings({ settings, onChange, catalog = "production" }:
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
     </div>
   );
 }
