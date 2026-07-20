@@ -152,6 +152,7 @@ export async function createWabaAlternativaCampaign(
       selectedDisparadorInstances: config.selectedInstanceNames,
       startHour: config.startHour,
       endHour: config.endHour,
+      workingDays: config.workingDays,
       messageMode: "ai",
       aiBriefing: config.aiBriefing,
       aiTone: config.aiTone,

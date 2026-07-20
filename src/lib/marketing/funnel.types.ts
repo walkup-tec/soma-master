@@ -38,6 +38,45 @@ export type FunnelAudienceConfig = {
   importRowCount: number | null;
 };
 
+export type FunnelDisparoWorkingDay = "seg" | "ter" | "qua" | "qui" | "sex" | "sab" | "dom";
+
+export const FUNNEL_DISPARO_WORKING_DAY_OPTIONS: Array<{
+  id: FunnelDisparoWorkingDay;
+  label: string;
+}> = [
+  { id: "seg", label: "Seg" },
+  { id: "ter", label: "Ter" },
+  { id: "qua", label: "Qua" },
+  { id: "qui", label: "Qui" },
+  { id: "sex", label: "Sex" },
+  { id: "sab", label: "Sáb" },
+  { id: "dom", label: "Dom" },
+];
+
+export const DEFAULT_FUNNEL_DISPARO_WORKING_DAYS: FunnelDisparoWorkingDay[] = [
+  "seg",
+  "ter",
+  "qua",
+  "qui",
+  "sex",
+];
+
+export function normalizeFunnelWorkingDays(
+  input: unknown,
+  options?: { allowEmpty?: boolean },
+): FunnelDisparoWorkingDay[] {
+  const allowed = new Set(FUNNEL_DISPARO_WORKING_DAY_OPTIONS.map((d) => d.id));
+  const raw = Array.isArray(input) ? input : null;
+  if (raw === null) return [...DEFAULT_FUNNEL_DISPARO_WORKING_DAYS];
+  const days = raw
+    .map((d) => String(d || "").toLowerCase().trim())
+    .filter((d): d is FunnelDisparoWorkingDay => allowed.has(d as FunnelDisparoWorkingDay));
+  const unique = Array.from(new Set(days));
+  if (unique.length > 0) return unique;
+  if (options?.allowEmpty) return [];
+  return [...DEFAULT_FUNNEL_DISPARO_WORKING_DAYS];
+}
+
 export type FunnelDisparoConfig = {
   campaignName: string;
   plannedSendCount: number;
@@ -50,9 +89,10 @@ export type FunnelDisparoConfig = {
   linkDestinationMode: "whatsapp" | "url";
   whatsappTargetNumber: string;
   responseUrl: string;
-  /** Expediente — WABA calcula delays a partir destes horários */
+  /** Expediente — WABA calcula delays a partir destes horários + dias */
   startHour: number;
   endHour: number;
+  workingDays: FunnelDisparoWorkingDay[];
   /** [] = todas as instâncias conectadas */
   selectedInstanceNames: string[];
   wabaCampaignId: string | null;
@@ -294,6 +334,7 @@ export function defaultDisparoConfig(): FunnelDisparoConfig {
     responseUrl: "",
     startHour: 8,
     endHour: 22,
+    workingDays: [...DEFAULT_FUNNEL_DISPARO_WORKING_DAYS],
     selectedInstanceNames: [],
     wabaCampaignId: null,
     lastGenerateError: null,

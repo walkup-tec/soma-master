@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { listWabaAquecedorInstancesFn } from "@/lib/waba/waba-aquecedor.server";
 import { createWabaAlternativaCampaignFn } from "@/lib/waba/waba-alternativa-campaign.server";
-import type { FunnelDisparoConfig } from "@/lib/marketing/funnel.types";
+import {
+  FUNNEL_DISPARO_WORKING_DAY_OPTIONS,
+  normalizeFunnelWorkingDays,
+  type FunnelDisparoConfig,
+  type FunnelDisparoWorkingDay,
+} from "@/lib/marketing/funnel.types";
+import { cn } from "@/lib/utils";
 
 export function FunnelDisparoModal({
   open,
@@ -57,6 +64,7 @@ export function FunnelDisparoModal({
       responseUrl: value.responseUrl || "",
       startHour: value.startHour ?? 8,
       endHour: value.endHour ?? 22,
+      workingDays: normalizeFunnelWorkingDays(value.workingDays),
       selectedInstanceNames: value.selectedInstanceNames || [],
       wabaCampaignId: value.wabaCampaignId,
       lastGenerateError: value.lastGenerateError,
@@ -107,6 +115,19 @@ export function FunnelDisparoModal({
     setDraft((current) => ({ ...current, ...partial }));
   }
 
+  function toggleWorkingDay(day: FunnelDisparoWorkingDay, checked: boolean) {
+    setDraft((current) => {
+      const currentDays = normalizeFunnelWorkingDays(current.workingDays, { allowEmpty: true });
+      const set = new Set(currentDays);
+      if (checked) set.add(day);
+      else set.delete(day);
+      const next = FUNNEL_DISPARO_WORKING_DAY_OPTIONS.map((d) => d.id).filter((id) =>
+        set.has(id),
+      );
+      return { ...current, workingDays: next };
+    });
+  }
+
   async function handleGenerate() {
     if (!draft.campaignName.trim()) {
       toast.error("Informe o nome da campanha.");
@@ -114,6 +135,10 @@ export function FunnelDisparoModal({
     }
     if (draft.plannedSendCount <= 0) {
       toast.error("Informe a quantidade planejada de envios.");
+      return;
+    }
+    if (normalizeFunnelWorkingDays(draft.workingDays, { allowEmpty: true }).length === 0) {
+      toast.error("Selecione ao menos um dia de expediente.");
       return;
     }
     const selectedInstances = resolveSelectedInstances(draft.selectedInstanceNames);
@@ -132,6 +157,7 @@ export function FunnelDisparoModal({
 
     const payload: FunnelDisparoConfig = {
       ...draft,
+      workingDays: normalizeFunnelWorkingDays(draft.workingDays),
       selectedInstanceNames: selectedInstances,
     };
 
@@ -296,29 +322,54 @@ export function FunnelDisparoModal({
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Expediente · início (h)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={23}
-                value={draft.startHour}
-                onChange={(event) => patch({ startHour: Number(event.target.value) || 0 })}
-              />
+          <div className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3">
+            <Label className="text-sm font-medium text-sky-300">Expediente</Label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Início da janela (hora)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={draft.startHour}
+                  onChange={(event) => patch({ startHour: Number(event.target.value) || 0 })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Fim da janela (hora)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={24}
+                  value={draft.endHour}
+                  onChange={(event) => patch({ endHour: Number(event.target.value) || 22 })}
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Expediente · fim (h)</Label>
-              <Input
-                type="number"
-                min={1}
-                max={24}
-                value={draft.endHour}
-                onChange={(event) => patch({ endHour: Number(event.target.value) || 22 })}
-              />
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {FUNNEL_DISPARO_WORKING_DAY_OPTIONS.map((day) => {
+                const checked = normalizeFunnelWorkingDays(draft.workingDays, {
+                  allowEmpty: true,
+                }).includes(day.id);
+                return (
+                  <label
+                    key={day.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2 text-sm text-foreground",
+                    )}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) => toggleWorkingDay(day.id, value === true)}
+                    />
+                    {day.label}
+                  </label>
+                );
+              })}
             </div>
-            <p className="text-[11px] text-muted-foreground sm:col-span-2">
-              O WABA calcula automaticamente o intervalo entre envios a partir deste expediente.
+            <p className="text-[11px] text-muted-foreground">
+              O WABA só dispara nos dias marcados, dentro desta janela. O intervalo entre envios é
+              calculado automaticamente.
             </p>
           </div>
 

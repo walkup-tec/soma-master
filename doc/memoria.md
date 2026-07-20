@@ -688,3 +688,8 @@
 ## 2026-07-20 08:31 — Painel API Alternativa
 - Cards campanhas WABA no Soma; ativar/pausar/+instancias/renomear/excluir via API
 - LOG: doc/LOG--api-alternativa-campanhas.md
+
+## 2026-07-20 11:50 — Expediente Disparo dias
+- Modal Disparo = WABA (inicio/fim + Seg-Dom)
+- LOG: doc/LOG-2026-07-20__115000__disparo-expediente-working-days.md
+

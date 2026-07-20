@@ -11,6 +11,7 @@ import {
   setSomaAlternativaCampaignActive,
 } from "@/lib/waba/waba-alternativa-campaign.adapter";
 import type { FunnelDisparoConfig } from "@/lib/marketing/funnel.types";
+import { normalizeFunnelWorkingDays } from "@/lib/marketing/funnel.types";
 
 function parseDisparoInput(data: unknown): FunnelDisparoConfig {
   if (!data || typeof data !== "object") throw new Error("Configuração de disparo inválida.");
@@ -29,6 +30,7 @@ function parseDisparoInput(data: unknown): FunnelDisparoConfig {
     responseUrl: String(body.responseUrl || ""),
     startHour: Math.max(0, Math.min(23, Math.floor(Number(body.startHour) || 8))),
     endHour: Math.max(1, Math.min(24, Math.floor(Number(body.endHour) || 22))),
+    workingDays: normalizeFunnelWorkingDays(body.workingDays),
     selectedInstanceNames: Array.isArray(body.selectedInstanceNames)
       ? body.selectedInstanceNames.map((n) => String(n || "").trim()).filter(Boolean)
       : [],
