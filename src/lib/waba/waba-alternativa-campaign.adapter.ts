@@ -83,10 +83,12 @@ export async function createWabaAlternativaCampaign(
     } | null;
 
     if (!response.ok || !data?.ok) {
-      return {
-        ok: false,
-        error: data?.error || `WABA respondeu ${response.status}.`,
-      };
+      const rawError = data?.error || `WABA respondeu ${response.status}.`;
+      const error =
+        rawError.includes("Sessão expirada") || rawError.includes("não autenticado")
+          ? "WABA em produção desatualizado: faça Redeploy do serviço waba_disparador no Easypanel (integração Soma Alternativa)."
+          : rawError;
+      return { ok: false, error };
     }
     return {
       ok: true,
