@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Filter, Flame, Phone, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import {
+  Filter,
+  Flame,
+  Loader2,
+  Pencil,
+  Phone,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -14,6 +24,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -32,6 +51,14 @@ import {
   wabaAvatarProxyUrl,
   type WabaAquecedorInstance,
 } from "@/lib/waba/waba-aquecedor.adapter";
+import {
+  addSomaAlternativaCampaignInstancesFn,
+  deleteSomaAlternativaCampaignFn,
+  listSomaAlternativaCampaignsFn,
+  renameSomaAlternativaCampaignFn,
+  setSomaAlternativaCampaignActiveFn,
+} from "@/lib/waba/waba-alternativa-campaign.server";
+import type { SomaAlternativaCampaign } from "@/lib/waba/waba-alternativa-campaign.adapter";
 import type { FunnelDraft } from "@/lib/marketing/funnel.types";
 import { cn } from "@/lib/utils";
 
@@ -384,15 +411,351 @@ export function MarketingFunnelPanel() {
 }
 
 export function MarketingApiAlternativaPanel() {
+  const listCampaigns = useServerFn(listSomaAlternativaCampaignsFn);
+  const setActive = useServerFn(setSomaAlternativaCampaignActiveFn);
+  const addInstances = useServerFn(addSomaAlternativaCampaignInstancesFn);
+  const renameCampaign = useServerFn(renameSomaAlternativaCampaignFn);
+  const deleteCampaign = useServerFn(deleteSomaAlternativaCampaignFn);
+
+  const [items, setItems] = useState<SomaAlternativaCampaign[]>([]);
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SomaAlternativaCampaign | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<SomaAlternativaCampaign | null>(null);
+
+  const refresh = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      try {
+        const result = await listCampaigns();
+        if (!result.ok) {
+          setError(result.error || "Não foi possível carregar as campanhas.");
+          setItems([]);
+          return;
+        }
+        setError(null);
+        setOwnerEmail(result.ownerEmail || "");
+        setItems(result.items || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Falha ao carregar API Alternativa.");
+        setItems([]);
+      } finally {
+        if (!opts?.silent) setLoading(false);
+      }
+    },
+    [listCampaigns],
+  );
+
+  useEffect(() => {
+    void refresh();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh({ silent: true });
+    }, 20_000);
+    return () => window.clearInterval(id);
+  }, [refresh]);
+
+  async function withBusy(id: string, action: () => Promise<{ ok: boolean; error?: string; message?: string }>) {
+    setBusyId(id);
+    try {
+      const result = await action();
+      if (!result.ok) {
+        toast.error(result.error || "Ação não concluída no WABA.");
+        return;
+      }
+      toast.success(result.message || "Ação enviada ao WABA.");
+      await refresh({ silent: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha na ação.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function formatStart(iso: string): string {
+    try {
+      return new Date(iso).toLocaleDateString("pt-BR");
+    } catch {
+      return "—";
+    }
+  }
+
   return (
-    <div className="rounded-xl border border-border/60 bg-card p-6">
-      <div className="mb-2 flex items-center gap-2 text-primary">
-        <Zap className="size-4" />
-        <h3 className="font-display text-lg font-semibold tracking-tight">API Alternativa</h3>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Parâmetros e operação da API Alternativa para envio de mensagens.
-      </p>
-    </div>
+    <>
+      <Card className="border-border/60 shadow-soft">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="font-display flex items-center gap-2 text-base">
+              <Zap className="size-4 text-primary" />
+              Campanhas · API Alternativa
+            </CardTitle>
+            <CardDescription>
+              Mesmas ações do WABA (ativar, instâncias, renomear, excluir), executadas na conta
+              {ownerEmail ? (
+                <>
+                  {" "}
+                  <span className="text-foreground">{ownerEmail}</span>
+                </>
+              ) : null}{" "}
+              via integração Soma → WABA.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            className="cursor-pointer gap-1.5"
+            onClick={() => {
+              void refresh().then(() => toast.success("Lista atualizada."));
+            }}
+          >
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+            Atualizar
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {error ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-6 text-sm text-destructive">
+              {error}
+            </div>
+          ) : loading && items.length === 0 ? (
+            <div className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Carregando campanhas do WABA…
+            </div>
+          ) : items.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border px-6 py-16 text-center">
+              <p className="font-medium text-foreground">Nenhuma campanha ainda</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Crie pelo módulo <span className="font-medium text-foreground">Disparo</span> no Funil
+                (Gerar Campanha). A campanha nasce pausada no WABA e aparece aqui.
+              </p>
+            </div>
+          ) : (
+            items.map((campaign) => {
+              const status = String(campaign.status || "").toLowerCase();
+              const isRunning = status === "running";
+              const isFinished = status === "finished";
+              const health = campaign.instanceHealth;
+              const needsMore = health?.needsMoreInstancesForMinimum === true;
+              const busy = busyId === campaign.id;
+              const progress = Math.max(
+                0,
+                Math.min(100, Number(campaign.progressPercent) || 0),
+              );
+              const stage = campaign.runtimeStage;
+
+              return (
+                <div
+                  key={campaign.id}
+                  className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div>
+                        <h4 className="truncate font-semibold text-foreground">{campaign.name}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Início: {formatStart(campaign.createdAt)}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {formatCount(campaign.processedCount)} de{" "}
+                          {formatCount(campaign.totalNumbers)} destinos processados ·{" "}
+                          {formatCount(campaign.sentCount)} enviados
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(campaign.disparadorInstances || []).map((tag) => (
+                          <span
+                            key={tag.instanceName}
+                            className={cn(
+                              "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                              tag.connected
+                                ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30"
+                                : "bg-destructive/15 text-destructive ring-1 ring-destructive/30",
+                            )}
+                          >
+                            {tag.instanceName}
+                          </span>
+                        ))}
+                      </div>
+                      {needsMore ? (
+                        <p className="text-sm text-destructive">
+                          Quantidade mínima para campanha = {health.minConnectedRequired} números
+                        </p>
+                      ) : null}
+                      {health?.shouldPauseByDisconnectedRatio ? (
+                        <p className="text-sm text-destructive">
+                          50% ou mais das instâncias selecionadas estão desconectadas.
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busy || isFinished || (needsMore && !isRunning)}
+                        className={cn(
+                          "cursor-pointer",
+                          isRunning
+                            ? "bg-amber-500 text-black hover:bg-amber-400"
+                            : "bg-emerald-600 text-white hover:bg-emerald-500",
+                        )}
+                        onClick={() =>
+                          void withBusy(campaign.id, () =>
+                            setActive({ data: { id: campaign.id, ativa: !isRunning } }),
+                          )
+                        }
+                      >
+                        {busy ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : isFinished ? (
+                          "Campanha finalizada"
+                        ) : isRunning ? (
+                          "Pausar"
+                        ) : (
+                          "Ativar campanha"
+                        )}
+                      </Button>
+                      {needsMore ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            void withBusy(campaign.id, () =>
+                              addInstances({ data: { id: campaign.id } }),
+                            )
+                          }
+                        >
+                          + Instâncias
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        className="cursor-pointer gap-1"
+                        onClick={() => {
+                          setRenameTarget(campaign);
+                          setRenameValue(campaign.name);
+                        }}
+                      >
+                        <Pencil className="size-3.5" />
+                        Editar nome
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        className="cursor-pointer gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setDeleteTarget(campaign)}
+                      >
+                        <Trash2 className="size-3.5" />
+                        Excluir
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-1.5">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          isRunning ? "bg-emerald-500" : "bg-amber-400",
+                        )}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {stage?.label || (isRunning ? "Enviando" : "Pausada")}
+                      </span>
+                      {stage?.detail ? ` · ${stage.detail}` : null}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={Boolean(renameTarget)}
+        onOpenChange={(open) => !open && setRenameTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar nome da campanha</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="soma-campaign-rename">Nome</Label>
+            <Input
+              id="soma-campaign-rename"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              maxLength={120}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRenameTarget(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={!renameValue.trim() || !renameTarget}
+              onClick={() => {
+                if (!renameTarget) return;
+                const id = renameTarget.id;
+                const name = renameValue.trim();
+                setRenameTarget(null);
+                void withBusy(id, () => renameCampaign({ data: { id, name } }));
+              }}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir campanha?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `Excluir "${deleteTarget.name}" no WABA? Esta ação não pode ser desfeita.`
+                : "Esta ação não pode ser desfeita."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                if (!deleteTarget) return;
+                const id = deleteTarget.id;
+                setDeleteTarget(null);
+                void withBusy(id, () => deleteCampaign({ data: { id } }));
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

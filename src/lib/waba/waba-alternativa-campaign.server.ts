@@ -2,7 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSession } from "@tanstack/react-start/server";
 import { sessionCanAccessMenu } from "@/lib/auth/menu-access";
 import { sessionConfig, type SessionData } from "@/lib/auth/session-config";
-import { createWabaAlternativaCampaign } from "@/lib/waba/waba-alternativa-campaign.adapter";
+import {
+  addSomaAlternativaCampaignInstances,
+  createWabaAlternativaCampaign,
+  deleteSomaAlternativaCampaign,
+  listSomaAlternativaCampaigns,
+  renameSomaAlternativaCampaign,
+  setSomaAlternativaCampaignActive,
+} from "@/lib/waba/waba-alternativa-campaign.adapter";
 import type { FunnelDisparoConfig } from "@/lib/marketing/funnel.types";
 
 function parseDisparoInput(data: unknown): FunnelDisparoConfig {
@@ -30,24 +37,24 @@ function parseDisparoInput(data: unknown): FunnelDisparoConfig {
   };
 }
 
+async function requireMarketingSession() {
+  const session = await getSession(sessionConfig);
+  const user = session.data as SessionData | undefined;
+  if (!user?.userId) {
+    return { ok: false as const, error: "Faça login novamente." };
+  }
+  if (!sessionCanAccessMenu(user, "marketing")) {
+    return { ok: false as const, error: "Sem permissão para Funil e WhatsApp." };
+  }
+  return { ok: true as const, user };
+}
+
 export const createWabaAlternativaCampaignFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => parseDisparoInput(data))
   .handler(async ({ data }) => {
     try {
-      const session = await getSession(sessionConfig);
-      const user = session.data as SessionData | undefined;
-      if (!user?.userId) {
-        return {
-          ok: false as const,
-          error: "Faça login novamente para gerar a campanha.",
-        };
-      }
-      if (!sessionCanAccessMenu(user, "marketing")) {
-        return {
-          ok: false as const,
-          error: "Sem permissão para Funil e WhatsApp.",
-        };
-      }
+      const auth = await requireMarketingSession();
+      if (!auth.ok) return { ok: false as const, error: auth.error };
       return await createWabaAlternativaCampaign(data);
     } catch (error) {
       return {
@@ -56,4 +63,70 @@ export const createWabaAlternativaCampaignFn = createServerFn({ method: "POST" }
           error instanceof Error ? error.message : "Falha ao gerar campanha no WABA.",
       };
     }
+  });
+
+export const listSomaAlternativaCampaignsFn = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const auth = await requireMarketingSession();
+    if (!auth.ok) return { ok: false as const, items: [], error: auth.error };
+    return listSomaAlternativaCampaigns();
+  },
+);
+
+export const setSomaAlternativaCampaignActiveFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data && typeof data === "object" ? data : {}) as {
+      id?: string;
+      ativa?: boolean;
+    };
+    const id = String(body.id || "").trim();
+    if (!id) throw new Error("Campanha inválida.");
+    return { id, ativa: body.ativa === true };
+  })
+  .handler(async ({ data }) => {
+    const auth = await requireMarketingSession();
+    if (!auth.ok) return { ok: false as const, error: auth.error };
+    return setSomaAlternativaCampaignActive(data.id, data.ativa);
+  });
+
+export const addSomaAlternativaCampaignInstancesFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const id = String((data as { id?: string })?.id || "").trim();
+    if (!id) throw new Error("Campanha inválida.");
+    return { id };
+  })
+  .handler(async ({ data }) => {
+    const auth = await requireMarketingSession();
+    if (!auth.ok) return { ok: false as const, error: auth.error };
+    return addSomaAlternativaCampaignInstances(data.id);
+  });
+
+export const renameSomaAlternativaCampaignFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data && typeof data === "object" ? data : {}) as {
+      id?: string;
+      name?: string;
+    };
+    const id = String(body.id || "").trim();
+    const name = String(body.name || "").trim();
+    if (!id) throw new Error("Campanha inválida.");
+    if (!name) throw new Error("Nome obrigatório.");
+    return { id, name };
+  })
+  .handler(async ({ data }) => {
+    const auth = await requireMarketingSession();
+    if (!auth.ok) return { ok: false as const, error: auth.error };
+    return renameSomaAlternativaCampaign(data.id, data.name);
+  });
+
+export const deleteSomaAlternativaCampaignFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const id = String((data as { id?: string })?.id || "").trim();
+    if (!id) throw new Error("Campanha inválida.");
+    return { id };
+  })
+  .handler(async ({ data }) => {
+    const auth = await requireMarketingSession();
+    if (!auth.ok) return { ok: false as const, error: auth.error };
+    return deleteSomaAlternativaCampaign(data.id);
   });
