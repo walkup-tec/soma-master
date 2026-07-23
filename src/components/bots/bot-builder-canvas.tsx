@@ -115,8 +115,11 @@ function BotCanvasInner({
   const [nodes, setNodes] = useState<Node[]>(() => toFlowNodes(draft));
   const [edges, setEdges] = useState<Edge[]>(() => toFlowEdges(draft));
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const draftRef = useRef(draft);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
+  const persistTimerRef = useRef<number | null>(null);
+  draftRef.current = draft;
   nodesRef.current = nodes;
   edgesRef.current = edges;
 
@@ -124,9 +127,41 @@ function BotCanvasInner({
 
   const persistGraph = useCallback(
     (nextNodes: Node[], nextEdges: Edge[]) => {
-      onChange(serializeDraftGraph(draft, nextNodes, nextEdges));
+      const next = serializeDraftGraph(draftRef.current, nextNodes, nextEdges);
+      const prev = draftRef.current;
+      const sameGraph =
+        prev.nodes.length === next.nodes.length &&
+        prev.edges.length === next.edges.length &&
+        prev.nodes.every((node, index) => {
+          const other = next.nodes[index];
+          return (
+            node.id === other.id &&
+            node.position.x === other.position.x &&
+            node.position.y === other.position.y &&
+            JSON.stringify(node.data) === JSON.stringify(other.data)
+          );
+        }) &&
+        prev.edges.every((edge, index) => {
+          const other = next.edges[index];
+          return (
+            edge.id === other.id &&
+            edge.source === other.source &&
+            edge.target === other.target &&
+            (edge.sourceHandle ?? null) === (other.sourceHandle ?? null)
+          );
+        });
+      if (sameGraph && prev.name === next.name) return;
+
+      // Evita setState do pai dentro do updater do React Flow (loop #185)
+      if (persistTimerRef.current != null) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+      persistTimerRef.current = window.setTimeout(() => {
+        persistTimerRef.current = null;
+        onChange(next);
+      }, 0);
     },
-    [draft, onChange],
+    [onChange],
   );
 
   const onNodesChange: OnNodesChange = useCallback(
@@ -136,20 +171,12 @@ function BotCanvasInner({
         nodesRef.current = next;
         const shouldPersist = changes.some(
           (change) =>
-            change.type === "position" ||
             change.type === "remove" ||
             change.type === "add" ||
-            change.type === "replace",
+            change.type === "replace" ||
+            (change.type === "position" && change.dragging === false),
         );
-        if (shouldPersist) {
-          const onlyDrag =
-            changes.length > 0 &&
-            changes.every((change) => change.type === "position" && "dragging" in change && change.dragging);
-          if (!onlyDrag) persistGraph(next, edgesRef.current);
-          else if (changes.some((change) => change.type === "position" && "dragging" in change && change.dragging === false)) {
-            persistGraph(next, edgesRef.current);
-          }
-        }
+        if (shouldPersist) persistGraph(next, edgesRef.current);
         return next;
       });
     },
@@ -239,19 +266,15 @@ function BotCanvasInner({
   const updateSelectedData = useCallback(
     (nextData: BotNodeData) => {
       if (!selectedNodeId) return;
-      setNodes((current) => {
-        const next = current.map((node) =>
-          node.id === selectedNodeId ? { ...node, data: nextData } : node,
-        );
-        nodesRef.current = next;
-        setEdges((currentEdges) => {
-          const nextEdges = pruneInvalidOptionEdges(selectedNodeId, nextData, currentEdges);
-          edgesRef.current = nextEdges;
-          persistGraph(next, nextEdges);
-          return nextEdges;
-        });
-        return next;
-      });
+      const nextNodes = nodesRef.current.map((node) =>
+        node.id === selectedNodeId ? { ...node, data: nextData } : node,
+      );
+      const nextEdges = pruneInvalidOptionEdges(selectedNodeId, nextData, edgesRef.current);
+      nodesRef.current = nextNodes;
+      edgesRef.current = nextEdges;
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      persistGraph(nextNodes, nextEdges);
     },
     [persistGraph, selectedNodeId],
   );
@@ -302,21 +325,17 @@ function BotCanvasInner({
         };
       });
 
-    setNodes((current) => {
-      const next = [
-        ...current.map((node) => ({ ...node, selected: false })),
-        ...created,
-      ];
-      nodesRef.current = next;
-      setEdges((currentEdges) => {
-        const nextEdges = [...currentEdges, ...createdEdges];
-        edgesRef.current = nextEdges;
-        persistGraph(next, nextEdges);
-        return nextEdges;
-      });
-      return next;
-    });
+    const nextNodes = [
+      ...nodesRef.current.map((node) => ({ ...node, selected: false })),
+      ...created,
+    ];
+    const nextEdges = [...edgesRef.current, ...createdEdges];
+    nodesRef.current = nextNodes;
+    edgesRef.current = nextEdges;
+    setNodes(nextNodes);
+    setEdges(nextEdges);
     setSelectedNodeIds(created.map((node) => node.id));
+    persistGraph(nextNodes, nextEdges);
     toast.success(
       created.length === 1 ? "Node duplicado." : `${created.length} nodes duplicados.`,
     );
@@ -344,21 +363,25 @@ function BotCanvasInner({
       return;
     }
 
-    setNodes((current) => {
-      const next = current.filter((item) => !removeIds.has(item.id));
-      nodesRef.current = next;
-      setEdges((currentEdges) => {
-        const nextEdges = currentEdges.filter(
-          (edge) => !removeIds.has(edge.source) && !removeIds.has(edge.target),
-        );
-        edgesRef.current = nextEdges;
-        persistGraph(next, nextEdges);
-        return nextEdges;
-      });
-      return next;
-    });
+    const nextNodes = nodesRef.current.filter((item) => !removeIds.has(item.id));
+    const nextEdges = edgesRef.current.filter(
+      (edge) => !removeIds.has(edge.source) && !removeIds.has(edge.target),
+    );
+    nodesRef.current = nextNodes;
+    edgesRef.current = nextEdges;
+    setNodes(nextNodes);
+    setEdges(nextEdges);
     setSelectedNodeIds([]);
+    persistGraph(nextNodes, nextEdges);
   }, [persistGraph, selectedNodeIds]);
+
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current != null) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -423,7 +446,16 @@ function BotCanvasInner({
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onSelectionChange={({ nodes: selected }) => {
-            setSelectedNodeIds(selected.map((node) => node.id));
+            const nextIds = selected.map((node) => node.id);
+            setSelectedNodeIds((current) => {
+              if (
+                current.length === nextIds.length &&
+                current.every((id, index) => id === nextIds[index])
+              ) {
+                return current;
+              }
+              return nextIds;
+            });
           }}
           selectionOnDrag
           selectionKeyCode={null}
