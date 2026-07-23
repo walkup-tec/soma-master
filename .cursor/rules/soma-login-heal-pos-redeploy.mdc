@@ -1,0 +1,46 @@
+---
+description: Pós-redeploy Easypanel — login Soma 502/404 NÃO é senha; heal v3 (:30300) com supervisor obrigatório
+alwaysApply: true
+---
+
+# Login Soma após atualização (502/404 ≠ senha)
+
+## Causa (recorrente)
+
+Após Redeploy Easypanel do `soma-promotora_gestao-interno`, o Swarm perde publish host **`:30300`** e/ou o Traefik aponta overlay / Host com `/` → HTTPS **502** ou **404**. Dados do app **não** são apagados.
+
+## Contingência permanente (v3) — NÃO é opcional
+
+| Camada | Unidade | Função |
+|--------|---------|--------|
+| Watch | `soma-gestao-heal-watch.service` | `docker events` → burst no redeploy |
+| Timer | `soma-gestao-heal.timer` | a cada **~20s** |
+| **Supervisor** | `soma-gestao-heal-supervisor.timer` | a cada **~20s**: se watch/timer mortos → `install`; se HTTPS≠200 → `burst` |
+| Actions | `Heal Soma (pós-deploy)` | push `main` → SSH install v3 + bursts |
+
+Script: `scripts/heal-soma-gestao-vps.sh` (`heal-soma-gestao-2026-07-23-v3-supervisor-anti-502`)
+
+Complemento Traefik: `scripts/soma-traefik-guard-vps.sh` (entryPoints + host-gw).
+
+Guardião (WABA registry): probe `app.somaconecta.com.br` + YAML isolado `soma-crm.yaml` — **não** substitui o publish `:30300`.
+
+## Regra operacional
+
+1. Push `main` → heal Actions deve instalar as **3** unidades.
+2. **Nunca** `systemctl disable` em watch/timer/**supervisor**.
+3. Traefik: sem HUP/force por hábito.
+4. Secret `VPS_SSH_PRIVATE_KEY` obrigatório no Actions.
+
+## Se cair 502 agora (uma vez)
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/soma-master/main/scripts/heal-soma-gestao-vps.sh" \
+  -o /tmp/heal-soma-gestao-vps.sh
+sed -i 's/\r$//' /tmp/heal-soma-gestao-vps.sh
+chmod +x /tmp/heal-soma-gestao-vps.sh
+/tmp/heal-soma-gestao-vps.sh install
+systemctl is-active soma-gestao-heal-watch.service soma-gestao-heal.timer soma-gestao-heal-supervisor.timer
+curl -sS -o /dev/null -w "login:%{http_code}\n" --max-time 15 https://app.somaconecta.com.br/login
+```
+
+Os três devem ser `active` e `login:200`. Depois o supervisor mantém sozinho.
