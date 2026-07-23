@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Bell,
+  Bot,
   CalendarDays,
   ClipboardList,
   Columns3,
@@ -30,6 +31,7 @@ export const MENU_ICONS: Record<MenuItemId, ComponentType<{ className?: string }
   remarketing: Megaphone,
   agenda: CalendarDays,
   marketing: Target,
+  bots: Bot,
   chat: MessageCircle,
   usuarios: UserCog,
   push: Bell,

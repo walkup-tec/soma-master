@@ -698,3 +698,11 @@
 - Wizard em cima; listagem embaixo (nao dentro das etapas)
 - LOG: doc/LOG-2026-07-20__115500__produtos-wizard-lista-cards.md
 
+
+
+## 2026-07-23 — Bots construtor híbrido
+- Menu **Bots** + builder fullscreen (Chatbot/IA/Sistema).
+- Registry modular + Mapear dados OCR/LLM + execução teste WhatsApp.
+- Keywords: bots, mapear-dados, reactflow, execução-fluxo.
+- LOG: LOG-2026-07-23__123109__bots-construtor-fluxo-hibrido.md
+

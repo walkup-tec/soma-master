@@ -20,6 +20,7 @@ import { Route as AppClientesRouteImport } from './routes/app/clientes'
 import { Route as AppConfiguracoesRouteImport } from './routes/app/configuracoes'
 import { Route as AppKanbanRouteImport } from './routes/app/kanban'
 import { Route as AppMarketingRouteImport } from './routes/app/marketing'
+import { Route as AppBotsRouteImport } from './routes/app/bots'
 import { Route as AppParceirosRouteImport } from './routes/app/parceiros'
 import { Route as AppPushRouteImport } from './routes/app/push'
 import { Route as AppRemarketingRouteImport } from './routes/app/remarketing'
@@ -90,6 +91,11 @@ const AppKanbanRoute = AppKanbanRouteImport.update({
 const AppMarketingRoute = AppMarketingRouteImport.update({
   id: '/marketing',
   path: '/marketing',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBotsRoute = AppBotsRouteImport.update({
+  id: '/bots',
+  path: '/bots',
   getParentRoute: () => AppRoute,
 } as any)
 const AppParceirosRoute = AppParceirosRouteImport.update({
@@ -187,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/marketing': typeof AppMarketingRoute
+  '/app/bots': typeof AppBotsRoute
   '/app/parceiros': typeof AppParceirosRouteWithChildren
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
@@ -215,6 +222,7 @@ export interface FileRoutesByTo {
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/marketing': typeof AppMarketingRoute
+  '/app/bots': typeof AppBotsRoute
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
   '/app/usuarios': typeof AppUsuariosRoute
@@ -244,6 +252,7 @@ export interface FileRoutesById {
   '/app/configuracoes': typeof AppConfiguracoesRoute
   '/app/kanban': typeof AppKanbanRoute
   '/app/marketing': typeof AppMarketingRoute
+  '/app/bots': typeof AppBotsRoute
   '/app/parceiros': typeof AppParceirosRouteWithChildren
   '/app/push': typeof AppPushRoute
   '/app/remarketing': typeof AppRemarketingRoute
@@ -275,6 +284,7 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/marketing'
+    | '/app/bots'
     | '/app/parceiros'
     | '/app/push'
     | '/app/remarketing'
@@ -303,6 +313,7 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/marketing'
+    | '/app/bots'
     | '/app/push'
     | '/app/remarketing'
     | '/app/usuarios'
@@ -331,6 +342,7 @@ export interface FileRouteTypes {
     | '/app/configuracoes'
     | '/app/kanban'
     | '/app/marketing'
+    | '/app/bots'
     | '/app/parceiros'
     | '/app/push'
     | '/app/remarketing'
@@ -439,6 +451,13 @@ declare module '@tanstack/react-router' {
       path: '/marketing'
       fullPath: '/app/marketing'
       preLoaderRoute: typeof AppMarketingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/bots': {
+      id: '/app/bots'
+      path: '/bots'
+      fullPath: '/app/bots'
+      preLoaderRoute: typeof AppBotsRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/parceiros': {
@@ -606,6 +625,7 @@ interface AppRouteChildren {
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppKanbanRoute: typeof AppKanbanRoute
   AppMarketingRoute: typeof AppMarketingRoute
+  AppBotsRoute: typeof AppBotsRoute
   AppParceirosRoute: typeof AppParceirosRouteWithChildren
   AppPushRoute: typeof AppPushRoute
   AppRemarketingRoute: typeof AppRemarketingRoute
@@ -620,6 +640,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppKanbanRoute: AppKanbanRoute,
   AppMarketingRoute: AppMarketingRoute,
+  AppBotsRoute: AppBotsRoute,
   AppParceirosRoute: AppParceirosRouteWithChildren,
   AppPushRoute: AppPushRoute,
   AppRemarketingRoute: AppRemarketingRoute,

@@ -10,6 +10,7 @@ export type MenuItemId =
   | "remarketing"
   | "agenda"
   | "marketing"
+  | "bots"
   | "chat"
   | "usuarios"
   | "push"
@@ -125,6 +126,13 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
     section: "producao-propria",
     group: "Funil e WhatsApp",
     path: "/app/marketing",
+  },
+  {
+    id: "bots",
+    label: "Bots",
+    section: "producao-propria",
+    group: "Funil e WhatsApp",
+    path: "/app/bots",
   },
   {
     id: "usuarios",
