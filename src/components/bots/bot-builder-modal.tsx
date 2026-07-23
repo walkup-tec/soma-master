@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BotBuilderCanvas } from "@/components/bots/bot-builder-canvas";
+import { BotBuilderErrorBoundary } from "@/components/bots/bot-builder-error-boundary";
 import { BotRunTestDialog } from "@/components/bots/bot-run-test-dialog";
 import {
   createFreshBotDraft,
@@ -33,7 +34,13 @@ export function BotBuilderModal({
   onSaved?: (draft: BotFlowDraft) => void;
 }) {
   const { settings } = useSystemSettings();
-  const [draft, setDraft] = useState<BotFlowDraft>(() => createFreshBotDraft());
+  const [draft, setDraft] = useState<BotFlowDraft>(() => ({
+    id: "bot-draft-pending",
+    name: "Novo bot",
+    updatedAt: new Date(0).toISOString(),
+    nodes: [],
+    edges: [],
+  }));
   const [canvasKey, setCanvasKey] = useState(0);
   const [runOpen, setRunOpen] = useState(false);
   const wasOpenRef = useRef(false);
@@ -138,13 +145,15 @@ export function BotBuilderModal({
       </header>
 
       <div className="min-h-0 flex-1">
-        <BotBuilderCanvas
-          key={`${draft.id}-${canvasKey}`}
-          draft={draft}
-          onChange={setDraft}
-          products={settings.products}
-          attendanceStatuses={settings.attendanceStatuses}
-        />
+        <BotBuilderErrorBoundary onClose={() => onOpenChange(false)}>
+          <BotBuilderCanvas
+            key={`${draft.id}-${canvasKey}`}
+            draft={draft}
+            onChange={setDraft}
+            products={settings.products || []}
+            attendanceStatuses={settings.attendanceStatuses || []}
+          />
+        </BotBuilderErrorBoundary>
       </div>
 
       <BotRunTestDialog open={runOpen} onOpenChange={setRunOpen} draft={draft} />

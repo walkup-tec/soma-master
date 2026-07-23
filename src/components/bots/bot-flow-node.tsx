@@ -50,12 +50,15 @@ const KIND_ICON: Partial<Record<BotNodeKind, typeof Play>> = {
 };
 
 function BotFlowNodeComponent({ data, selected }: NodeProps) {
-  const step = data as BotNodeData;
+  const step = (data || {}) as BotNodeData;
   const definition = getBotNodeDefinition(step.kind);
   const meta = BOT_CATEGORY_META[step.category] || BOT_CATEGORY_META.chatbot;
   const Icon = KIND_ICON[step.kind] || Bot;
   const inputs = definition?.inputs || [];
-  const outputs = resolveBotNodeOutputs(step);
+  const outputs = resolveBotNodeOutputs({
+    kind: step.kind || "message",
+    config: step.config || {},
+  });
   const showOutputLabels =
     step.kind === "buttons" ||
     step.kind === "list" ||
@@ -67,14 +70,14 @@ function BotFlowNodeComponent({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        "min-w-[180px] max-w-[260px] rounded-xl border bg-card px-3 py-2.5 shadow-soft",
+        "relative min-w-[180px] max-w-[260px] rounded-xl border bg-card px-3 py-2.5 shadow-soft",
         meta.ring,
         selected && "ring-2 ring-primary/40",
       )}
     >
       {inputs.map((port, index) => (
         <Handle
-          key={port.id}
+          key={`in-${port.id}`}
           id={port.id}
           type="target"
           position={Position.Left}
@@ -88,11 +91,11 @@ function BotFlowNodeComponent({ data, selected }: NodeProps) {
           <Icon className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{step.title}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{step.title || "Node"}</p>
           <p className="truncate text-[11px] text-muted-foreground">
-            {meta.label} · {step.executionKind}
+            {meta.label} · {step.executionKind || "flow"}
           </p>
-          {step.status !== "idle" ? (
+          {step.status && step.status !== "idle" ? (
             <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
               {step.status}
             </p>
@@ -101,33 +104,27 @@ function BotFlowNodeComponent({ data, selected }: NodeProps) {
       </div>
 
       {showOutputLabels && outputs.length > 0 ? (
-        <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+        <div className="mt-2 space-y-1 border-t border-border/50 pt-2 pr-2">
           {outputs.map((port) => (
-            <div key={port.id} className="relative pr-3 text-right text-[10px] text-muted-foreground">
-              <span className="truncate">{port.label}</span>
-              <Handle
-                id={port.id}
-                type="source"
-                position={Position.Right}
-                className="!right-[-6px] !top-1/2 !size-2.5 !-translate-y-1/2 !border-2 !border-background !bg-violet-500"
-                title={port.label}
-              />
+            <div key={`lbl-${port.id}`} className="truncate text-right text-[10px] text-muted-foreground">
+              {port.label}
             </div>
           ))}
         </div>
-      ) : (
-        outputs.map((port, index) => (
-          <Handle
-            key={port.id}
-            id={port.id}
-            type="source"
-            position={Position.Right}
-            style={{ top: `${((index + 1) / (outputs.length + 1)) * 100}%` }}
-            className="!size-2.5 !border-2 !border-background !bg-violet-500"
-            title={port.label}
-          />
-        ))
-      )}
+      ) : null}
+
+      {/* Handles sempre filhos diretos do root — exigência do React Flow */}
+      {outputs.map((port, index) => (
+        <Handle
+          key={`out-${port.id}`}
+          id={port.id}
+          type="source"
+          position={Position.Right}
+          style={{ top: `${((index + 1) / (outputs.length + 1)) * 100}%` }}
+          className="!size-2.5 !border-2 !border-background !bg-violet-500"
+          title={port.label}
+        />
+      ))}
     </div>
   );
 }

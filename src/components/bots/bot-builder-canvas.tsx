@@ -426,6 +426,7 @@ function BotCanvasInner({
             setSelectedNodeIds(selected.map((node) => node.id));
           }}
           selectionOnDrag
+          selectionKeyCode={null}
           selectionMode={SelectionMode.Partial}
           panOnDrag={[1, 2]}
           multiSelectionKeyCode="Shift"
