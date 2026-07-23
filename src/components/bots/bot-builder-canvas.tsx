@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -6,6 +6,7 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
@@ -18,7 +19,7 @@ import {
   type OnNodesChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,6 +30,7 @@ import {
   BOT_NODE_REGISTRY,
   createBotNodeData,
   listBotNodesByCategory,
+  resolveBotNodeOutputs,
 } from "@/lib/bots/bot-node.registry";
 import type { BotFlowDraft, BotNodeCategory, BotNodeData, BotNodeKind } from "@/lib/bots/bot.types";
 import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
@@ -84,6 +86,20 @@ function serializeDraftGraph(base: BotFlowDraft, nextNodes: Node[], nextEdges: E
   };
 }
 
+function cloneNodeData(data: BotNodeData): BotNodeData {
+  return JSON.parse(JSON.stringify(data)) as BotNodeData;
+}
+
+function pruneInvalidOptionEdges(nodeId: string, data: BotNodeData, edges: Edge[]): Edge[] {
+  if (data.kind !== "buttons" && data.kind !== "list" && data.kind !== "menu") return edges;
+  const valid = new Set(resolveBotNodeOutputs(data).map((port) => port.id));
+  return edges.filter((edge) => {
+    if (edge.source !== nodeId) return true;
+    if (!edge.sourceHandle) return true;
+    return valid.has(edge.sourceHandle);
+  });
+}
+
 function BotCanvasInner({
   draft,
   onChange,
@@ -98,11 +114,13 @@ function BotCanvasInner({
   const { screenToFlowPosition, fitView } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>(() => toFlowNodes(draft));
   const [edges, setEdges] = useState<Edge[]>(() => toFlowEdges(draft));
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   nodesRef.current = nodes;
   edgesRef.current = edges;
+
+  const selectedNodeId = selectedNodeIds.length === 1 ? selectedNodeIds[0] : null;
 
   const persistGraph = useCallback(
     (nextNodes: Node[], nextEdges: Edge[]) => {
@@ -182,7 +200,7 @@ function BotCanvasInner({
           (node) => (node.data as BotNodeData | undefined)?.kind === "start",
         );
         if (existing) {
-          setSelectedNodeId(existing.id);
+          setSelectedNodeIds([existing.id]);
           toast.message("O fluxo já tem Início.");
           return;
         }
@@ -197,15 +215,16 @@ function BotCanvasInner({
         type: "botStep",
         position: { x: position.x - 100, y: position.y - 40 },
         deletable: kind !== "start",
+        selected: true,
         data: createBotNodeData(kind),
       };
       setNodes((current) => {
-        const next = [...current, node];
+        const next = [...current.map((item) => ({ ...item, selected: false })), node];
         nodesRef.current = next;
         persistGraph(next, edgesRef.current);
         return next;
       });
-      setSelectedNodeId(id);
+      setSelectedNodeIds([id]);
       window.setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50);
     },
     [fitView, persistGraph, screenToFlowPosition],
@@ -225,26 +244,112 @@ function BotCanvasInner({
           node.id === selectedNodeId ? { ...node, data: nextData } : node,
         );
         nodesRef.current = next;
-        persistGraph(next, edgesRef.current);
+        setEdges((currentEdges) => {
+          const nextEdges = pruneInvalidOptionEdges(selectedNodeId, nextData, currentEdges);
+          edgesRef.current = nextEdges;
+          persistGraph(next, nextEdges);
+          return nextEdges;
+        });
         return next;
       });
     },
     [persistGraph, selectedNodeId],
   );
 
+  const duplicateSelected = useCallback(() => {
+    const selected = nodesRef.current.filter((node) => selectedNodeIds.includes(node.id));
+    if (selected.length === 0) return;
+
+    const clonable = selected.filter(
+      (node) => (node.data as BotNodeData | undefined)?.kind !== "start",
+    );
+    if (clonable.length === 0) {
+      toast.message("O node Início não pode ser duplicado.");
+      return;
+    }
+
+    const idMap = new Map<string, string>();
+    const offset = { x: 48, y: 48 };
+    const created: Node[] = clonable.map((node) => {
+      const data = cloneNodeData(node.data as BotNodeData);
+      const newId = `bot-${data.kind}-${crypto.randomUUID().slice(0, 6)}`;
+      idMap.set(node.id, newId);
+      return {
+        ...node,
+        id: newId,
+        position: {
+          x: (node.position?.x || 0) + offset.x,
+          y: (node.position?.y || 0) + offset.y,
+        },
+        selected: true,
+        data,
+        deletable: true,
+      };
+    });
+
+    const createdEdges: Edge[] = edgesRef.current
+      .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
+      .map((edge) => {
+        const source = idMap.get(edge.source)!;
+        const target = idMap.get(edge.target)!;
+        const sourceHandle = edge.sourceHandle || "out";
+        return {
+          ...edge,
+          id: `e-${source}-${sourceHandle}-${target}-${crypto.randomUUID().slice(0, 4)}`,
+          source,
+          target,
+          selected: false,
+        };
+      });
+
+    setNodes((current) => {
+      const next = [
+        ...current.map((node) => ({ ...node, selected: false })),
+        ...created,
+      ];
+      nodesRef.current = next;
+      setEdges((currentEdges) => {
+        const nextEdges = [...currentEdges, ...createdEdges];
+        edgesRef.current = nextEdges;
+        persistGraph(next, nextEdges);
+        return nextEdges;
+      });
+      return next;
+    });
+    setSelectedNodeIds(created.map((node) => node.id));
+    toast.success(
+      created.length === 1 ? "Node duplicado." : `${created.length} nodes duplicados.`,
+    );
+  }, [persistGraph, selectedNodeIds]);
+
   const deleteSelected = useCallback(() => {
-    if (!selectedNodeId) return;
-    const node = nodesRef.current.find((item) => item.id === selectedNodeId);
-    if ((node?.data as BotNodeData | undefined)?.kind === "start") {
+    if (selectedNodeIds.length === 0) return;
+    const blocked = selectedNodeIds.some((id) => {
+      const node = nodesRef.current.find((item) => item.id === id);
+      return (node?.data as BotNodeData | undefined)?.kind === "start";
+    });
+    if (blocked && selectedNodeIds.length === 1) {
       toast.message("O node Início é obrigatório.");
       return;
     }
+
+    const removeIds = new Set(
+      selectedNodeIds.filter((id) => {
+        const node = nodesRef.current.find((item) => item.id === id);
+        return (node?.data as BotNodeData | undefined)?.kind !== "start";
+      }),
+    );
+    if (removeIds.size === 0) {
+      toast.message("O node Início é obrigatório.");
+      return;
+    }
+
     setNodes((current) => {
-      const next = current.filter((item) => item.id !== selectedNodeId);
+      const next = current.filter((item) => !removeIds.has(item.id));
       nodesRef.current = next;
       setEdges((currentEdges) => {
         const nextEdges = currentEdges.filter(
-          (edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId,
+          (edge) => !removeIds.has(edge.source) && !removeIds.has(edge.target),
         );
         edgesRef.current = nextEdges;
         persistGraph(next, nextEdges);
@@ -252,8 +357,29 @@ function BotCanvasInner({
       });
       return next;
     });
-    setSelectedNodeId(null);
-  }, [persistGraph, selectedNodeId]);
+    setSelectedNodeIds([]);
+  }, [persistGraph, selectedNodeIds]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+
+      const meta = event.ctrlKey || event.metaKey;
+      if (meta && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        duplicateSelected();
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedNodeIds.length > 0) {
+        event.preventDefault();
+        deleteSelected();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleteSelected, duplicateSelected, selectedNodeIds.length]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -297,8 +423,13 @@ function BotCanvasInner({
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onSelectionChange={({ nodes: selected }) => {
-            setSelectedNodeId(selected[0]?.id || null);
+            setSelectedNodeIds(selected.map((node) => node.id));
           }}
+          selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={[1, 2]}
+          multiSelectionKeyCode="Shift"
+          deleteKeyCode={null}
           fitView
           minZoom={0.2}
           maxZoom={1.6}
@@ -309,8 +440,18 @@ function BotCanvasInner({
           <MiniMap pannable zoomable />
         </ReactFlow>
 
-        {selectedNodeId ? (
-          <div className="absolute right-3 top-3 z-10">
+        {selectedNodeIds.length > 0 ? (
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="cursor-pointer gap-1.5"
+              onClick={duplicateSelected}
+            >
+              <Copy className="size-3.5" />
+              Duplicar{selectedNodeIds.length > 1 ? ` (${selectedNodeIds.length})` : ""}
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -319,10 +460,14 @@ function BotCanvasInner({
               onClick={deleteSelected}
             >
               <Trash2 className="size-3.5" />
-              Remover
+              Remover{selectedNodeIds.length > 1 ? ` (${selectedNodeIds.length})` : ""}
             </Button>
           </div>
         ) : null}
+
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm">
+          Arraste no fundo para selecionar · Shift+clique · botão do meio para pan · Ctrl+D duplica
+        </div>
       </div>
 
       <aside className="w-[340px] shrink-0">
@@ -334,6 +479,21 @@ function BotCanvasInner({
             products={products}
             attendanceStatuses={attendanceStatuses}
           />
+        ) : selectedNodeIds.length > 1 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 border-l border-border p-6 text-center">
+            <p className="text-sm font-medium text-foreground">
+              {selectedNodeIds.length} nodes selecionados
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Use Duplicar ou Remover na barra superior. Selecione um único node para configurar.
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" className="cursor-pointer gap-1.5" onClick={duplicateSelected}>
+                <Copy className="size-3.5" />
+                Duplicar todos
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="flex h-full items-center justify-center border-l border-border p-6 text-center text-sm text-muted-foreground">
             Selecione um node para configurar, ver I/O, variáveis, logs e testar.

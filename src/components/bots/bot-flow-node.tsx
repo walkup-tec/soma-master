@@ -17,7 +17,7 @@ import {
   Sunrise,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BOT_CATEGORY_META, getBotNodeDefinition } from "@/lib/bots/bot-node.registry";
+import { BOT_CATEGORY_META, getBotNodeDefinition, resolveBotNodeOutputs } from "@/lib/bots/bot-node.registry";
 import type { BotNodeData, BotNodeKind } from "@/lib/bots/bot.types";
 
 const KIND_ICON: Partial<Record<BotNodeKind, typeof Play>> = {
@@ -55,12 +55,19 @@ function BotFlowNodeComponent({ data, selected }: NodeProps) {
   const meta = BOT_CATEGORY_META[step.category] || BOT_CATEGORY_META.chatbot;
   const Icon = KIND_ICON[step.kind] || Bot;
   const inputs = definition?.inputs || [];
-  const outputs = definition?.outputs || [];
+  const outputs = resolveBotNodeOutputs(step);
+  const showOutputLabels =
+    step.kind === "buttons" ||
+    step.kind === "list" ||
+    step.kind === "menu" ||
+    step.kind === "condition" ||
+    step.kind === "expediente" ||
+    outputs.length > 2;
 
   return (
     <div
       className={cn(
-        "min-w-[180px] max-w-[240px] rounded-xl border bg-card px-3 py-2.5 shadow-soft",
+        "min-w-[180px] max-w-[260px] rounded-xl border bg-card px-3 py-2.5 shadow-soft",
         meta.ring,
         selected && "ring-2 ring-primary/40",
       )}
@@ -93,17 +100,34 @@ function BotFlowNodeComponent({ data, selected }: NodeProps) {
         </div>
       </div>
 
-      {outputs.map((port, index) => (
-        <Handle
-          key={port.id}
-          id={port.id}
-          type="source"
-          position={Position.Right}
-          style={{ top: `${((index + 1) / (outputs.length + 1)) * 100}%` }}
-          className="!size-2.5 !border-2 !border-background !bg-violet-500"
-          title={port.label}
-        />
-      ))}
+      {showOutputLabels && outputs.length > 0 ? (
+        <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+          {outputs.map((port) => (
+            <div key={port.id} className="relative pr-3 text-right text-[10px] text-muted-foreground">
+              <span className="truncate">{port.label}</span>
+              <Handle
+                id={port.id}
+                type="source"
+                position={Position.Right}
+                className="!right-[-6px] !top-1/2 !size-2.5 !-translate-y-1/2 !border-2 !border-background !bg-violet-500"
+                title={port.label}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        outputs.map((port, index) => (
+          <Handle
+            key={port.id}
+            id={port.id}
+            type="source"
+            position={Position.Right}
+            style={{ top: `${((index + 1) / (outputs.length + 1)) * 100}%` }}
+            className="!size-2.5 !border-2 !border-background !bg-violet-500"
+            title={port.label}
+          />
+        ))
+      )}
     </div>
   );
 }

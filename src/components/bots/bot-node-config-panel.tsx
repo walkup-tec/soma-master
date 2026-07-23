@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { FlaskConical, Loader2 } from "lucide-react";
+import { FlaskConical, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,9 +17,13 @@ import type {
   BotNodeExecuteResult,
   BotNodeLogEntry,
 } from "@/lib/bots/bot.types";
-import { getBotNodeDefinition } from "@/lib/bots/bot-node.registry";
+import { getBotNodeDefinition, resolveBotNodeOutputs } from "@/lib/bots/bot-node.registry";
 import { mapBotDataFn, testBotNodeFn } from "@/lib/bots/bots.server";
 import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
+
+function newOptionId() {
+  return `opt-${crypto.randomUUID().slice(0, 6)}`;
+}
 
 export function BotNodeConfigPanel({
   data,
@@ -39,15 +43,43 @@ export function BotNodeConfigPanel({
   const [busy, setBusy] = useState(false);
   const [mapFileBusy, setMapFileBusy] = useState(false);
   const definition = getBotNodeDefinition(data.kind);
+  const dynamicOutputs = useMemo(() => resolveBotNodeOutputs(data), [data]);
+  const optionInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const [focusOptionIndex, setFocusOptionIndex] = useState<number | null>(null);
 
   const patchConfig = (patch: Partial<BotNodeData["config"]>) => {
     onChange({ ...data, config: { ...data.config, ...patch } });
   };
 
+  const buttonOptions = data.config.options || [];
+
+  useEffect(() => {
+    if (focusOptionIndex == null) return;
+    const el = optionInputRefs.current[focusOptionIndex];
+    if (el) {
+      el.focus();
+      el.select();
+    }
+    setFocusOptionIndex(null);
+  }, [focusOptionIndex, buttonOptions.length]);
+
   const selectedMapFields = useMemo(
     () => new Set(data.config.mapFields || []),
     [data.config.mapFields],
   );
+
+  function ensureButtonOptions() {
+    if ((data.config.options || []).length > 0) return data.config.options || [];
+    return [{ id: newOptionId(), label: "", value: "" }];
+  }
+
+  function setButtonOptions(
+    options: Array<{ id: string; label: string; value?: string }>,
+    focusIndex?: number,
+  ) {
+    patchConfig({ options });
+    if (typeof focusIndex === "number") setFocusOptionIndex(focusIndex);
+  }
 
   async function handleTest() {
     setBusy(true);
@@ -268,7 +300,115 @@ export function BotNodeConfigPanel({
               </>
             )}
 
-            {(data.kind === "buttons" || data.kind === "list" || data.kind === "menu") && (
+            {data.kind === "buttons" && (
+              <div className="space-y-2">
+                <Label>Opções dos botões</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Digite o nome e pressione Enter para criar a próxima opção. Cada opção vira uma
+                  saída no node.
+                </p>
+                <div className="space-y-2">
+                  {(buttonOptions.length
+                    ? buttonOptions
+                    : [{ id: "opt-draft", label: "", value: "" }]
+                  ).map((opt, index) => (
+                      <div key={opt.id} className="flex items-center gap-1.5">
+                        <Input
+                          ref={(el) => {
+                            optionInputRefs.current[index] = el;
+                          }}
+                          value={opt.label}
+                          placeholder={`Opção ${index + 1}`}
+                          onChange={(event) => {
+                            const current =
+                              (data.config.options || []).length > 0
+                                ? data.config.options || []
+                                : [{ id: newOptionId(), label: "", value: "" }];
+                            const next = current.map((item, i) =>
+                              i === index
+                                ? {
+                                    ...item,
+                                    label: event.target.value,
+                                    value: event.target.value,
+                                  }
+                                : item,
+                            );
+                            setButtonOptions(next);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            if (!String(opt.label || "").trim()) return;
+                            const current =
+                              (data.config.options || []).length > 0
+                                ? (data.config.options || []).map((item, i) =>
+                                    i === index
+                                      ? {
+                                          ...item,
+                                          label: opt.label,
+                                          value: opt.label || item.value,
+                                        }
+                                      : item,
+                                  )
+                                : [
+                                    {
+                                      id: newOptionId(),
+                                      label: opt.label,
+                                      value: opt.label,
+                                    },
+                                  ];
+                            const next = [
+                              ...current.slice(0, index + 1),
+                              { id: newOptionId(), label: "", value: "" },
+                              ...current.slice(index + 1),
+                            ];
+                            setButtonOptions(next, index + 1);
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="size-8 shrink-0 cursor-pointer"
+                          disabled={buttonOptions.length <= 1 && !String(opt.label || "").trim()}
+                          onClick={() => {
+                            const current = ensureButtonOptions();
+                            if (current.length <= 1) {
+                              setButtonOptions([{ id: newOptionId(), label: "", value: "" }], 0);
+                              return;
+                            }
+                            setButtonOptions(
+                              current.filter((_, i) => i !== index),
+                              Math.max(0, index - 1),
+                            );
+                          }}
+                          title="Remover opção"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="cursor-pointer gap-1.5"
+                  onClick={() => {
+                    const current = ensureButtonOptions();
+                    setButtonOptions(
+                      [...current, { id: newOptionId(), label: "", value: "" }],
+                      current.length,
+                    );
+                  }}
+                >
+                  <Plus className="size-3.5" />
+                  Adicionar opção
+                </Button>
+              </div>
+            )}
+
+            {(data.kind === "list" || data.kind === "menu") && (
               <div className="space-y-1.5">
                 <Label>Opções (uma por linha: rótulo|valor)</Label>
                 <Textarea
@@ -410,12 +550,12 @@ export function BotNodeConfigPanel({
             <div>
               <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Saídas</p>
               <ul className="space-y-1 text-sm">
-                {(definition?.outputs || []).map((port) => (
+                {dynamicOutputs.map((port) => (
                   <li key={port.id} className="rounded-md border border-border/60 px-2 py-1">
                     {port.label} <span className="text-muted-foreground">({port.id})</span>
                   </li>
                 ))}
-                {(definition?.outputs || []).length === 0 ? (
+                {dynamicOutputs.length === 0 ? (
                   <li className="text-muted-foreground">Nenhuma</li>
                 ) : null}
               </ul>

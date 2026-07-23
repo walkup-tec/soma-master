@@ -61,7 +61,7 @@ function evalSimpleCondition(expression: string, variables: Record<string, BotJs
 export async function executeBotNode(
   ctx: BotNodeExecuteContext,
 ): Promise<BotNodeExecuteResult> {
-  const { node, variables, dryRun } = ctx;
+  const { node, variables, dryRun, inboundText } = ctx;
   const { kind, config } = node.data;
   const definition = getBotNodeDefinition(kind);
 
@@ -73,10 +73,7 @@ export async function executeBotNode(
       case "end":
         return { ok: true, status: "success", message: "Fluxo finalizado", nextHandle: undefined };
 
-      case "message":
-      case "buttons":
-      case "list":
-      case "menu": {
+      case "message": {
         const text = resolveTemplate(config.text || definition?.label || "", variables);
         return {
           ok: true,
@@ -84,7 +81,59 @@ export async function executeBotNode(
           message: dryRun ? `Simulado: ${text}` : `Mensagem preparada`,
           nextHandle: "out",
           outboundText: text,
-          data: { options: (config.options || []) as unknown as BotJson },
+        };
+      }
+
+      case "buttons":
+      case "list":
+      case "menu": {
+        const text = resolveTemplate(config.text || definition?.label || "", variables);
+        const options = (config.options || []).filter((opt) => String(opt.label || "").trim());
+        const optionsPayload = options.map((opt) => ({
+          id: opt.id,
+          label: opt.label,
+          value: opt.value || opt.label,
+        })) as unknown as BotJson;
+
+        const replyRaw =
+          inboundText != null && String(inboundText).trim() !== ""
+            ? String(inboundText).trim()
+            : null;
+
+        if (!replyRaw) {
+          return {
+            ok: true,
+            status: dryRun ? "success" : "waiting",
+            message: dryRun
+              ? `Simulado: ${text} (${options.length} opções)`
+              : "Aguardando escolha do contato",
+            waitForReply: !dryRun,
+            nextHandle: dryRun ? options[0]?.id || "out" : undefined,
+            outboundText: text,
+            data: { options: optionsPayload },
+          };
+        }
+
+        const normalized = replyRaw.toLowerCase();
+        const match = options.find((opt) => {
+          const label = String(opt.label || "").trim().toLowerCase();
+          const value = String(opt.value || "").trim().toLowerCase();
+          const id = String(opt.id || "").trim().toLowerCase();
+          return normalized === label || normalized === value || normalized === id;
+        });
+
+        return {
+          ok: true,
+          status: "success",
+          message: match
+            ? `Opção escolhida: ${match.label}`
+            : `Sem match — Fallback (${replyRaw})`,
+          nextHandle: match?.id || "out",
+          variables: {
+            [config.outputVariable || "opcao_escolhida"]: match?.value || match?.label || replyRaw,
+            ultima_resposta: replyRaw,
+          },
+          data: { options: optionsPayload, chosen: match?.id || null },
         };
       }
 
@@ -421,6 +470,7 @@ export async function advanceBotRun(input: {
       variables: run.variables,
       testPhone: run.testPhone,
       dryRun: false,
+      inboundText: input.inboundText,
     });
 
     run.logs.push(
@@ -448,7 +498,7 @@ export async function advanceBotRun(input: {
       break;
     }
 
-    // Após wait_reply com inbound, segue pela saída
+    // Após wait_reply / botões com inbound, segue pela saída
     const next = findNextNode(input.flow, nodeId, result.nextHandle);
     if (!next) {
       run.phase = "finished";
@@ -458,7 +508,12 @@ export async function advanceBotRun(input: {
     run.currentNodeId = next.id;
 
     // Evita processar o mesmo wait novamente no mesmo tick após inbound
-    if (node.data.kind === "wait_reply" && input.inboundText != null) {
+    const clearsInbound =
+      node.data.kind === "wait_reply" ||
+      node.data.kind === "buttons" ||
+      node.data.kind === "list" ||
+      node.data.kind === "menu";
+    if (clearsInbound && input.inboundText != null) {
       input = { ...input, inboundText: undefined };
     }
   }

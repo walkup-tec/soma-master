@@ -197,6 +197,8 @@ export type BotNodeExecuteContext = {
   variables: Record<string, BotJson>;
   testPhone?: string;
   dryRun?: boolean;
+  /** Resposta do contato neste tick (botões / wait_reply). */
+  inboundText?: string | null;
 };
 
 export type BotNodeExecuteResult = {

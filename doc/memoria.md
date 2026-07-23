@@ -717,3 +717,7 @@
 - Chatbot Expediente: 3 saídas (Bom dia/Boa tarde/Boa noite) por horário Brasília.
 - IA Saudação: prompt + institucional + turno.
 - Keywords: bots, expediente, saudacao, brasilia.
+
+## 2026-07-23 — Bots: duplicar + multi-selecao + Botoes
+- Duplicar (Ctrl+D), lasso, saidas dinamicas por botao.
+- Keywords: bots, duplicate, buttons, multi-select.

@@ -144,10 +144,7 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
     ],
     defaultConfig: {
       text: "Escolha uma opção:",
-      options: [
-        { id: "opt-1", label: "Sim", value: "sim" },
-        { id: "opt-2", label: "Não", value: "nao" },
-      ],
+      options: [{ id: "opt-1", label: "", value: "" }],
     },
   }),
   def({
@@ -381,6 +378,29 @@ export function createBotNodeData(kind: BotNodeKind): BotNodeData {
     lastTestAt: null,
     lastTestResult: null,
   };
+}
+
+/** Saídas efetivas do node (Botões/Lista/Menu usam `config.options`). */
+export function resolveBotNodeOutputs(data: Pick<BotNodeData, "kind" | "config">): BotPortDef[] {
+  const definition = getBotNodeDefinition(data.kind);
+  if (data.kind === "buttons" || data.kind === "list" || data.kind === "menu") {
+    const options = (data.config.options || [])
+      .filter((opt) => String(opt.label || "").trim().length > 0)
+      .map((opt, index) => ({
+        id: String(opt.id || `opt-${index + 1}`),
+        label: String(opt.label).trim(),
+      }));
+    if (options.length === 0) {
+      return data.kind === "buttons"
+        ? [{ id: "out", label: "Fallback" }]
+        : [{ id: "out", label: "Saída" }];
+    }
+    if (data.kind === "buttons") {
+      return [...options, { id: "out", label: "Fallback" }];
+    }
+    return options;
+  }
+  return definition?.outputs?.length ? definition.outputs : [{ id: "out", label: "Saída" }];
 }
 
 export const BOT_CATEGORY_META: Record<
