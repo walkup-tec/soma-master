@@ -7,17 +7,22 @@
 #   - SOMA-HOST-SLASH-404: Host(`app.somaconecta.com.br/`) com barra → 404 Traefik
 #   - Publish host :30300 some no redeploy
 #
-# Modelo canônico WABA: heal-waba-login-vps.sh (watch + timer + burst).
+# Modelo canônico WABA v6: heal-waba-login-vps.sh (watch + timer + supervisor + burst).
 # Doc Traefik: routing/dynamic = hot-reload — NUNCA force easypanel-traefik.
 #   https://doc.traefik.io/traefik/getting-started/configuration-overview/
 #
-# Uso (root no srv1261237):
-#   bash heal-soma-gestao-vps.sh run|burst|watch|install|status|check
+# Camadas:
+#   1) watch      — docker events → burst no redeploy
+#   2) timer      — a cada ~20s: run se needs_heal
+#   3) supervisor — a cada ~20s: se watch/timer mortos → install; se HTTPS!=200 → burst
 #
-# Versão: heal-soma-gestao-2026-07-17-v2 (normaliza entryPoints web/websecure→http/https)
+# Uso (root no srv1261237):
+#   bash heal-soma-gestao-vps.sh run|burst|watch|ensure|install|status|check
+#
+# Versão: heal-soma-gestao-2026-07-23-v3-supervisor-anti-502
 set -euo pipefail
 
-VERSION="heal-soma-gestao-2026-07-17-v2"
+VERSION="heal-soma-gestao-2026-07-23-v3-supervisor-anti-502"
 LOG="${SOMA_HEAL_LOG:-/var/log/soma-gestao-heal.log}"
 LOCK="${SOMA_HEAL_LOCK:-/var/run/soma-gestao-heal.lock}"
 INSTALL_DIR="/root/soma-infra"
@@ -25,6 +30,8 @@ UNIT_DIR="/etc/systemd/system"
 SERVICE="soma-gestao-heal.service"
 TIMER="soma-gestao-heal.timer"
 WATCH_SERVICE="soma-gestao-heal-watch.service"
+SUPERVISOR_SERVICE="soma-gestao-heal-supervisor.service"
+SUPERVISOR_TIMER="soma-gestao-heal-supervisor.timer"
 SWARM_SERVICE="${SOMA_SWARM_SERVICE:-soma-promotora_gestao-interno}"
 HOST_PORT="${SOMA_HOST_PUBLISHED_PORT:-30300}"
 TARGET_PORT="${SOMA_TARGET_PORT:-3000}"
@@ -32,12 +39,17 @@ DOMAIN="${SOMA_PUBLIC_HOST:-app.somaconecta.com.br}"
 EASY_HOST="${SOMA_EASYPANEL_HOST:-soma-promotora-app.achpyp.easypanel.host}"
 MAIN_YAML="${TRAEFIK_MAIN_YAML:-/etc/easypanel/traefik/config/main.yaml}"
 REPO_SCRIPTS="${SOMA_SCRIPTS_REPO:-https://raw.githubusercontent.com/walkup-tec/soma-master/main/scripts}"
-TIMER_SEC="${SOMA_HEAL_SEC:-45}"
+TIMER_SEC="${SOMA_HEAL_SEC:-20}"
+SUPERVISOR_SEC="${SOMA_HEAL_SUPERVISOR_SEC:-20}"
 BURST_ROUNDS="${SOMA_HEAL_BURST_ROUNDS:-20}"
 BURST_SLEEP="${SOMA_HEAL_BURST_SLEEP:-5}"
 BACKEND_URL="http://172.17.0.1:${HOST_PORT}/"
 
 log() { printf '[%s] [%s] %s\n' "$(date -Is)" "$VERSION" "$*" | tee -a "$LOG"; }
+
+unit_active() {
+  systemctl is-active --quiet "$1" 2>/dev/null
+}
 
 local_health_ok() {
   local code
@@ -301,6 +313,43 @@ cmd_watch() {
     done
 }
 
+# Camada à prova de falha: revive unidades mortas + cura 502 sem depender de evento.
+cmd_ensure() {
+  mkdir -p "$(dirname "$LOG")"
+  local dest="${INSTALL_DIR}/heal-soma-gestao-vps.sh"
+  local need_reinstall=0
+
+  if ! unit_active "$WATCH_SERVICE"; then
+    log "ENSURE: ${WATCH_SERVICE} inativo — reativando"
+    need_reinstall=1
+  fi
+  if ! unit_active "$TIMER"; then
+    log "ENSURE: ${TIMER} inativo — reativando"
+    need_reinstall=1
+  fi
+  if ! unit_active "$SUPERVISOR_TIMER"; then
+    log "ENSURE: ${SUPERVISOR_TIMER} inativo — reativando"
+    need_reinstall=1
+  fi
+
+  if [[ "$need_reinstall" -eq 1 ]]; then
+    if [[ -x "$dest" ]]; then
+      bash "$dest" install >>"$LOG" 2>&1 || true
+    else
+      systemctl enable --now "$WATCH_SERVICE" 2>/dev/null || true
+      systemctl enable --now "$TIMER" 2>/dev/null || true
+      systemctl enable --now "$SUPERVISOR_TIMER" 2>/dev/null || true
+    fi
+  fi
+
+  # HTTPS degradado (login ou health) → burst imediato
+  if ! https_ok "$DOMAIN" "/login" || ! https_ok "$DOMAIN" "/api/health" || ! local_health_ok; then
+    log "ENSURE: path degradado — burst"
+    bash "${BASH_SOURCE[0]}" burst || bash "${BASH_SOURCE[0]}" run || true
+  fi
+  return 0
+}
+
 install_units() {
   local dest="${INSTALL_DIR}/heal-soma-gestao-vps.sh"
 
@@ -319,9 +368,9 @@ EOF
 Description=Soma gestao heal a cada ${TIMER_SEC}s (anti 404/502 pós-redeploy Easypanel)
 
 [Timer]
-OnBootSec=40s
+OnBootSec=20s
 OnUnitActiveSec=${TIMER_SEC}s
-AccuracySec=5s
+AccuracySec=3s
 Persistent=true
 
 [Install]
@@ -337,11 +386,35 @@ Requires=docker.service
 [Service]
 Type=simple
 Restart=always
-RestartSec=5
+RestartSec=3
 ExecStart=${dest} watch
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+  cat >"${UNIT_DIR}/${SUPERVISOR_SERVICE}" <<EOF
+[Unit]
+Description=Soma gestao heal SUPERVISOR — revive watch/timer + cura 502
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=${dest} ensure
+EOF
+
+  cat >"${UNIT_DIR}/${SUPERVISOR_TIMER}" <<EOF
+[Unit]
+Description=Soma gestao heal SUPERVISOR a cada ${SUPERVISOR_SEC}s (anti-queda permanente)
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=${SUPERVISOR_SEC}s
+AccuracySec=3s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
 EOF
 }
 
@@ -365,28 +438,40 @@ cmd_install() {
   systemctl daemon-reload
   systemctl enable --now "$TIMER"
   systemctl enable --now "$WATCH_SERVICE"
-  log "install OK — timer=${TIMER_SEC}s watch=on"
+  systemctl enable --now "$SUPERVISOR_TIMER"
+  log "install OK — timer=${TIMER_SEC}s watch=on supervisor=${SUPERVISOR_SEC}s"
   bash "$dest" burst || bash "$dest" run || true
+
+  local ok=1
+  unit_active "$WATCH_SERVICE" && log "OK ${WATCH_SERVICE}=active" || { log "ERRO ${WATCH_SERVICE}!=active"; ok=0; }
+  unit_active "$TIMER" && log "OK ${TIMER}=active" || { log "ERRO ${TIMER}!=active"; ok=0; }
+  unit_active "$SUPERVISOR_TIMER" && log "OK ${SUPERVISOR_TIMER}=active" || { log "ERRO ${SUPERVISOR_TIMER}!=active"; ok=0; }
   cmd_status
+  [[ "$ok" -eq 1 ]] || exit 1
 }
 
 cmd_status() {
   echo "VERSION=${VERSION}"
-  systemctl is-active "$TIMER" 2>/dev/null || echo "timer:inactive"
-  systemctl is-active "$WATCH_SERVICE" 2>/dev/null || echo "watch:inactive"
+  for u in "$WATCH_SERVICE" "$TIMER" "$SUPERVISOR_TIMER"; do
+    echo -n "${u}: "
+    systemctl is-active "$u" 2>/dev/null || echo "inactive"
+  done
+  echo "--- supervisor ---"
+  systemctl status "$SUPERVISOR_TIMER" --no-pager 2>/dev/null | head -n 8 || echo "(supervisor não instalado)"
   cmd_check
-  tail -n 15 "$LOG" 2>/dev/null || true
+  tail -n 20 "$LOG" 2>/dev/null || true
 }
 
 case "${1:-}" in
   run) cmd_run ;;
   burst) cmd_burst ;;
   watch) cmd_watch ;;
+  ensure) cmd_ensure ;;
   install) cmd_install ;;
   status) cmd_status ;;
   check) cmd_check ;;
   *)
-    echo "Uso: $0 run|burst|watch|install|status|check"
+    echo "Uso: $0 run|burst|watch|ensure|install|status|check"
     exit 1
     ;;
 esac

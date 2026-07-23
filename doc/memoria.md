@@ -706,3 +706,9 @@
 - Keywords: bots, mapear-dados, reactflow, execução-fluxo.
 - LOG: LOG-2026-07-23__123109__bots-construtor-fluxo-hibrido.md
 
+
+## 2026-07-23 — Heal Soma v3 supervisor
+- watch + timer + **supervisor** (espelho WABA v6) anti-502 permanente pós-redeploy.
+- Keywords: heal-soma, supervisor, v3, 30300, anti-502.
+- LOG: LOG-2026-07-23__133500__heal-soma-v3-supervisor-anti-502.md
+

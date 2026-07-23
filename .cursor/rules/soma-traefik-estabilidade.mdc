@@ -13,7 +13,7 @@ O Soma roda no **mesmo VPS `srv1261237` (72.60.51.127)** e no **mesmo `easypanel
 |---|---|---|---|
 | Traefik `:443` / bootstrap | **WABA (compartilhado)** | proxy de todos os sites | `traefik-easypanel-bootstrap-vps.sh`, `infra/traefik-443-watchdog-vps.sh` |
 | entryPoints globais `http`/`https` | **WABA (compartilhado)** | routers órfãos (404 SPA) | `infra/traefik-entrypoint-guard-vps.sh` |
-| App Soma (publish + backend) | **Soma** | `:30300`, backend URL, host-slash, entryPoints Soma | `scripts/heal-soma-gestao-vps.sh` |
+| App Soma (publish + backend) | **Soma** | `:30300`, backend URL, host-slash, entryPoints Soma | `scripts/heal-soma-gestao-vps.sh` **v3** (watch+timer+**supervisor**) |
 | Guard routers Soma | **Soma** | entryPoints/backend/host dos routers do Soma | `scripts/soma-traefik-guard-vps.sh` |
 
 Se o `:443` cair, é a camada WABA que recupera. **Não** criar 443-watchdog/bootstrap próprios do Soma.
@@ -24,12 +24,13 @@ Se o `:443` cair, é a camada WABA que recupera. **Não** criar 443-watchdog/boo
 2. **Backend Soma = host gateway** `http://172.17.0.1:30300/`. Overlay Swarm (`http://soma-promotora_gestao-interno:3000/`) não é alcançável pelo Traefik → 502. `Cannot GET /api/errors/bad-gateway` = isto, **não** bug do app.
 3. **Host sem barra final.** `Host(\`app.somaconecta.com.br/\`)` → 404 Traefik.
 4. **routing = config dinâmica (hot-reload por file watch).** **NUNCA** `docker service update --force easypanel-traefik` nem HUP por hábito.
-5. **Anti-thrash:** poucos timers e espaçados. `heal-soma` ~45s + watch de eventos; `soma-traefik-guard` a cada 3min. Não empilhar timers curtos concorrentes.
+5. **Anti-thrash:** poucos timers e espaçados. `heal-soma` timer ~20s + **supervisor ~20s** + watch de eventos; `soma-traefik-guard` a cada 3min. Não empilhar writers Traefik concorrentes além do Guardião + guard Soma.
 6. **Nunca** instalar heals de `:30180` (login WABA) / `:30210` (paginadevendas) para o Soma.
+7. **Nunca** `systemctl disable` em `soma-gestao-heal-watch` / `soma-gestao-heal.timer` / `soma-gestao-heal-supervisor.timer`.
 
 ## Automático a cada deploy (sem passo manual no VPS)
 
-`.github/workflows/heal-soma-on-deploy.yml` (espelho do WABA): push em `main` → SSH root no VPS → `install` (idempotente: recria watch+timer) + `burst`. Depois do 1º run, o VPS se cura sozinho em todo redeploy (watch por `docker events` + timer).
+`.github/workflows/heal-soma-on-deploy.yml` (espelho do WABA): push em `main` → SSH root no VPS → `install` v3 (idempotente: watch+timer+**supervisor**) + `burst`. Depois do 1º run, o VPS se cura sozinho em todo redeploy — o supervisor revive unidades mortas e faz burst se HTTPS≠200.
 
 **Único pré-requisito (uma vez, no GitHub, não no VPS):** secret `VPS_SSH_PRIVATE_KEY` no repo `soma-master` (mesma chave root do WABA). Opcional `VPS_HOST` (default `72.60.51.127`).
 

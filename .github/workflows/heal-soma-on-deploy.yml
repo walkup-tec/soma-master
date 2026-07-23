@@ -1,11 +1,12 @@
 # Estabiliza Soma automaticamente após cada push em main (= redeploy Easypanel).
-# Sem passo manual no VPS: SSH → install (watch+timer, idempotente) → burst.
+# Sem passo manual no VPS: SSH → install v3 (watch+timer+supervisor) → burst.
 #
-# Uma vez instalado, o VPS se cura sozinho em TODO redeploy futuro (watch por
-# docker events + timer). Este workflow só garante que a suíte está fresca e
-# aplica um burst imediato na janela do deploy.
+# Uma vez instalado, o VPS se cura sozinho em TODO redeploy futuro:
+#   - watch: docker events → burst
+#   - timer: ~20s run se needs_heal
+#   - supervisor: ~20s revive unidades mortas + burst se HTTPS≠200
 #
-# Base comprovada: WABA .github/workflows/heal-waba-login-on-deploy.yml
+# Base comprovada: WABA heal-waba-login v6 + .github/workflows/heal-waba-login-on-deploy.yml
 #
 # Secret obrigatório (GitHub → Settings → Secrets and variables → Actions):
 #   VPS_SSH_PRIVATE_KEY  — chave SSH root do srv1261237
@@ -40,7 +41,7 @@ jobs:
       - name: Aguardar Easypanel iniciar o build/redeploy
         run: sleep 45
 
-      - name: SSH — install (watch+timer) + burst da suíte Soma
+      - name: SSH — install v3 (watch+timer+supervisor) + burst
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST != '' && secrets.VPS_HOST || '72.60.51.127' }}
@@ -56,19 +57,19 @@ jobs:
               curl -fsSL "${REPO}/${s}" -o "/tmp/${s}"
               sed -i 's/\r$//' "/tmp/${s}"
               chmod +x "/tmp/${s}"
-              # install é idempotente: (re)cria watch + timer no VPS
               "/tmp/${s}" install || true
             done
 
-            # Burst imediato — cobre a janela do Swarm/Easypanel subir o container
             /tmp/heal-soma-gestao-vps.sh burst || true
             /tmp/soma-traefik-guard-vps.sh run || true
 
             echo "--- status ---"
             /tmp/heal-soma-gestao-vps.sh status || true
+            systemctl is-active \
+              soma-gestao-heal-watch.service \
+              soma-gestao-heal.timer \
+              soma-gestao-heal-supervisor.timer || true
 
-            # Health final com retry (~4 min): o build do Easypanel pode demorar;
-            # não falha o job só porque o container ainda estava subindo.
             code="000"
             for i in $(seq 1 24); do
               code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
@@ -79,6 +80,7 @@ jobs:
                 break
               fi
               /tmp/heal-soma-gestao-vps.sh burst || true
+              /tmp/heal-soma-gestao-vps.sh ensure || true
               sleep 10
             done
             echo "https_login_final=${code}"
