@@ -712,3 +712,8 @@
 - Keywords: heal-soma, supervisor, v3, 30300, anti-502.
 - LOG: LOG-2026-07-23__133500__heal-soma-v3-supervisor-anti-502.md
 
+
+## 2026-07-23 — Nodes Expediente + Saudação
+- Chatbot Expediente: 3 saídas (Bom dia/Boa tarde/Boa noite) por horário Brasília.
+- IA Saudação: prompt + institucional + turno.
+- Keywords: bots, expediente, saudacao, brasilia.

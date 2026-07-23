@@ -13,6 +13,8 @@ import {
   Play,
   Repeat,
   Sparkles,
+  Sun,
+  Sunrise,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BOT_CATEGORY_META, getBotNodeDefinition } from "@/lib/bots/bot-node.registry";
@@ -34,9 +36,11 @@ const KIND_ICON: Partial<Record<BotNodeKind, typeof Play>> = {
   pdf: Database,
   audio: MessageSquare,
   video: ImageIcon,
+  expediente: Sunrise,
   calc_margin: Sparkles,
   map_data: Brain,
   prompt: Brain,
+  saudacao: Sun,
   confirm_data: Sparkles,
   create_lead: Database,
   update_lead: Database,

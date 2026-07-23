@@ -159,20 +159,59 @@ export function BotNodeConfigPanel({
               data.kind === "list" ||
               data.kind === "menu" ||
               data.kind === "confirm_data" ||
-              data.kind === "prompt") && (
+              data.kind === "prompt" ||
+              data.kind === "saudacao") && (
               <div className="space-y-1.5">
-                <Label>{data.kind === "prompt" ? "Prompt" : "Texto"}</Label>
+                <Label>
+                  {data.kind === "prompt" || data.kind === "saudacao" ? "Prompt" : "Texto"}
+                </Label>
                 <Textarea
                   value={
-                    data.kind === "prompt" ? data.config.prompt || "" : data.config.text || ""
+                    data.kind === "prompt" || data.kind === "saudacao"
+                      ? data.config.prompt || ""
+                      : data.config.text || ""
                   }
                   onChange={(event) =>
-                    data.kind === "prompt"
+                    data.kind === "prompt" || data.kind === "saudacao"
                       ? patchConfig({ prompt: event.target.value })
                       : patchConfig({ text: event.target.value })
                   }
                   rows={4}
                 />
+              </div>
+            )}
+
+            {data.kind === "saudacao" && (
+              <div className="space-y-1.5">
+                <Label>Texto institucional</Label>
+                <Textarea
+                  value={data.config.institutionalText || ""}
+                  onChange={(event) => patchConfig({ institutionalText: event.target.value })}
+                  rows={3}
+                  placeholder="Quem somos, tom de voz, o que oferecer na abertura…"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  A IA usa o turno atual de Brasília (Bom dia / Boa tarde / Boa noite) + este
+                  institucional para montar a saudação.
+                </p>
+              </div>
+            )}
+
+            {data.kind === "expediente" && (
+              <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">Turnos (horário de Brasília)</p>
+                <ul className="list-disc space-y-1 pl-4">
+                  <li>
+                    <span className="text-foreground">Bom dia</span> — 00:01 até 12:00
+                  </li>
+                  <li>
+                    <span className="text-foreground">Boa tarde</span> — 12:01 até 18:00
+                  </li>
+                  <li>
+                    <span className="text-foreground">Boa noite</span> — 18:01 até 00:00
+                  </li>
+                </ul>
+                <p>Saídas do node: Bom dia · Boa tarde · Boa noite.</p>
               </div>
             )}
 

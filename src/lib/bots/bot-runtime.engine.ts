@@ -1,4 +1,6 @@
 import { getBotNodeDefinition } from "@/lib/bots/bot-node.registry";
+import { resolveBrasiliaExpedienteTurno } from "@/lib/bots/bot-expediente";
+import { generateSaudacaoText } from "@/lib/bots/bot-saudacao.service";
 import type {
   BotFlowDraft,
   BotFlowNode,
@@ -139,6 +141,27 @@ export async function executeBotNode(
         };
       }
 
+      case "expediente": {
+        const turno = resolveBrasiliaExpedienteTurno();
+        const outKey = config.outputVariable || "turno";
+        return {
+          ok: true,
+          status: "success",
+          message: `Expediente Brasília ${turno.timeLabel}: ${turno.label}`,
+          nextHandle: turno.handle,
+          variables: {
+            [outKey]: turno.id,
+            saudacao_turno: turno.label,
+            expediente_horario: turno.timeLabel,
+          },
+          data: {
+            turno: turno.id,
+            label: turno.label,
+            horario: turno.timeLabel,
+          },
+        };
+      }
+
       case "switch": {
         const value = resolveTemplate(config.expression || "{{ultima_resposta}}", variables)
           .trim()
@@ -177,10 +200,43 @@ export async function executeBotNode(
       }
 
       case "prompt":
+      case "saudacao":
       case "calc_margin":
       case "map_data":
       case "confirm_data": {
-        // LLM real roda no server fn; aqui prepara payload / dry-run
+        if (kind === "saudacao") {
+          const generated = await generateSaudacaoText({
+            prompt: resolveTemplate(config.prompt || "", variables),
+            institutionalText: resolveTemplate(config.institutionalText || "", variables),
+            dryRun: Boolean(dryRun),
+            model: config.model,
+          });
+          const outKey = config.outputVariable || "saudacao";
+          return {
+            ok: generated.ok || Boolean(generated.text),
+            status: generated.text ? "success" : "error",
+            message: generated.error
+              ? `Saudação: ${generated.error}`
+              : `Saudação (${generated.turnoLabel} · ${generated.timeLabel})`,
+            nextHandle: "out",
+            outboundText: generated.text,
+            variables: {
+              [outKey]: generated.text,
+              saudacao_turno: generated.turnoLabel,
+              expediente_horario: generated.timeLabel,
+              turno:
+                generated.turnoLabel === "Bom dia"
+                  ? "bom_dia"
+                  : generated.turnoLabel === "Boa tarde"
+                    ? "boa_tarde"
+                    : "boa_noite",
+            },
+            data: {
+              turno: generated.turnoLabel,
+              horario: generated.timeLabel,
+            },
+          };
+        }
         if (kind === "confirm_data") {
           const payload = variables.dados_mapeados || variables;
           const text = `${config.text || "Confirme os dados:"}\n${JSON.stringify(payload, null, 2)}`;

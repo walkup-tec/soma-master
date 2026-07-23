@@ -58,7 +58,8 @@ export const testBotNodeFn = createServerFn({ method: "POST" })
     const result = await executeBotNode({
       node: data.node,
       variables: data.variables,
-      dryRun: true,
+      // IA (ex.: Saudação) pode chamar OpenAI no teste individual
+      dryRun: data.node.data?.executionKind !== "llm",
     });
     return toPlain(result);
   });

@@ -25,10 +25,12 @@ export type BotNodeKind =
   | "pdf"
   | "audio"
   | "video"
+  | "expediente"
   // IA
   | "calc_margin"
   | "map_data"
   | "prompt"
+  | "saudacao"
   | "confirm_data"
   // Sistema
   | "create_lead"
@@ -110,6 +112,8 @@ export type BotNodeConfig = {
   options?: Array<{ id: string; label: string; value?: string }>;
   // IA
   prompt?: string;
+  /** Texto institucional usado na Saudação (IA). */
+  institutionalText?: string;
   model?: string;
   productId?: string;
   mapFields?: BotMapFieldId[];

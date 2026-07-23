@@ -210,6 +210,22 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
     description: "Envia vídeo",
     defaultConfig: { mediaUrl: "", mediaCaption: "" },
   }),
+  def({
+    kind: "expediente",
+    category: "chatbot",
+    executionKind: "flow",
+    label: "Expediente",
+    description: "Bifurca por turno (Brasília): Bom dia / Boa tarde / Boa noite",
+    outputs: [
+      { id: "bom_dia", label: "Bom dia" },
+      { id: "boa_tarde", label: "Boa tarde" },
+      { id: "boa_noite", label: "Boa noite" },
+    ],
+    defaultConfig: {
+      label: "Expediente",
+      outputVariable: "turno",
+    },
+  }),
 
   // ——— IA ———
   def({
@@ -258,6 +274,20 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
     defaultConfig: {
       prompt: "Responda de forma objetiva e cordial.",
       outputVariable: "resposta_ia",
+      model: "gpt-4o-mini",
+    },
+  }),
+  def({
+    kind: "saudacao",
+    category: "ia",
+    executionKind: "llm",
+    label: "Saudação",
+    description: "IA gera saudação inicial com turno (Brasília) + texto institucional",
+    defaultConfig: {
+      prompt:
+        "Faça uma saudação inicial curta e cordial em português do Brasil. Use o turno informado (Bom dia / Boa tarde / Boa noite) e incorpore o texto institucional. Não invente dados do cliente. Uma ou duas frases no máximo.",
+      institutionalText: "Somos a Soma Promotora. Estamos aqui para ajudar.",
+      outputVariable: "saudacao",
       model: "gpt-4o-mini",
     },
   }),
