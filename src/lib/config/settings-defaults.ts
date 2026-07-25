@@ -4,8 +4,12 @@ import { resolveCategoryHomeMenuId } from "@/lib/config/category-utils";
 import type {
   AttendanceStatusConfig,
   BankConfig,
+  ChatbotDaySchedule,
+  ChatbotRuntimeConfig,
+  ChatTagConfig,
   SystemSettings,
   UserCategory,
+  WeekdayId,
 } from "@/lib/config/settings-types";
 import { DEFAULT_STATUS_COLOR, normalizeStatusColor } from "@/lib/config/status-colors";
 import { isPartnerLinkedUserCategoryId } from "@/lib/partners/partner.constants";
@@ -13,6 +17,38 @@ import { isPartnerLinkedUserCategoryId } from "@/lib/partners/partner.constants"
 const masterCategoryId = "cat-master";
 const atendenteCategoryId = "cat-atendente";
 const gerenteCategoryId = "cat-gerente";
+
+export const WEEKDAY_ORDER: WeekdayId[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+export const WEEKDAY_LABELS: Record<WeekdayId, string> = {
+  mon: "Segunda",
+  tue: "Terça",
+  wed: "Quarta",
+  thu: "Quinta",
+  fri: "Sexta",
+  sat: "Sábado",
+  sun: "Domingo",
+};
+
+function defaultDay(enabled: boolean, start = "08:00", end = "18:00"): ChatbotDaySchedule {
+  return { enabled, start, end };
+}
+
+export function createDefaultChatbotRuntime(): ChatbotRuntimeConfig {
+  return {
+    activeBotId: null,
+    alwaysOpen: true,
+    schedule: {
+      mon: defaultDay(true),
+      tue: defaultDay(true),
+      wed: defaultDay(true),
+      thu: defaultDay(true),
+      fri: defaultDay(true),
+      sat: defaultDay(false),
+      sun: defaultDay(false),
+    },
+  };
+}
 
 export const DEFAULT_ATTENDANCE_STATUSES: AttendanceStatusConfig[] = [
   { id: "novo", label: "Novo", color: "#3b82f6", autoReturnDays: null },
@@ -81,6 +117,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   ],
   banks: [],
   attendanceStatuses: [...DEFAULT_ATTENDANCE_STATUSES],
+  chatTags: [],
+  chatbotRuntime: createDefaultChatbotRuntime(),
 };
 
 export function createEmptyProduct(options?: {
@@ -188,8 +226,17 @@ export function normalizeSettings(settings: SystemSettings & { defaultCategoryId
     bankIds: product.bankIds.filter((id) => bankIdSet.has(id)),
   }));
   const attendanceStatuses = normalizeAttendanceStatuses(settings.attendanceStatuses ?? []);
+  const chatTags = normalizeChatTags(settings.chatTags ?? []);
+  const chatbotRuntime = normalizeChatbotRuntime(settings.chatbotRuntime);
 
-  return { categories, products: productsWithValidBanks, banks, attendanceStatuses };
+  return {
+    categories,
+    products: productsWithValidBanks,
+    banks,
+    attendanceStatuses,
+    chatTags,
+    chatbotRuntime,
+  };
 }
 
 export function createEmptyAttendanceStatus(): AttendanceStatusConfig {
@@ -199,6 +246,71 @@ export function createEmptyAttendanceStatus(): AttendanceStatusConfig {
     color: DEFAULT_STATUS_COLOR,
     autoReturnDays: null,
   };
+}
+
+export function createEmptyChatTag(): ChatTagConfig {
+  return {
+    id: `tag-${crypto.randomUUID().slice(0, 8)}`,
+    label: "",
+    color: DEFAULT_STATUS_COLOR,
+    transferBotId: null,
+  };
+}
+
+function normalizeTimeHm(value: unknown, fallback: string): string {
+  const raw = String(value ?? "").trim();
+  if (/^\d{2}:\d{2}$/.test(raw)) return raw;
+  return fallback;
+}
+
+export function normalizeChatbotRuntime(raw: unknown): ChatbotRuntimeConfig {
+  const base = createDefaultChatbotRuntime();
+  if (!raw || typeof raw !== "object") return base;
+  const input = raw as Partial<ChatbotRuntimeConfig> & {
+    schedule?: Partial<Record<WeekdayId, Partial<ChatbotDaySchedule>>>;
+  };
+  const schedule = { ...base.schedule };
+  for (const day of WEEKDAY_ORDER) {
+    const src = input.schedule?.[day];
+    const fallback = base.schedule[day];
+    schedule[day] = {
+      enabled: src?.enabled == null ? fallback.enabled : Boolean(src.enabled),
+      start: normalizeTimeHm(src?.start, fallback.start),
+      end: normalizeTimeHm(src?.end, fallback.end),
+    };
+  }
+  const activeBotId =
+    typeof input.activeBotId === "string" && input.activeBotId.trim()
+      ? input.activeBotId.trim()
+      : null;
+  return {
+    activeBotId,
+    alwaysOpen: input.alwaysOpen == null ? true : Boolean(input.alwaysOpen),
+    schedule,
+  };
+}
+
+export function normalizeChatTags(tags: ChatTagConfig[]): ChatTagConfig[] {
+  const seen = new Set<string>();
+  return tags
+    .map((tag) => {
+      const transfer =
+        typeof tag.transferBotId === "string" && tag.transferBotId.trim()
+          ? tag.transferBotId.trim()
+          : null;
+      return {
+        id: String(tag.id ?? `tag-${crypto.randomUUID().slice(0, 8)}`).trim(),
+        label: String(tag.label ?? "").trim(),
+        color: normalizeStatusColor(tag.color, DEFAULT_STATUS_COLOR),
+        transferBotId: transfer,
+      };
+    })
+    .filter((tag) => {
+      if (!tag.id || !tag.label) return false;
+      if (seen.has(tag.id)) return false;
+      seen.add(tag.id);
+      return true;
+    });
 }
 
 export function normalizeAttendanceStatuses(

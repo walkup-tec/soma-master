@@ -725,3 +725,7 @@
 ## 2026-07-25 — Fix lentidao menu lateral (v2)
 - enrichSession cache-first 60s; preloadStaleTime 30s; DDL settings once.
 - Keywords: lentidao, sidebar, preload, enrichSession.
+
+## 2026-07-25 — Bot e Integracoes: sub-abas + Tags + Expediente
+- Sub: conexao, webhook, tags, educacao-ia, bot-expediente.
+- Keywords: chatbot, tags, transferBot, expediente, sempre-aberto.

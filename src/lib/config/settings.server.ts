@@ -15,6 +15,8 @@ const SECTIONS = new Set<SettingsSaveSection>([
   "products",
   "banks",
   "attendanceStatuses",
+  "chatTags",
+  "chatbotRuntime",
   "all",
 ]);
 

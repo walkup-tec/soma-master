@@ -59,9 +59,41 @@ export type AttendanceStatusConfig = {
   autoReturnDays: number | null;
 };
 
+/** Tag do chatbot — pode transferir o cliente para um fluxo de Bot. */
+export type ChatTagConfig = {
+  id: string;
+  label: string;
+  color: string;
+  /**
+   * ID do bot (fluxo) para o qual o cliente é ingressado
+   * quando esta tag for aplicada. null = só marca, sem transferir.
+   */
+  transferBotId: string | null;
+};
+
+export type WeekdayId = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+export type ChatbotDaySchedule = {
+  enabled: boolean;
+  /** HH:mm */
+  start: string;
+  /** HH:mm */
+  end: string;
+};
+
+/** Bot que atende leads novos + janela de expediente. */
+export type ChatbotRuntimeConfig = {
+  activeBotId: string | null;
+  /** Se true, ignora dias/horários — bot sempre disponível. */
+  alwaysOpen: boolean;
+  schedule: Record<WeekdayId, ChatbotDaySchedule>;
+};
+
 export type SystemSettings = {
   categories: UserCategory[];
   products: ProductConfig[];
   banks: BankConfig[];
   attendanceStatuses: AttendanceStatusConfig[];
+  chatTags: ChatTagConfig[];
+  chatbotRuntime: ChatbotRuntimeConfig;
 };

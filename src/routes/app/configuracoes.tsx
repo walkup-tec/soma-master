@@ -5,7 +5,11 @@ import { UserCategoriesSettings } from "@/components/settings/user-categories-se
 import { ProductsSettings } from "@/components/settings/products-settings";
 import { AttendanceStatusesSettings } from "@/components/settings/attendance-statuses-settings";
 import { BanksSettings } from "@/components/settings/banks-settings";
-import { ChatbotSettings } from "@/components/settings/chatbot-settings";
+import {
+  ChatbotSettings,
+  parseChatbotSub,
+  type ChatbotSubId,
+} from "@/components/settings/chatbot-settings";
 import { useSystemSettings } from "@/hooks/use-system-settings";
 import { getChatbotSettingsLoaderFn } from "@/lib/chat/chat.server";
 
@@ -26,6 +30,7 @@ function parseTab(value: unknown): SettingsTabId {
 
 type SettingsSearch = {
   tab: SettingsTabId;
+  sub?: ChatbotSubId;
   ok?: string;
   err?: string;
 };
@@ -33,13 +38,19 @@ type SettingsSearch = {
 export const Route = createFileRoute("/app/configuracoes")({
   validateSearch: (search: Record<string, unknown>): SettingsSearch => {
     const tab = parseTab(search.tab);
+    const sub = tab === "chatbot" ? parseChatbotSub(search.sub) : undefined;
     const ok = typeof search.ok === "string" && search.ok.trim() ? search.ok.trim() : undefined;
     const err = typeof search.err === "string" && search.err.trim() ? search.err.trim() : undefined;
-    return { tab, ok, err };
+    return { tab, sub, ok, err };
   },
-  loaderDeps: ({ search }) => ({ tab: search.tab }),
+  loaderDeps: ({ search }) => ({ tab: search.tab, sub: search.sub }),
   loader: async ({ deps }) => {
     if (deps.tab !== "chatbot") {
+      return { evo: null, education: null };
+    }
+    const sub = parseChatbotSub(deps.sub);
+    // Tags / expediente não precisam do loader EVO/IA
+    if (sub === "tags" || sub === "bot-expediente") {
       return { evo: null, education: null };
     }
     return getChatbotSettingsLoaderFn();
@@ -49,9 +60,10 @@ export const Route = createFileRoute("/app/configuracoes")({
 
 function ConfiguracoesPage() {
   const navigate = Route.useNavigate();
-  const { tab, ok, err } = Route.useSearch();
+  const { tab, sub, ok, err } = Route.useSearch();
   const { evo, education } = Route.useLoaderData();
   const { settings, setSettings } = useSystemSettings();
+  const chatbotSub = parseChatbotSub(sub);
 
   return (
     <div className="space-y-6">
@@ -62,14 +74,17 @@ function ConfiguracoesPage() {
         </div>
         <h2 className="font-display text-2xl font-bold tracking-tight">Configurações</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Bancos, produtos, categorias, status e Integração EVO (Chatbot).
+          Bancos, produtos, categorias, status e Bot e Integrações (Chatbot).
         </p>
       </div>
 
       <Tabs
         value={tab}
         onValueChange={(next) => {
-          void navigate({ search: { tab: parseTab(next) } });
+          const nextTab = parseTab(next);
+          void navigate({
+            search: nextTab === "chatbot" ? { tab: nextTab, sub: "conexao" } : { tab: nextTab },
+          });
         }}
         className="space-y-6"
       >
@@ -87,7 +102,7 @@ function ConfiguracoesPage() {
             <ListChecks className="size-4" /> Status de atendimento
           </TabsTrigger>
           <TabsTrigger value="chatbot" className="gap-2">
-            <Bot className="size-4" /> Integração EVO
+            <Bot className="size-4" /> Bot e Integrações
           </TabsTrigger>
         </TabsList>
 
@@ -122,7 +137,18 @@ function ConfiguracoesPage() {
         </TabsContent>
 
         <TabsContent value="chatbot">
-          <ChatbotSettings evo={evo} education={education} flashOk={ok} flashErr={err} />
+          <ChatbotSettings
+            sub={chatbotSub}
+            onSubChange={(nextSub) => {
+              void navigate({ search: { tab: "chatbot", sub: nextSub } });
+            }}
+            evo={evo}
+            education={education}
+            settings={settings}
+            onSettingsChange={(next, section) => setSettings(next, section)}
+            flashOk={ok}
+            flashErr={err}
+          />
         </TabsContent>
       </Tabs>
     </div>

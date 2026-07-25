@@ -674,7 +674,7 @@ export function ChatInboxScreen({
                 {conversations.length === 0 ? (
                   <Button asChild size="sm" variant="secondary" className="cursor-pointer">
                     <Link to="/app/configuracoes" search={{ tab: "chatbot" }}>
-                      Abrir Integração EVO
+                      Abrir Bot e Integrações
                     </Link>
                   </Button>
                 ) : null}
@@ -808,7 +808,7 @@ export function ChatInboxScreen({
                   search={{ tab: "chatbot" }}
                   className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline"
                 >
-                  Integração EVO
+                  Bot e Integrações
                 </Link>
                 , ou use o teste de mensagem local.
               </p>

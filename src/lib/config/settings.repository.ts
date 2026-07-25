@@ -12,6 +12,11 @@ import type { MenuItemId } from "@/lib/config/menu-items";
 import type postgres from "postgres";
 import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
 import { isPartnerLinkedUserCategoryId } from "@/lib/partners/partner.constants";
+import {
+  createDefaultChatbotRuntime,
+  normalizeChatbotRuntime,
+  normalizeChatTags,
+} from "@/lib/config/settings-defaults";
 
 const DATA_DIR = join(process.cwd(), "data");
 const SETTINGS_FILE = join(DATA_DIR, "system-settings.json");
@@ -21,6 +26,8 @@ export type SettingsSaveSection =
   | "products"
   | "banks"
   | "attendanceStatuses"
+  | "chatTags"
+  | "chatbotRuntime"
   | "all";
 
 let cachedSettings: SystemSettings | null = null;
@@ -118,6 +125,14 @@ async function ensureSettingsSchemaOnce(sql: Awaited<ReturnType<typeof getSql>>)
       primary key (product_id, bank_id)
     )
   `;
+  await sql`
+    create table if not exists crm.chatbot_settings (
+      id text primary key,
+      tags jsonb not null default '[]'::jsonb,
+      runtime jsonb not null default '{}'::jsonb,
+      updated_at timestamptz not null default now()
+    )
+  `;
   settingsSchemaEnsured = true;
 }
 
@@ -125,7 +140,7 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
   const sql = await getSql();
   await ensureSettingsSchemaOnce(sql);
 
-  const [categories, menus, products, productFields, productBanks, banks, attendanceStatuses] =
+  const [categories, menus, products, productFields, productBanks, banks, attendanceStatuses, chatbotRows] =
     await Promise.all([
     sql<{ id: string; name: string; home_menu_id: string | null }[]>`
       select id, name, home_menu_id from crm.user_categories order by name
@@ -185,7 +200,16 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
       from crm.attendance_statuses
       order by sort_order, label
     `,
+    sql<{ id: string; tags: unknown; runtime: unknown }[]>`
+      select id, tags, runtime from crm.chatbot_settings where id = 'default' limit 1
+    `,
   ]);
+
+  const chatbotRow = chatbotRows[0];
+  const chatTags = normalizeChatTags(
+    Array.isArray(chatbotRow?.tags) ? (chatbotRow.tags as Parameters<typeof normalizeChatTags>[0]) : [],
+  );
+  const chatbotRuntime = normalizeChatbotRuntime(chatbotRow?.runtime ?? createDefaultChatbotRuntime());
 
   const menuMap = new Map<string, MenuItemId[]>();
   for (const row of menus) {
@@ -264,6 +288,8 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
             autoReturnDays: status.auto_return_days,
           }))
         : undefined,
+    chatTags,
+    chatbotRuntime,
   } as SystemSettings);
 }
 
@@ -619,6 +645,24 @@ async function syncAttendanceStatuses(tx: Tx, statuses: AttendanceStatusConfig[]
   `;
 }
 
+async function syncChatbotSettings(tx: Tx, settings: SystemSettings): Promise<void> {
+  const tags = normalizeChatTags(settings.chatTags ?? []);
+  const runtime = normalizeChatbotRuntime(settings.chatbotRuntime);
+  await tx`
+    insert into crm.chatbot_settings (id, tags, runtime, updated_at)
+    values (
+      'default',
+      ${tx.json(tags)},
+      ${tx.json(runtime)},
+      now()
+    )
+    on conflict (id) do update set
+      tags = excluded.tags,
+      runtime = excluded.runtime,
+      updated_at = now()
+  `;
+}
+
 function mergeSettingsForSection(
   base: SystemSettings,
   incoming: SystemSettings,
@@ -632,6 +676,11 @@ function mergeSettingsForSection(
       section === "all" || section === "attendanceStatuses"
         ? incoming.attendanceStatuses
         : base.attendanceStatuses,
+    chatTags: section === "all" || section === "chatTags" ? incoming.chatTags : base.chatTags,
+    chatbotRuntime:
+      section === "all" || section === "chatbotRuntime"
+        ? incoming.chatbotRuntime
+        : base.chatbotRuntime,
   });
 }
 
@@ -656,6 +705,9 @@ async function saveSystemSettingsToPostgres(
     }
     if (section === "all" || section === "attendanceStatuses") {
       await syncAttendanceStatuses(tx, next.attendanceStatuses);
+    }
+    if (section === "all" || section === "chatTags" || section === "chatbotRuntime") {
+      await syncChatbotSettings(tx, next);
     }
   });
 
