@@ -110,7 +110,7 @@ function LoginPage() {
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
+              <Label htmlFor="email">Informe seu e-mail</Label>
               <Input
                 id="email"
                 name="email"

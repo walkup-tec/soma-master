@@ -13,7 +13,7 @@ import { normalizeEmail } from "@/lib/auth/master-user";
 import { findUserByEmail, findUserById } from "@/lib/users/user.repository";
 import { getPartnerAccess } from "@/lib/partners/partner.repository";
 
-const ENRICH_TTL_MS = 10_000;
+const ENRICH_TTL_MS = 60_000;
 
 type EnrichCache = {
   userId: string;
@@ -80,9 +80,16 @@ function sessionNeedsPersist(session: SessionData, next: SessionData): boolean {
 /** Sincroniza sessão com o cadastro atual (categoria, nome, menus). */
 async function enrichSession(session: SessionData): Promise<SessionData | null> {
   const now = Date.now();
+
+  // Cache-first: navegação no menu não deve bater DB/settings a cada clique.
+  if (enrichCache && enrichCache.userId === session.userId && enrichCache.expiresAt > now) {
+    return enrichCache.data;
+  }
+
   const user = await findUserById(session.userId);
   if (!user) {
     await clearSession(sessionConfig);
+    enrichCache = null;
     return null;
   }
 
@@ -92,21 +99,10 @@ async function enrichSession(session: SessionData): Promise<SessionData | null> 
     access = await resolveSessionAccess(user.id, user.role, categoryId);
   } catch {
     await clearSession(sessionConfig);
+    enrichCache = null;
     return null;
   }
   const { menuIds, homeMenuId } = access;
-
-  if (
-    enrichCache &&
-    enrichCache.userId === session.userId &&
-    enrichCache.expiresAt > now &&
-    enrichCache.data.menuIds.join(",") === menuIds.join(",") &&
-    enrichCache.data.homeMenuId === homeMenuId &&
-    enrichCache.data.categoryId === categoryId &&
-    enrichCache.data.name === user.name
-  ) {
-    return enrichCache.data;
-  }
 
   const next: SessionData = {
     ...session,

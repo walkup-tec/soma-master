@@ -721,3 +721,7 @@
 ## 2026-07-23 — Bots: duplicar + multi-selecao + Botoes
 - Duplicar (Ctrl+D), lasso, saidas dinamicas por botao.
 - Keywords: bots, duplicate, buttons, multi-select.
+
+## 2026-07-25 — Fix lentidao menu lateral (v2)
+- enrichSession cache-first 60s; preloadStaleTime 30s; DDL settings once.
+- Keywords: lentidao, sidebar, preload, enrichSession.

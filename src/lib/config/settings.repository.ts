@@ -24,6 +24,7 @@ export type SettingsSaveSection =
   | "all";
 
 let cachedSettings: SystemSettings | null = null;
+let settingsSchemaEnsured = false;
 
 export function clearSystemSettingsCache(): void {
   cachedSettings = null;
@@ -31,8 +32,8 @@ export function clearSystemSettingsCache(): void {
 
 type Tx = postgres.TransactionSql<Record<string, never>>;
 
-async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
-  const sql = await getSql();
+async function ensureSettingsSchemaOnce(sql: Awaited<ReturnType<typeof getSql>>): Promise<void> {
+  if (settingsSchemaEnsured) return;
   await sql`
     alter table crm.attendance_statuses
     add column if not exists color text not null default '#64748b'
@@ -117,6 +118,12 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
       primary key (product_id, bank_id)
     )
   `;
+  settingsSchemaEnsured = true;
+}
+
+async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
+  const sql = await getSql();
+  await ensureSettingsSchemaOnce(sql);
 
   const [categories, menus, products, productFields, productBanks, banks, attendanceStatuses] =
     await Promise.all([

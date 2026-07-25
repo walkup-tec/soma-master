@@ -13,7 +13,7 @@ export const Route = createFileRoute("/app/chat")({
       banks: settings.banks,
     };
   },
-  staleTime: 5_000,
+  staleTime: 15_000,
   component: ChatPage,
 });
 

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppTopbar } from "@/components/app-topbar";
+import { AppRoutePending } from "@/components/app-route-pending";
 import { ChatbotAlertProvider } from "@/components/chat/chatbot-alert-context";
 import { getAuthSessionFn } from "@/lib/auth/auth.server";
 import { guardAppMenuAccess } from "@/lib/auth/menu-guard.server";
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/app")({
   },
   // Evita refetch agressivo dos loaders filhos a cada troca de aba/foco.
   staleTime: 60_000,
+  pendingComponent: AppRoutePending,
   component: AppLayout,
 });
 
