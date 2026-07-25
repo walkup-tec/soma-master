@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, Power } from "lucide-react";
+import { Clock3, Moon, Sun } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,45 @@ type Props = {
   settings: SystemSettings;
   onChange: (settings: SystemSettings) => void | Promise<unknown>;
 };
+
+function BotSelect({
+  id,
+  label,
+  hint,
+  value,
+  bots,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: string | null;
+  bots: Array<{ id: string; name: string }>;
+  onChange: (botId: string | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={cn("space-y-2", disabled && "opacity-50")}>
+      <Label htmlFor={id}>{label}</Label>
+      <select
+        id={id}
+        disabled={disabled}
+        className="flex h-10 w-full max-w-md cursor-pointer rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed"
+        value={value || ""}
+        onChange={(event) => onChange(event.target.value || null)}
+      >
+        <option value="">Nenhum (somente humano / IA chat)</option>
+        {bots.map((bot) => (
+          <option key={bot.id} value={bot.id}>
+            {bot.name}
+          </option>
+        ))}
+      </select>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
 
 export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
   const [runtime, setRuntime] = useState<ChatbotRuntimeConfig>(() =>
@@ -43,11 +82,8 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
 
   const save = () => {
     const next = normalizeChatbotRuntime(runtime);
-    if (!next.activeBotId) {
-      toast.message("Selecione um bot ativo ou deixe vazio para nenhum atendimento automático.");
-    }
     void onChange({ ...settings, chatbotRuntime: next });
-    toast.success("Bot ativo e expediente salvos.");
+    toast.success("Bots de expediente e horários salvos.");
   };
 
   const scheduleDisabled = runtime.alwaysOpen;
@@ -56,42 +92,65 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
     <div className="space-y-6">
       <Card className="border-border/60 shadow-soft">
         <CardHeader>
-          <CardTitle className="font-display flex items-center gap-2 text-base">
-            <Power className="size-4 text-primary" />
-            Bot ativo
-          </CardTitle>
+          <CardTitle className="font-display text-base">Bots por janela</CardTitle>
           <CardDescription>
-            Quando um lead entrar em contato no WhatsApp, o atendimento automático usa este fluxo.
+            Defina qual fluxo atende contatos <strong>dentro</strong> e <strong>fora</strong> do
+            expediente.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="active-bot">Bot que atende novos contatos</Label>
-            <select
-              id="active-bot"
-              className="flex h-10 w-full max-w-md cursor-pointer rounded-md border border-input bg-background px-3 text-sm"
-              value={runtime.activeBotId || ""}
-              onChange={(event) =>
-                setRuntime((current) => ({
-                  ...current,
-                  activeBotId: event.target.value || null,
-                }))
-              }
-            >
-              <option value="">Nenhum (somente humano / IA chat)</option>
-              {bots.map((bot) => (
-                <option key={bot.id} value={bot.id}>
-                  {bot.name}
-                </option>
-              ))}
-            </select>
-            {bots.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Crie um fluxo em <span className="font-medium text-foreground">Bots</span> para
-                aparecer aqui.
+        <CardContent className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-border/60 bg-muted/15 p-4">
+              <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Sun className="size-4 text-amber-500" />
+                Bot expediente
               </p>
-            ) : null}
+              <BotSelect
+                id="bot-expediente"
+                label="Bot no horário de expediente"
+                hint="Atende contatos entrantes dentro dos dias/horários definidos abaixo."
+                value={runtime.expedienteBotId}
+                bots={bots}
+                onChange={(expedienteBotId) =>
+                  setRuntime((current) => ({ ...current, expedienteBotId }))
+                }
+              />
+            </div>
+
+            <div
+              className={cn(
+                "rounded-xl border border-border/60 bg-muted/15 p-4",
+                scheduleDisabled && "opacity-60",
+              )}
+            >
+              <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Moon className="size-4 text-sky-500" />
+                Bot fora expediente
+              </p>
+              <BotSelect
+                id="bot-fora-expediente"
+                label="Bot fora do horário de expediente"
+                hint={
+                  scheduleDisabled
+                    ? "Desative “Sempre aberto” para usar um bot diferente fora do expediente."
+                    : "Atende contatos entrantes fora dos dias/horários de expediente."
+                }
+                value={runtime.foraExpedienteBotId}
+                bots={bots}
+                disabled={scheduleDisabled}
+                onChange={(foraExpedienteBotId) =>
+                  setRuntime((current) => ({ ...current, foraExpedienteBotId }))
+                }
+              />
+            </div>
           </div>
+
+          {bots.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Crie um fluxo em <span className="font-medium text-foreground">Bots</span> para
+              aparecer nas listas.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -102,8 +161,8 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
             Expediente
           </CardTitle>
           <CardDescription>
-            Defina quando o bot responde. Com <strong>Sempre aberto</strong>, dias e horários ficam
-            desabilitados.
+            Com <strong>Sempre aberto</strong>, só o <strong>Bot expediente</strong> atende 24h — o
+            bot fora do expediente fica desativado.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -118,7 +177,7 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Sempre aberto</p>
               <p className="text-xs text-muted-foreground">
-                O bot fica disponível 24h, todos os dias — ideal para captura contínua de leads.
+                Usa apenas o Bot expediente o tempo todo, sem grade de dias/horários.
               </p>
             </div>
             <Switch
@@ -137,7 +196,7 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
             )}
           >
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Dias e horários
+              Dias e horários do expediente
             </p>
             {WEEKDAY_ORDER.map((day) => {
               const row = runtime.schedule[day];
@@ -157,7 +216,7 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
                     {WEEKDAY_LABELS[day]}
                   </label>
                   <span className="hidden text-xs text-muted-foreground sm:inline">
-                    {row.enabled ? "Aberto" : "Fechado"}
+                    {row.enabled ? "Expediente" : "Fora"}
                   </span>
                   <div className="space-y-1">
                     <Label className="text-[11px] text-muted-foreground">Início</Label>
@@ -185,7 +244,7 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
           </div>
 
           <Button type="button" className="cursor-pointer" onClick={save}>
-            Salvar bot ativo e expediente
+            Salvar bots e expediente
           </Button>
         </CardContent>
       </Card>

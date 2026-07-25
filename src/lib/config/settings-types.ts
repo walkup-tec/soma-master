@@ -81,10 +81,13 @@ export type ChatbotDaySchedule = {
   end: string;
 };
 
-/** Bot que atende leads novos + janela de expediente. */
+/** Bots de atendimento por janela de expediente + grade horária. */
 export type ChatbotRuntimeConfig = {
-  activeBotId: string | null;
-  /** Se true, ignora dias/horários — bot sempre disponível. */
+  /** Bot ativo dentro do horário de expediente. */
+  expedienteBotId: string | null;
+  /** Bot ativo fora do horário de expediente. */
+  foraExpedienteBotId: string | null;
+  /** Se true, ignora dias/horários — usa só o Bot expediente 24h. */
   alwaysOpen: boolean;
   schedule: Record<WeekdayId, ChatbotDaySchedule>;
 };

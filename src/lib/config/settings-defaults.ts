@@ -36,7 +36,8 @@ function defaultDay(enabled: boolean, start = "08:00", end = "18:00"): ChatbotDa
 
 export function createDefaultChatbotRuntime(): ChatbotRuntimeConfig {
   return {
-    activeBotId: null,
+    expedienteBotId: null,
+    foraExpedienteBotId: null,
     alwaysOpen: true,
     schedule: {
       mon: defaultDay(true),
@@ -268,6 +269,8 @@ export function normalizeChatbotRuntime(raw: unknown): ChatbotRuntimeConfig {
   if (!raw || typeof raw !== "object") return base;
   const input = raw as Partial<ChatbotRuntimeConfig> & {
     schedule?: Partial<Record<WeekdayId, Partial<ChatbotDaySchedule>>>;
+    /** Legado: um único bot ativo. */
+    activeBotId?: string | null;
   };
   const schedule = { ...base.schedule };
   for (const day of WEEKDAY_ORDER) {
@@ -279,12 +282,21 @@ export function normalizeChatbotRuntime(raw: unknown): ChatbotRuntimeConfig {
       end: normalizeTimeHm(src?.end, fallback.end),
     };
   }
-  const activeBotId =
+  const legacyActive =
     typeof input.activeBotId === "string" && input.activeBotId.trim()
       ? input.activeBotId.trim()
       : null;
+  const expedienteBotId =
+    typeof input.expedienteBotId === "string" && input.expedienteBotId.trim()
+      ? input.expedienteBotId.trim()
+      : legacyActive;
+  const foraExpedienteBotId =
+    typeof input.foraExpedienteBotId === "string" && input.foraExpedienteBotId.trim()
+      ? input.foraExpedienteBotId.trim()
+      : null;
   return {
-    activeBotId,
+    expedienteBotId,
+    foraExpedienteBotId,
     alwaysOpen: input.alwaysOpen == null ? true : Boolean(input.alwaysOpen),
     schedule,
   };

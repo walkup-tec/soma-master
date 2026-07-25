@@ -228,7 +228,7 @@ export function ChatbotSettings({
       <div>
         <h3 className="font-display text-lg font-semibold tracking-tight">Bot e Integrações</h3>
         <p className="text-sm text-muted-foreground">
-          Conexão WhatsApp, webhook, tags, educação da IA e bot ativo com expediente.
+          Conexão WhatsApp, webhook, tags, educação da IA e bots de expediente / fora do expediente.
         </p>
       </div>
 
@@ -251,7 +251,7 @@ export function ChatbotSettings({
             <GraduationCap className="size-4" /> Educação da IA
           </TabsTrigger>
           <TabsTrigger value="bot-expediente" className="gap-2">
-            <Clock3 className="size-4" /> Bot Ativo e Expediente
+            <Clock3 className="size-4" /> Bot expediente
           </TabsTrigger>
         </TabsList>
 
