@@ -729,3 +729,9 @@
 ## 2026-07-25 — Bot e Integracoes: sub-abas + Tags + Expediente
 - Sub: conexao, webhook, tags, educacao-ia, bot-expediente.
 - Keywords: chatbot, tags, transferBot, expediente, sempre-aberto.
+
+## 2026-07-25 — Deploy UI chatbot nao refletia
+
+- Producao ficou em build ~11:42 BRT (`500d21a`); `a7519bc` (dois bots) nao entrou ate Redeploy EasyPanel.
+- Validar: strings `Bots por janela` / `foraExpedienteBotId` no JS; Last-Modified do `index-*.js`.
+- Keywords: `deploy`, `easypanel`, `stale`, `foraExpedienteBotId`
