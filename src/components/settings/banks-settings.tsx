@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import {
   Check,
   Copy,
-  Download,
   Eye,
-  FileUp,
   Plus,
   Trash2,
   X,
@@ -24,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { uploadBankOperationalGuideFn } from "@/lib/config/settings.server";
 import { createEmptyBank, normalizeBanks } from "@/lib/config/settings-defaults";
 import type { BankConfig, SystemSettings } from "@/lib/config/settings-types";
 import { cn } from "@/lib/utils";
@@ -33,14 +29,6 @@ type Props = {
   settings: SystemSettings;
   onChange: (settings: SystemSettings) => Promise<SystemSettings> | void;
 };
-
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
 
 async function copyText(label: string, value: string) {
   const text = String(value || "").trim();
@@ -74,12 +62,6 @@ function hasBankAccess(bank: BankConfig): boolean {
 
 function hasLinkAccess(bank: BankConfig): boolean {
   return Boolean(bank.stormLink.trim() || bank.bankLink.trim());
-}
-
-function hasGuideAccess(bank: BankConfig): boolean {
-  return (
-    bank.operationalGuideEnabled && Boolean(bank.operationalGuide?.storageId?.trim())
-  );
 }
 
 function AccessCheckIcon(props: { active: boolean; label: string }) {
@@ -146,10 +128,8 @@ function DetailCopyRow(props: { label: string; value: string }) {
 }
 
 export function BanksSettings({ settings, onChange }: Props) {
-  const uploadGuide = useServerFn(uploadBankOperationalGuideFn);
   const [banks, setBanks] = useState<BankConfig[]>(settings.banks ?? []);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<BankConfig>(() => createEmptyBank());
@@ -183,7 +163,11 @@ export function BanksSettings({ settings, onChange }: Props) {
 
   const openEditForm = (bank: BankConfig) => {
     setEditingId(bank.id);
-    setDraft({ ...bank });
+    setDraft({
+      ...bank,
+      operationalGuideEnabled: false,
+      operationalGuide: null,
+    });
     setFormOpen(true);
     setDetailBank(null);
   };
@@ -215,7 +199,9 @@ export function BanksSettings({ settings, onChange }: Props) {
       toast.error("Informe o nome do banco.");
       return;
     }
-    const normalizedDraft = normalizeBanks([draft])[0];
+    const normalizedDraft = normalizeBanks([
+      { ...draft, operationalGuideEnabled: false, operationalGuide: null },
+    ])[0];
     if (!normalizedDraft) {
       toast.error("Informe o nome do banco.");
       return;
@@ -239,30 +225,6 @@ export function BanksSettings({ settings, onChange }: Props) {
     }
   };
 
-  const handleGuideUpload = async (file: File | null) => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const base64 = await fileToBase64(file);
-      const uploaded = await uploadGuide({ data: { fileName: file.name, base64 } });
-      patchDraft({
-        operationalGuideEnabled: true,
-        operationalGuide: {
-          storageId: uploaded.storageId,
-          fileName: uploaded.fileName,
-          displayName:
-            draft.operationalGuide?.displayName.trim() ||
-            uploaded.fileName.replace(/\.pdf$/i, ""),
-        },
-      });
-      toast.success("PDF carregado. Salve o banco para gravar.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha no upload do PDF.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <Card className="border-border/60 shadow-soft">
@@ -270,7 +232,7 @@ export function BanksSettings({ settings, onChange }: Props) {
           <div>
             <CardTitle className="font-display text-base">Bancos</CardTitle>
             <CardDescription>
-              Lista dos bancos salvos. Use &quot;Novo banco&quot; para cadastrar com formulário limpo.
+              Lista dos bancos salvos. Use &quot;Novo banco&quot; para cadastrar. O Roteiro Operacional fica no cadastro do produto.
             </CardDescription>
           </div>
           <Button type="button" onClick={openCreateForm} disabled={saving || formOpen}>
@@ -305,7 +267,6 @@ export function BanksSettings({ settings, onChange }: Props) {
                             <AccessCheckIcon active={hasStormAccess(bank)} label="Storm" />
                             <AccessCheckIcon active={hasBankAccess(bank)} label="Banco" />
                             <AccessCheckIcon active={hasLinkAccess(bank)} label="Link" />
-                            <AccessCheckIcon active={hasGuideAccess(bank)} label="Roteiro" />
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -354,7 +315,7 @@ export function BanksSettings({ settings, onChange }: Props) {
               />
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-2">
               <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
                 <label className="flex items-start gap-2 text-sm">
                   <Checkbox
@@ -435,61 +396,6 @@ export function BanksSettings({ settings, onChange }: Props) {
                 ) : null}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-border/60 bg-muted/15 p-3">
-                <label className="flex items-start gap-2 text-sm">
-                  <Checkbox
-                    checked={draft.operationalGuideEnabled}
-                    onCheckedChange={(value) =>
-                      patchDraft({ operationalGuideEnabled: value === true })
-                    }
-                  />
-                  <span>
-                    <span className="font-medium">Roteiro Operacional</span>
-                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                      PDF + nome de exibição
-                    </span>
-                  </span>
-                </label>
-                {draft.operationalGuideEnabled ? (
-                  <div className="space-y-2">
-                    <CredentialField
-                      id="guide-name"
-                      label="Nome de exibição"
-                      value={draft.operationalGuide?.displayName ?? ""}
-                      onChange={(value) =>
-                        patchDraft({
-                          operationalGuide: {
-                            storageId: draft.operationalGuide?.storageId ?? "",
-                            fileName: draft.operationalGuide?.fileName ?? "",
-                            displayName: value,
-                          },
-                        })
-                      }
-                    />
-                    <label className="inline-flex">
-                      <input
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        className="hidden"
-                        onChange={(event) =>
-                          void handleGuideUpload(event.target.files?.[0] ?? null)
-                        }
-                      />
-                      <Button type="button" variant="outline" size="sm" asChild disabled={uploading}>
-                        <span>
-                          <FileUp className="size-3.5" />
-                          {uploading ? "Enviando…" : "Enviar PDF"}
-                        </span>
-                      </Button>
-                    </label>
-                    {draft.operationalGuide?.fileName ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        Arquivo: {draft.operationalGuide.fileName}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -524,7 +430,6 @@ export function BanksSettings({ settings, onChange }: Props) {
                 <AccessCheckIcon active={hasStormAccess(detailBank)} label="Storm" />
                 <AccessCheckIcon active={hasBankAccess(detailBank)} label="Banco" />
                 <AccessCheckIcon active={hasLinkAccess(detailBank)} label="Link" />
-                <AccessCheckIcon active={hasGuideAccess(detailBank)} label="Roteiro" />
               </div>
 
               {detailBank.stormAccessEnabled ? (
@@ -545,23 +450,6 @@ export function BanksSettings({ settings, onChange }: Props) {
                 </div>
               ) : null}
 
-              {hasGuideAccess(detailBank) ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Roteiro Operacional</p>
-                  <p className="text-sm text-muted-foreground">
-                    {detailBank.operationalGuide?.displayName ||
-                      detailBank.operationalGuide?.fileName}
-                  </p>
-                  <Button type="button" variant="outline" size="sm" asChild>
-                    <a
-                      href={`/api/banks/guides/${detailBank.operationalGuide!.storageId}`}
-                      download={detailBank.operationalGuide?.fileName || "roteiro.pdf"}
-                    >
-                      <Download className="size-3.5" /> Baixar PDF
-                    </a>
-                  </Button>
-                </div>
-              ) : null}
 
               <div className="space-y-1">
                 <p className="text-sm font-medium">Produtos vinculados</p>

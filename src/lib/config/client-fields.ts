@@ -60,17 +60,18 @@ export type ClientFieldId =
 
   | "data_ultima_parcela"
 
-  | "banco";
+  | "banco"
 
+  /** Campo dinâmico criado pelo master no produto. */
+  | `custom-${string}`;
 
 
 export type ClientFieldGroupId = "pessoais" | "profissionais" | "financeiros";
 
 
-
 export type ClientFieldDefinition = {
 
-  id: ClientFieldId;
+  id: Exclude<ClientFieldId, `custom-${string}`>;
 
   label: string;
 
@@ -220,18 +221,23 @@ export const LEGACY_CLIENT_FIELD_IDS: Record<string, ClientFieldId | null> = {
 
 
 
-export function clientFieldLabel(id: ClientFieldId): string {
+export function isCustomClientFieldId(id: string): boolean {
+  return String(id || "").startsWith("custom-");
+}
+
+export function clientFieldLabel(
+  id: string,
+  customFields?: Array<{ id: string; label: string }>,
+): string {
+  const custom = customFields?.find((field) => field.id === id);
+  if (custom?.label?.trim()) return custom.label.trim();
 
   for (const group of CLIENT_FIELD_GROUPS) {
-
     const field = group.fields.find((f) => f.id === id);
-
     if (field) return field.label;
-
   }
 
   return id;
-
 }
 
 

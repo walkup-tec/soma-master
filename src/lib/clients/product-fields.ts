@@ -12,10 +12,9 @@ export function productFieldsForImport(product: ProductConfig): {
   required: ProductFieldOption[];
   optional: ProductFieldOption[];
 } {
-  const requiredSet = new Set(product.requiredFieldIds);
   const toOption = (id: ClientFieldId, required: boolean): ProductFieldOption => ({
     id,
-    label: clientFieldLabel(id),
+    label: clientFieldLabel(id, product.customFields),
     required,
   });
 

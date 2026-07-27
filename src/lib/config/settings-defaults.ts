@@ -1,4 +1,10 @@
-import { ALL_CLIENT_FIELD_IDS, LEGACY_CLIENT_FIELD_IDS, type ClientFieldId } from "@/lib/config/client-fields";
+import {
+  ALL_CLIENT_FIELD_IDS,
+  LEGACY_CLIENT_FIELD_IDS,
+  isCustomClientFieldId,
+  type ClientFieldId,
+  type ClientFieldGroupId,
+} from "@/lib/config/client-fields";
 import { ALL_MENU_ITEM_IDS, type MenuItemId } from "@/lib/config/menu-items";
 import { resolveCategoryHomeMenuId } from "@/lib/config/category-utils";
 import type {
@@ -7,6 +13,8 @@ import type {
   ChatbotDaySchedule,
   ChatbotRuntimeConfig,
   ChatTagConfig,
+  ProductCustomField,
+  ProductOperationalGuide,
   SystemSettings,
   UserCategory,
   WeekdayId,
@@ -103,6 +111,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       partnerOnly: false,
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone", "tipo_cliente", "renda_mensal"],
+      customFields: [],
+      operationalGuideEnabled: false,
+      operationalGuide: null,
     },
     {
       id: "prod-fgts",
@@ -114,6 +125,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       partnerOnly: false,
       availableFieldIds: [],
       requiredFieldIds: ["nome", "cpf", "telefone"],
+      customFields: [],
+      operationalGuideEnabled: false,
+      operationalGuide: null,
     },
   ],
   banks: [],
@@ -136,6 +150,9 @@ export function createEmptyProduct(options?: {
     partnerOnly,
     availableFieldIds: [...ALL_CLIENT_FIELD_IDS],
     requiredFieldIds: [],
+    customFields: [],
+    operationalGuideEnabled: false,
+    operationalGuide: null,
   });
 }
 
@@ -393,17 +410,31 @@ export function normalizeBanks(banks: BankConfig[]): BankConfig[] {
 }
 
 function migrateClientFieldId(id: string): ClientFieldId | null {
-  if (ALL_CLIENT_FIELD_IDS.includes(id as ClientFieldId)) return id as ClientFieldId;
+  if ((ALL_CLIENT_FIELD_IDS as readonly string[]).includes(id)) return id as ClientFieldId;
   const legacy = LEGACY_CLIENT_FIELD_IDS[id];
   if (legacy === undefined) return null;
   return legacy;
 }
 
-function migrateFieldIdList(ids: string[]): ClientFieldId[] {
+const CUSTOM_FIELD_GROUPS = new Set<ClientFieldGroupId>([
+  "pessoais",
+  "profissionais",
+  "financeiros",
+]);
+
+function migrateFieldIdList(ids: string[], customIds: Set<string>): ClientFieldId[] {
   const result: ClientFieldId[] = [];
-  const seen = new Set<ClientFieldId>();
+  const seen = new Set<string>();
   for (const id of ids) {
-    const migrated = migrateClientFieldId(id);
+    const raw = String(id || "").trim();
+    if (!raw || seen.has(raw)) continue;
+    if (isCustomClientFieldId(raw)) {
+      if (!customIds.has(raw)) continue;
+      seen.add(raw);
+      result.push(raw as `custom-${string}`);
+      continue;
+    }
+    const migrated = migrateClientFieldId(raw);
     if (!migrated || seen.has(migrated)) continue;
     seen.add(migrated);
     result.push(migrated);
@@ -411,18 +442,56 @@ function migrateFieldIdList(ids: string[]): ClientFieldId[] {
   return result;
 }
 
+export function normalizeCustomFields(raw: unknown): ProductCustomField[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const result: ProductCustomField[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const id = String(row.id ?? "").trim();
+    const label = String(row.label ?? "").trim();
+    const groupId = String(row.groupId ?? "").trim() as ClientFieldGroupId;
+    if (!isCustomClientFieldId(id) || !label || !CUSTOM_FIELD_GROUPS.has(groupId)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push({ id: id as `custom-${string}`, label, groupId });
+  }
+  return result;
+}
+
+function normalizeOperationalGuide(raw: unknown): ProductOperationalGuide | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const storageId = String(row.storageId ?? "").trim();
+  if (!storageId) return null;
+  return {
+    storageId,
+    fileName: String(row.fileName ?? "").trim() || "roteiro.pdf",
+    displayName: String(row.displayName ?? "").trim(),
+  };
+}
+
 export function normalizeProductFields(
   product: import("@/lib/config/settings-types").ProductConfig,
 ): import("@/lib/config/settings-types").ProductConfig {
-  const requiredFieldIds = migrateFieldIdList(product.requiredFieldIds);
+  const customFields = normalizeCustomFields(product.customFields);
+  const customIdSet = new Set(customFields.map((field) => field.id));
+  const requiredFieldIds = migrateFieldIdList(product.requiredFieldIds ?? [], customIdSet);
   const requiredSet = new Set(requiredFieldIds);
-  const availableFieldIds = ALL_CLIENT_FIELD_IDS.filter((id) => !requiredSet.has(id));
+  const availableBuiltins = ALL_CLIENT_FIELD_IDS.filter((id) => !requiredSet.has(id));
+  const availableCustom = customFields.map((field) => field.id).filter((id) => !requiredSet.has(id));
+  const availableFieldIds = [...availableBuiltins, ...availableCustom];
   const name = String(product.name ?? "").trim();
   // Tag segue o nome do produto (sem campo separado na UI)
   const tag = name || String(product.tag ?? "").trim();
   const bankIds = Array.isArray(product.bankIds)
     ? [...new Set(product.bankIds.map((id) => String(id || "").trim()).filter(Boolean))]
     : [];
+  const operationalGuideEnabled = Boolean(product.operationalGuideEnabled);
+  const operationalGuide = operationalGuideEnabled
+    ? normalizeOperationalGuide(product.operationalGuide)
+    : null;
   return {
     ...product,
     name,
@@ -431,8 +500,11 @@ export function normalizeProductFields(
     bankIds,
     availableForPartners: Boolean(product.availableForPartners),
     partnerOnly: Boolean(product.partnerOnly),
+    customFields,
     availableFieldIds,
     requiredFieldIds,
+    operationalGuideEnabled: Boolean(operationalGuide),
+    operationalGuide,
   };
 }
 

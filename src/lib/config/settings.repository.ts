@@ -71,6 +71,26 @@ async function ensureSettingsSchemaOnce(sql: Awaited<ReturnType<typeof getSql>>)
     add column if not exists partner_only boolean not null default false
   `;
   await sql`
+    alter table crm.products
+    add column if not exists custom_fields jsonb not null default '[]'::jsonb
+  `;
+  await sql`
+    alter table crm.products
+    add column if not exists operational_guide_enabled boolean not null default false
+  `;
+  await sql`
+    alter table crm.products
+    add column if not exists operational_guide_display_name text not null default ''
+  `;
+  await sql`
+    alter table crm.products
+    add column if not exists operational_guide_file_name text not null default ''
+  `;
+  await sql`
+    alter table crm.products
+    add column if not exists operational_guide_storage_id text not null default ''
+  `;
+  await sql`
     alter table crm.banks
     add column if not exists storm_access_enabled boolean not null default false
   `;
@@ -156,9 +176,19 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
         color: string | null;
         available_for_partners: boolean | null;
         partner_only: boolean | null;
+        custom_fields: unknown;
+        operational_guide_enabled: boolean | null;
+        operational_guide_display_name: string | null;
+        operational_guide_file_name: string | null;
+        operational_guide_storage_id: string | null;
       }[]
     >`
-      select id, name, tag, color, available_for_partners, partner_only from crm.products order by name
+      select
+        id, name, tag, color, available_for_partners, partner_only, custom_fields,
+        operational_guide_enabled,
+        operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id
+      from crm.products
+      order by name
     `,
     sql<{ product_id: string; field_id: string; required: boolean }[]>`
       select product_id, field_id, required from crm.product_fields
@@ -244,6 +274,7 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
       })),
     products: products.map((product) => {
       const fields = fieldsByProduct.get(product.id) ?? { required: [], optional: [] };
+      const guideStorageId = String(product.operational_guide_storage_id ?? "").trim();
       return {
         id: product.id,
         name: product.name,
@@ -254,6 +285,15 @@ async function loadSystemSettingsFromPostgres(): Promise<SystemSettings> {
         partnerOnly: Boolean(product.partner_only),
         requiredFieldIds: fields.required,
         availableFieldIds: fields.optional,
+        customFields: Array.isArray(product.custom_fields) ? product.custom_fields : [],
+        operationalGuideEnabled: Boolean(product.operational_guide_enabled),
+        operationalGuide: guideStorageId
+          ? {
+              displayName: product.operational_guide_display_name ?? "",
+              fileName: product.operational_guide_file_name ?? "",
+              storageId: guideStorageId,
+            }
+          : null,
       };
     }),
     banks: banks.map((bank) => {
@@ -403,6 +443,11 @@ async function syncProductSubset(
     partner_only: partnerOnly,
     required_field_ids: product.requiredFieldIds,
     bank_ids: product.bankIds ?? [],
+    custom_fields: product.customFields ?? [],
+    operational_guide_enabled: Boolean(product.operationalGuideEnabled && product.operationalGuide?.storageId),
+    operational_guide_display_name: product.operationalGuide?.displayName || "",
+    operational_guide_file_name: product.operationalGuide?.fileName || "",
+    operational_guide_storage_id: product.operationalGuide?.storageId || "",
   }));
 
   await tx`
@@ -416,7 +461,12 @@ async function syncProductSubset(
         available_for_partners boolean,
         partner_only boolean,
         required_field_ids jsonb,
-        bank_ids jsonb
+        bank_ids jsonb,
+        custom_fields jsonb,
+        operational_guide_enabled boolean,
+        operational_guide_display_name text,
+        operational_guide_file_name text,
+        operational_guide_storage_id text
       )
     ),
     del_field_orphans as (
@@ -442,14 +492,33 @@ async function syncProductSubset(
       returning 1
     ),
     upsert_products as (
-      insert into crm.products (id, name, tag, color, available_for_partners, partner_only, updated_at)
-      select id, name, tag, color, available_for_partners, partner_only, now() from input
+      insert into crm.products (
+        id, name, tag, color, available_for_partners, partner_only,
+        custom_fields,
+        operational_guide_enabled,
+        operational_guide_display_name, operational_guide_file_name, operational_guide_storage_id,
+        updated_at
+      )
+      select
+        id, name, tag, color, available_for_partners, partner_only,
+        coalesce(custom_fields, '[]'::jsonb),
+        coalesce(operational_guide_enabled, false),
+        coalesce(operational_guide_display_name, ''),
+        coalesce(operational_guide_file_name, ''),
+        coalesce(operational_guide_storage_id, ''),
+        now()
+      from input
       on conflict (id) do update set
         name = excluded.name,
         tag = excluded.tag,
         color = excluded.color,
         available_for_partners = excluded.available_for_partners,
         partner_only = excluded.partner_only,
+        custom_fields = excluded.custom_fields,
+        operational_guide_enabled = excluded.operational_guide_enabled,
+        operational_guide_display_name = excluded.operational_guide_display_name,
+        operational_guide_file_name = excluded.operational_guide_file_name,
+        operational_guide_storage_id = excluded.operational_guide_storage_id,
         updated_at = now()
       returning id
     ),
@@ -479,7 +548,12 @@ async function syncProductSubset(
       available_for_partners boolean,
       partner_only boolean,
       required_field_ids jsonb,
-      bank_ids jsonb
+      bank_ids jsonb,
+      custom_fields jsonb,
+      operational_guide_enabled boolean,
+      operational_guide_display_name text,
+      operational_guide_file_name text,
+      operational_guide_storage_id text
     )
     cross join lateral jsonb_array_elements_text(coalesce(i.required_field_ids, '[]'::jsonb)) as field_id
     on conflict (product_id, field_id) do update set required = excluded.required
@@ -496,7 +570,12 @@ async function syncProductSubset(
       available_for_partners boolean,
       partner_only boolean,
       required_field_ids jsonb,
-      bank_ids jsonb
+      bank_ids jsonb,
+      custom_fields jsonb,
+      operational_guide_enabled boolean,
+      operational_guide_display_name text,
+      operational_guide_file_name text,
+      operational_guide_storage_id text
     )
     cross join lateral jsonb_array_elements_text(coalesce(i.bank_ids, '[]'::jsonb)) as bank_id
     where exists (select 1 from crm.banks b where b.id = bank_id)

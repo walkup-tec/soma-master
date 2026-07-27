@@ -81,3 +81,6 @@ export const uploadBankOperationalGuideFn = createServerFn({ method: "POST" })
     const buffer = Buffer.from(data.base64, "base64");
     return saveBankOperationalGuidePdf({ buffer, fileName: data.fileName });
   });
+
+/** Alias semântico — roteiro agora é do produto. */
+export const uploadProductOperationalGuideFn = uploadBankOperationalGuideFn;

@@ -1,4 +1,12 @@
-﻿## 2026-07-19 20:35 — Exclusão de funil com AlertDialog
+﻿
+## 2026-07-26 — Roteiro no produto + campos dinâmicos
+
+- Roteiro Operacional saiu de Bancos e entrou na penúltima etapa do wizard de Produto.
+- Master adiciona campos `custom-*` em Dados (disponível por padrão → obrigatório).
+- Persistência: `crm.products.custom_fields` + `operational_guide_*`.
+- Keywords: `roteiro`, `produto`, `custom-fields`, `master`
+
+## 2026-07-19 20:35 — Exclusão de funil com AlertDialog
 - Removido `window.confirm` nativo; modal in-app Cancelar/Excluir.
 - Commit `7b86fe5`
 - LOG: `doc/LOG-2026-07-19__203500__funil-excluir-alert-dialog.md`.
@@ -735,3 +743,4 @@
 - Producao ficou em build ~11:42 BRT (`500d21a`); `a7519bc` (dois bots) nao entrou ate Redeploy EasyPanel.
 - Validar: strings `Bots por janela` / `foraExpedienteBotId` no JS; Last-Modified do `index-*.js`.
 - Keywords: `deploy`, `easypanel`, `stale`, `foraExpedienteBotId`
+

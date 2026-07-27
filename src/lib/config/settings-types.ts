@@ -1,4 +1,4 @@
-import type { ClientFieldId } from "@/lib/config/client-fields";
+import type { ClientFieldId, ClientFieldGroupId } from "@/lib/config/client-fields";
 import type { MenuItemId } from "@/lib/config/menu-items";
 
 export type UserCategory = {
@@ -7,6 +7,20 @@ export type UserCategory = {
   menuIds: MenuItemId[];
   /** Primeira tela após o login — deve estar em `menuIds`. */
   homeMenuId: MenuItemId;
+};
+
+/** Campo extra criado pelo master em Dados do produto (`custom-…`). */
+export type ProductCustomField = {
+  id: `custom-${string}`;
+  label: string;
+  /** Grupo do wizard: pessoais | profissionais | financeiros */
+  groupId: ClientFieldGroupId;
+};
+
+export type ProductOperationalGuide = {
+  displayName: string;
+  fileName: string;
+  storageId: string;
 };
 
 export type ProductConfig = {
@@ -22,15 +36,18 @@ export type ProductConfig = {
   availableForPartners: boolean;
   /** Criado em Parceiros → Produtos: só aparece para parceiros, não em Produção própria. */
   partnerOnly: boolean;
+  /** Campos builtin + custom disponíveis (opcionais). */
   availableFieldIds: ClientFieldId[];
+  /** Campos builtin + custom obrigatórios. */
   requiredFieldIds: ClientFieldId[];
+  /** Metadados dos campos dinâmicos (label/grupo). */
+  customFields: ProductCustomField[];
+  operationalGuideEnabled: boolean;
+  operationalGuide: ProductOperationalGuide | null;
 };
 
-export type BankOperationalGuide = {
-  displayName: string;
-  fileName: string;
-  storageId: string;
-};
+/** @deprecated Roteiro passou para ProductConfig — mantido só para leitura legada de bancos. */
+export type BankOperationalGuide = ProductOperationalGuide;
 
 export type BankConfig = {
   id: string;
@@ -43,6 +60,7 @@ export type BankConfig = {
   bankUsername: string;
   bankPassword: string;
   bankLink: string;
+  /** Legado: roteiro agora é do produto. */
   operationalGuideEnabled: boolean;
   operationalGuide: BankOperationalGuide | null;
 };
