@@ -94,6 +94,8 @@ async function maybeReplyWithAi(conversationId: string, userText: string): Promi
 
   // O estado individual é soberano: o botão geral apenas aplica um comando em massa.
   if (!conversation?.aiEnabled) return;
+  // Bot e IA são mutuamente exclusivos
+  if (conversation.botEnabled) return;
   if (!isOpenAiConfigured()) {
     await appendMessage({
       conversationId,

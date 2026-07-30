@@ -17,6 +17,11 @@ export type ChatConversation = {
   contactNote: string | null;
   /** IA local da conversa — false quando atendente entra. */
   aiEnabled: boolean;
+  /**
+   * Bot de fluxo (expediente/fora) nesta conversa.
+   * Mutuamente exclusivo com aiEnabled: no máximo um ligado.
+   */
+  botEnabled: boolean;
   /** Execução ativa do bot de expediente (JSON). */
   botRun: BotRunState | null;
   lastMessageAt: string | null;
@@ -75,6 +80,11 @@ export type ChatAiSettings = {
    * mas cada conversa pode ser sobrescrita depois pelo seu próprio aiEnabled.
    */
   aiGlobalEnabled: boolean;
+  /**
+   * Estado do último comando geral do Bot de fluxo.
+   * Mutuamente exclusivo com aiGlobalEnabled: ligar um desliga o outro.
+   */
+  botGlobalEnabled: boolean;
   openaiModel: string;
   systemPrompt: string;
   /**
@@ -87,6 +97,8 @@ export type ChatAiSettings = {
 
 export const DEFAULT_CHAT_AI_SETTINGS: ChatAiSettings = {
   aiGlobalEnabled: false,
+  /** true por padrão: bots de expediente já existiam sem toggle. */
+  botGlobalEnabled: true,
   openaiModel: "gpt-4o-mini",
   systemPrompt: `Você é o assistente virtual da Soma Promotora no WhatsApp.
 Atenda com clareza, cordialidade e objetividade.

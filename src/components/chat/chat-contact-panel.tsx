@@ -234,6 +234,10 @@ export function ChatContactPanel({
           <p className="font-medium">{conversation.assignedUserName ?? "Não atribuído"}</p>
         </div>
         <div>
+          <p className="text-xs text-muted-foreground">Bot nesta conversa</p>
+          <p className="font-medium">{conversation.botEnabled !== false ? "Ligado" : "Pausado"}</p>
+        </div>
+        <div>
           <p className="text-xs text-muted-foreground">IA nesta conversa</p>
           <p className="font-medium">{conversation.aiEnabled ? "Ligada" : "Pausada"}</p>
         </div>
@@ -370,6 +374,10 @@ export function ChatContactPanel({
       <div>
         <p className="text-xs text-muted-foreground">Atendente</p>
         <p className="font-medium">{conversation.assignedUserName ?? "Não atribuído"}</p>
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">Bot nesta conversa</p>
+        <p className="font-medium">{conversation.botEnabled !== false ? "Ligado" : "Pausado"}</p>
       </div>
       <div>
         <p className="text-xs text-muted-foreground">IA nesta conversa</p>

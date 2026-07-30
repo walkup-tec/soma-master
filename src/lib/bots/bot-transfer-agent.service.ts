@@ -1,9 +1,9 @@
 import { isAgentOnline, listOnlineAgentIds } from "@/lib/chat/agent-presence.repository";
 import {
   appendMessage,
+  disableConversationAutomation,
   getConversation,
   joinConversationAsAgent,
-  setConversationAiEnabled,
 } from "@/lib/chat/chat.repository";
 import { takeRoundRobinIndex } from "@/lib/bots/bot-transfer-rr.repository";
 import type { BotNodeConfig, BotTransferMode } from "@/lib/bots/bot.types";
@@ -145,10 +145,7 @@ export async function applyBotTransferAgent(input: {
 
   if ("error" in resolved) {
     if (resolved.error === "__NO_ONLINE__") {
-      await setConversationAiEnabled({
-        conversationId: input.conversationId,
-        aiEnabled: false,
-      });
+      await disableConversationAutomation(input.conversationId);
       await appendMessage({
         conversationId: input.conversationId,
         direction: "outbound",
@@ -200,10 +197,7 @@ export async function applyBotTransferAgent(input: {
     });
   }
 
-  await setConversationAiEnabled({
-    conversationId: input.conversationId,
-    aiEnabled: false,
-  });
+  await disableConversationAutomation(input.conversationId);
 
   return {
     ok: true,

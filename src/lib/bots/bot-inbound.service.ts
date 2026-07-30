@@ -36,6 +36,8 @@ export async function maybeRunChatbotRuntime(input: {
 
   // Atendente humano assume a conversa
   if (conversation.assignedUserId) return false;
+  // Bot pausado nesta conversa
+  if (!conversation.botEnabled) return false;
 
   const settings = await loadSystemSettingsFromDisk();
   const selection = resolveChatbotRuntimeSelection(settings.chatbotRuntime);

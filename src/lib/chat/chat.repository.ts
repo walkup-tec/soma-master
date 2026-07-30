@@ -52,6 +52,7 @@ type ConvRow = {
   assigned_user_name: string | null;
   contact_note: string | null;
   ai_enabled: boolean;
+  bot_enabled?: boolean | null;
   bot_run?: unknown;
   last_message_at: Date | null;
   last_message_preview: string | null;
@@ -78,6 +79,7 @@ function mapConv(row: ConvRow): ChatConversation {
     assignedUserName: row.assigned_user_name,
     contactNote: row.contact_note ?? null,
     aiEnabled: row.ai_enabled,
+    botEnabled: row.bot_enabled !== false,
     botRun: mapBotRun(row.bot_run),
     lastMessageAt: row.last_message_at ? row.last_message_at.toISOString() : null,
     lastMessagePreview: row.last_message_preview,
@@ -109,7 +111,7 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
       select
         c.id, c.phone, c.contact_name, c.client_id, c.assigned_user_id, c.assigned_user_name,
         c.contact_note,
-        c.ai_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
+        c.ai_enabled, c.bot_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
         cl.data->>'nome' as client_name,
         cl.status as client_status,
@@ -135,6 +137,7 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
       .map((item) => ({
         ...item,
         contactNote: item.contactNote ?? null,
+        botEnabled: item.botEnabled !== false,
         botRun: item.botRun ?? null,
       }))
       .sort((a, b) =>
@@ -238,7 +241,7 @@ export async function getOrCreateConversationByPhone(input: {
     return withChatDb(async (sql) => {
       const existing = await sql<ConvRow[]>`
         select id, phone, contact_name, client_id, assigned_user_id, assigned_user_name, contact_note,
-               ai_enabled, bot_run, last_message_at, last_message_preview, unread_count, created_at, updated_at
+               ai_enabled, bot_enabled, bot_run, last_message_at, last_message_preview, unread_count, created_at, updated_at
         from crm.chat_conversations where phone = ${phone} limit 1
       `;
       if (existing[0]) {
@@ -253,25 +256,32 @@ export async function getOrCreateConversationByPhone(input: {
       }
 
       const linked = await findClientIdByPhone(phone);
-      const aiSettings = await sql<{ ai_global_enabled: boolean }[]>`
-        select ai_global_enabled
+      const aiSettings = await sql<{ ai_global_enabled: boolean; bot_global_enabled: boolean | null }[]>`
+        select ai_global_enabled, bot_global_enabled
         from crm.chat_ai_settings
         where id = 'default'
         limit 1
       `;
-      const initialAiEnabled =
+      let initialBotEnabled =
+        aiSettings[0]?.bot_global_enabled ?? DEFAULT_CHAT_AI_SETTINGS.botGlobalEnabled;
+      let initialAiEnabled =
         aiSettings[0]?.ai_global_enabled ?? DEFAULT_CHAT_AI_SETTINGS.aiGlobalEnabled;
+      // Exclusão mútua na criação
+      if (initialBotEnabled && initialAiEnabled) {
+        initialAiEnabled = false;
+      }
       const id = `chat-${crypto.randomUUID().slice(0, 10)}`;
       const now = new Date();
       await sql`
         insert into crm.chat_conversations (
-          id, phone, contact_name, client_id, ai_enabled, created_at, updated_at
+          id, phone, contact_name, client_id, ai_enabled, bot_enabled, created_at, updated_at
         ) values (
           ${id},
           ${phone},
           ${input.contactName ?? linked?.name ?? null},
           ${linked?.clientId ?? null},
           ${initialAiEnabled},
+          ${initialBotEnabled},
           ${now},
           ${now}
         )
@@ -285,6 +295,7 @@ export async function getOrCreateConversationByPhone(input: {
         assignedUserName: null,
         contactNote: null,
         aiEnabled: initialAiEnabled,
+        botEnabled: initialBotEnabled,
         botRun: null,
         lastMessageAt: null,
         lastMessagePreview: null,
@@ -297,8 +308,17 @@ export async function getOrCreateConversationByPhone(input: {
 
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
   const found = items.find((c) => c.phone === phone);
-  if (found) return { ...found, botRun: found.botRun ?? null };
-  const initialAiEnabled = (await getChatAiSettings()).aiGlobalEnabled;
+  if (found) {
+    return {
+      ...found,
+      botEnabled: found.botEnabled !== false,
+      botRun: found.botRun ?? null,
+    };
+  }
+  const settings = await getChatAiSettings();
+  let initialBotEnabled = settings.botGlobalEnabled;
+  let initialAiEnabled = settings.aiGlobalEnabled;
+  if (initialBotEnabled && initialAiEnabled) initialAiEnabled = false;
   const now = new Date().toISOString();
   const created: ChatConversation = {
     id: `chat-${crypto.randomUUID().slice(0, 10)}`,
@@ -309,6 +329,7 @@ export async function getOrCreateConversationByPhone(input: {
     assignedUserName: null,
     contactNote: null,
     aiEnabled: initialAiEnabled,
+    botEnabled: initialBotEnabled,
     botRun: null,
     lastMessageAt: null,
     lastMessagePreview: null,
@@ -651,13 +672,25 @@ export async function setConversationAiEnabled(input: {
   conversationId: string;
   aiEnabled: boolean;
 }): Promise<void> {
+  // Ligar IA desliga Bot nesta conversa (exclusão mútua).
+  const botEnabled = input.aiEnabled ? false : undefined;
   if (isDatabaseEnabled()) {
     await withChatDb(
-      (sql) => sql`
-        update crm.chat_conversations
-        set ai_enabled = ${input.aiEnabled}, updated_at = now()
-        where id = ${input.conversationId}
-      `,
+      (sql) =>
+        botEnabled === false
+          ? sql`
+              update crm.chat_conversations
+              set ai_enabled = ${input.aiEnabled},
+                  bot_enabled = false,
+                  bot_run = null,
+                  updated_at = now()
+              where id = ${input.conversationId}
+            `
+          : sql`
+              update crm.chat_conversations
+              set ai_enabled = ${input.aiEnabled}, updated_at = now()
+              where id = ${input.conversationId}
+            `,
     );
     return;
   }
@@ -666,7 +699,88 @@ export async function setConversationAiEnabled(input: {
     CONV_FILE,
     convs.map((c) =>
       c.id === input.conversationId
-        ? { ...c, aiEnabled: input.aiEnabled, updatedAt: new Date().toISOString() }
+        ? {
+            ...c,
+            aiEnabled: input.aiEnabled,
+            botEnabled: input.aiEnabled ? false : (c.botEnabled !== false),
+            botRun: input.aiEnabled ? null : c.botRun,
+            updatedAt: new Date().toISOString(),
+          }
+        : c,
+    ),
+  );
+}
+
+export async function setConversationBotEnabled(input: {
+  conversationId: string;
+  botEnabled: boolean;
+}): Promise<void> {
+  // Ligar Bot desliga IA nesta conversa (exclusão mútua).
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) =>
+        input.botEnabled
+          ? sql`
+              update crm.chat_conversations
+              set bot_enabled = true,
+                  ai_enabled = false,
+                  updated_at = now()
+              where id = ${input.conversationId}
+            `
+          : sql`
+              update crm.chat_conversations
+              set bot_enabled = false,
+                  bot_run = null,
+                  updated_at = now()
+              where id = ${input.conversationId}
+            `,
+    );
+    return;
+  }
+  const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  await writeJsonFile(
+    CONV_FILE,
+    convs.map((c) =>
+      c.id === input.conversationId
+        ? {
+            ...c,
+            botEnabled: input.botEnabled,
+            aiEnabled: input.botEnabled ? false : c.aiEnabled,
+            botRun: input.botEnabled ? c.botRun : null,
+            updatedAt: new Date().toISOString(),
+          }
+        : c,
+    ),
+  );
+}
+
+/** Desliga IA e Bot na conversa (ex.: transferência / mensagem humana). */
+export async function disableConversationAutomation(conversationId: string): Promise<void> {
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) => sql`
+        update crm.chat_conversations
+        set ai_enabled = false,
+            bot_enabled = false,
+            bot_run = null,
+            updated_at = now()
+        where id = ${conversationId}
+      `,
+    );
+    return;
+  }
+  const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  await writeJsonFile(
+    CONV_FILE,
+    convs.map((c) =>
+      c.id === conversationId
+        ? {
+            ...c,
+            aiEnabled: false,
+            botEnabled: false,
+            botRun: null,
+            updatedAt: new Date().toISOString(),
+          }
         : c,
     ),
   );
@@ -698,26 +812,72 @@ export async function setConversationBotRun(input: {
   );
 }
 
-/** Aplica o comando geral de IA a todas as conversas. */
+/** Aplica o comando geral de IA a todas as conversas. Ligar IA desliga Bot em massa. */
 export async function setAiEnabledForAllConversations(aiEnabled: boolean): Promise<void> {
   if (isDatabaseEnabled()) {
     await withChatDb(
-      (sql) => sql`
-        update crm.chat_conversations
-        set ai_enabled = ${aiEnabled}, updated_at = now()
-        where ai_enabled is distinct from ${aiEnabled}
-      `,
+      (sql) =>
+        aiEnabled
+          ? sql`
+              update crm.chat_conversations
+              set ai_enabled = true,
+                  bot_enabled = false,
+                  bot_run = null,
+                  updated_at = now()
+            `
+          : sql`
+              update crm.chat_conversations
+              set ai_enabled = false, updated_at = now()
+              where ai_enabled is distinct from false
+            `,
     );
     return;
   }
   const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
   await writeJsonFile(
     CONV_FILE,
-    convs.map((c) =>
-      c.aiEnabled !== aiEnabled
-        ? { ...c, aiEnabled, updatedAt: new Date().toISOString() }
-        : c,
-    ),
+    convs.map((c) => ({
+      ...c,
+      aiEnabled,
+      botEnabled: aiEnabled ? false : (c.botEnabled !== false),
+      botRun: aiEnabled ? null : c.botRun,
+      updatedAt: new Date().toISOString(),
+    })),
+  );
+}
+
+/** Aplica o comando geral do Bot a todas as conversas. Ligar Bot desliga IA em massa. */
+export async function setBotEnabledForAllConversations(botEnabled: boolean): Promise<void> {
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) =>
+        botEnabled
+          ? sql`
+              update crm.chat_conversations
+              set bot_enabled = true,
+                  ai_enabled = false,
+                  updated_at = now()
+            `
+          : sql`
+              update crm.chat_conversations
+              set bot_enabled = false,
+                  bot_run = null,
+                  updated_at = now()
+              where bot_enabled is distinct from false
+            `,
+    );
+    return;
+  }
+  const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  await writeJsonFile(
+    CONV_FILE,
+    convs.map((c) => ({
+      ...c,
+      botEnabled,
+      aiEnabled: botEnabled ? false : c.aiEnabled,
+      botRun: botEnabled ? c.botRun : null,
+      updatedAt: new Date().toISOString(),
+    })),
   );
 }
 
@@ -726,20 +886,22 @@ export async function getChatAiSettings(): Promise<ChatAiSettings> {
     return withChatDb(async (sql) => {
       const rows = await sql<{
         ai_global_enabled: boolean;
+        bot_global_enabled: boolean | null;
         openai_model: string;
         system_prompt: string;
         webhook_public_base_url: string | null;
         updated_at: Date;
       }[]>`
-        select ai_global_enabled, openai_model, system_prompt, webhook_public_base_url, updated_at
+        select ai_global_enabled, bot_global_enabled, openai_model, system_prompt, webhook_public_base_url, updated_at
         from crm.chat_ai_settings where id = 'default' limit 1
       `;
       if (!rows[0]) {
         await sql`
-          insert into crm.chat_ai_settings (id, ai_global_enabled, openai_model, system_prompt, updated_at)
+          insert into crm.chat_ai_settings (id, ai_global_enabled, bot_global_enabled, openai_model, system_prompt, updated_at)
           values (
             'default',
             ${DEFAULT_CHAT_AI_SETTINGS.aiGlobalEnabled},
+            ${DEFAULT_CHAT_AI_SETTINGS.botGlobalEnabled},
             ${DEFAULT_CHAT_AI_SETTINGS.openaiModel},
             ${DEFAULT_CHAT_AI_SETTINGS.systemPrompt},
             now()
@@ -750,6 +912,7 @@ export async function getChatAiSettings(): Promise<ChatAiSettings> {
       }
       return {
         aiGlobalEnabled: rows[0].ai_global_enabled,
+        botGlobalEnabled: rows[0].bot_global_enabled !== false,
         openaiModel: rows[0].openai_model,
         systemPrompt: rows[0].system_prompt,
         webhookPublicBaseUrl: rows[0].webhook_public_base_url?.trim() ?? "",
@@ -761,14 +924,23 @@ export async function getChatAiSettings(): Promise<ChatAiSettings> {
   return {
     ...DEFAULT_CHAT_AI_SETTINGS,
     ...fromFile,
+    botGlobalEnabled: fromFile.botGlobalEnabled !== false,
     webhookPublicBaseUrl: fromFile.webhookPublicBaseUrl?.trim() ?? "",
   };
 }
 
 export async function saveChatAiSettings(input: Partial<ChatAiSettings>): Promise<ChatAiSettings> {
   const current = await getChatAiSettings();
+  let aiGlobalEnabled = input.aiGlobalEnabled ?? current.aiGlobalEnabled;
+  let botGlobalEnabled = input.botGlobalEnabled ?? current.botGlobalEnabled;
+  // Exclusão mútua nos globais quando ambos viriam ligados
+  if (input.aiGlobalEnabled === true) botGlobalEnabled = false;
+  if (input.botGlobalEnabled === true) aiGlobalEnabled = false;
+  if (aiGlobalEnabled && botGlobalEnabled) aiGlobalEnabled = false;
+
   const next: ChatAiSettings = {
-    aiGlobalEnabled: input.aiGlobalEnabled ?? current.aiGlobalEnabled,
+    aiGlobalEnabled,
+    botGlobalEnabled,
     openaiModel: (input.openaiModel ?? current.openaiModel).trim() || "gpt-4o-mini",
     systemPrompt: (input.systemPrompt ?? current.systemPrompt).trim() || DEFAULT_CHAT_AI_SETTINGS.systemPrompt,
     webhookPublicBaseUrl:
@@ -782,11 +954,12 @@ export async function saveChatAiSettings(input: Partial<ChatAiSettings>): Promis
     await withChatDb(
       (sql) => sql`
         insert into crm.chat_ai_settings (
-          id, ai_global_enabled, openai_model, system_prompt, webhook_public_base_url, updated_at
+          id, ai_global_enabled, bot_global_enabled, openai_model, system_prompt, webhook_public_base_url, updated_at
         )
         values (
           'default',
           ${next.aiGlobalEnabled},
+          ${next.botGlobalEnabled},
           ${next.openaiModel},
           ${next.systemPrompt},
           ${next.webhookPublicBaseUrl || null},
@@ -794,6 +967,7 @@ export async function saveChatAiSettings(input: Partial<ChatAiSettings>): Promis
         )
         on conflict (id) do update set
           ai_global_enabled = excluded.ai_global_enabled,
+          bot_global_enabled = excluded.bot_global_enabled,
           openai_model = excluded.openai_model,
           system_prompt = excluded.system_prompt,
           webhook_public_base_url = excluded.webhook_public_base_url,

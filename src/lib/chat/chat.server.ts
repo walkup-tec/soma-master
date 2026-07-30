@@ -18,7 +18,10 @@ import {
   markConversationRead,
   saveChatAiSettings,
   setAiEnabledForAllConversations,
+  setBotEnabledForAllConversations,
   setConversationAiEnabled,
+  setConversationBotEnabled,
+  disableConversationAutomation,
   transferConversation,
   unassignConversation,
   upsertAiExample,
@@ -297,7 +300,20 @@ export const setChatConversationAiFn = createServerFn({ method: "POST" })
     return getConversation(data.conversationId);
   });
 
-/** Aplica o estado geral da IA a todos os atendimentos. */
+export const setChatConversationBotFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { conversationId?: string; botEnabled?: boolean };
+    const conversationId = String(body.conversationId ?? "").trim();
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    return { conversationId, botEnabled: Boolean(body.botEnabled) };
+  })
+  .handler(async ({ data }) => {
+    await requireChatUser();
+    await setConversationBotEnabled(data);
+    return getConversation(data.conversationId);
+  });
+
+/** Aplica o estado geral da IA a todos os atendimentos. Ligar IA desliga Bot. */
 export const setChatAiGlobalEnabledFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const body = data as { enabled?: boolean };
@@ -306,8 +322,28 @@ export const setChatAiGlobalEnabledFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     await requireChatUser();
-    const saved = await saveChatAiSettings({ aiGlobalEnabled: data.enabled });
+    const saved = await saveChatAiSettings({
+      aiGlobalEnabled: data.enabled,
+      ...(data.enabled ? { botGlobalEnabled: false } : {}),
+    });
     await setAiEnabledForAllConversations(data.enabled);
+    return saved;
+  });
+
+/** Aplica o estado geral do Bot a todos os atendimentos. Ligar Bot desliga IA. */
+export const setChatBotGlobalEnabledFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { enabled?: boolean };
+    if (typeof body.enabled !== "boolean") throw new Error("Informe se o Bot deve ligar ou desligar.");
+    return { enabled: body.enabled };
+  })
+  .handler(async ({ data }) => {
+    await requireChatUser();
+    const saved = await saveChatAiSettings({
+      botGlobalEnabled: data.enabled,
+      ...(data.enabled ? { aiGlobalEnabled: false } : {}),
+    });
+    await setBotEnabledForAllConversations(data.enabled);
     return saved;
   });
 
@@ -322,10 +358,7 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await requireChatUser();
     // Enviar NÃO atribui — só o botão Atribuir coloca em Meus.
-    await setConversationAiEnabled({
-      conversationId: data.conversationId,
-      aiEnabled: false,
-    });
+    await disableConversationAutomation(data.conversationId);
     const conversation = await getConversation(data.conversationId);
     if (!conversation) throw new Error("Conversa não encontrada.");
 
@@ -429,7 +462,7 @@ export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
 
     const meta = await finalizeChatImageUpload(data.mediaId);
     // Enviar imagem NÃO atribui — só o botão Atribuir coloca em Meus.
-    await setConversationAiEnabled({ conversationId: conversation.id, aiEnabled: false });
+    await disableConversationAutomation(conversation.id);
 
     const message = await appendMessage({
       conversationId: conversation.id,
@@ -807,11 +840,13 @@ export const saveChatAiEducationFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const body = data as {
       aiGlobalEnabled?: boolean;
+      botGlobalEnabled?: boolean;
       openaiModel?: string;
       systemPrompt?: string;
     };
     return {
       aiGlobalEnabled: body.aiGlobalEnabled,
+      botGlobalEnabled: body.botGlobalEnabled,
       openaiModel: body.openaiModel,
       systemPrompt: body.systemPrompt,
     };
@@ -821,6 +856,9 @@ export const saveChatAiEducationFn = createServerFn({ method: "POST" })
     const saved = await saveChatAiSettings(data);
     if (typeof data.aiGlobalEnabled === "boolean") {
       await setAiEnabledForAllConversations(data.aiGlobalEnabled);
+    }
+    if (typeof data.botGlobalEnabled === "boolean") {
+      await setBotEnabledForAllConversations(data.botGlobalEnabled);
     }
     return saved;
   });

@@ -9,6 +9,7 @@ import {
   Loader2,
   MessageCircle,
   Paperclip,
+  Bot,
   Search,
   Send,
   Sparkles,
@@ -40,7 +41,9 @@ import {
   listChatConversationsFn,
   sendChatMessageFn,
   setChatAiGlobalEnabledFn,
+  setChatBotGlobalEnabledFn,
   setChatConversationAiFn,
+  setChatConversationBotFn,
   unassignChatConversationFn,
 } from "@/lib/chat/chat.server";
 import {
@@ -89,7 +92,9 @@ export function ChatInboxScreen({
   const finalizeAndSendImage = useServerFn(finalizeAndSendChatImageFn);
   const attachChatMediaToClient = useServerFn(attachChatMediaToClientFn);
   const setConvAi = useServerFn(setChatConversationAiFn);
+  const setConvBot = useServerFn(setChatConversationBotFn);
   const setAiGlobal = useServerFn(setChatAiGlobalEnabledFn);
+  const setBotGlobal = useServerFn(setChatBotGlobalEnabledFn);
   const addNote = useServerFn(addChatAttendanceNoteFn);
   const { setViewingConversationId } = useChatbotAlert();
 
@@ -113,8 +118,13 @@ export function ChatInboxScreen({
   const [query, setQuery] = useState("");
   const [composer, setComposer] = useState<ComposerMode>("reply");
   const [aiGlobalEnabled, setAiGlobalEnabled] = useState(bootstrap.aiSettings.aiGlobalEnabled);
+  const [botGlobalEnabled, setBotGlobalEnabled] = useState(
+    bootstrap.aiSettings.botGlobalEnabled !== false,
+  );
   const [togglingAiGlobal, setTogglingAiGlobal] = useState(false);
+  const [togglingBotGlobal, setTogglingBotGlobal] = useState(false);
   const [togglingConversationId, setTogglingConversationId] = useState<string | null>(null);
+  const [togglingBotConversationId, setTogglingBotConversationId] = useState<string | null>(null);
   // Nome/WhatsApp digitados no formulário Vincular ao CRM — o cabeçalho Contato espelha
   const [contactDraft, setContactDraft] = useState<{ name: string; phone: string }>({
     name: "",
@@ -183,7 +193,7 @@ export function ChatInboxScreen({
   }
 
   async function toggleConversationAi(conversation: ChatConversation) {
-    if (togglingConversationId) return;
+    if (togglingConversationId || togglingBotConversationId) return;
     setTogglingConversationId(conversation.id);
     try {
       const next = await setConvAi({
@@ -202,6 +212,29 @@ export function ChatInboxScreen({
       toast.error(error instanceof Error ? error.message : "Falha ao alterar IA");
     } finally {
       setTogglingConversationId(null);
+    }
+  }
+
+  async function toggleConversationBot(conversation: ChatConversation) {
+    if (togglingConversationId || togglingBotConversationId) return;
+    setTogglingBotConversationId(conversation.id);
+    try {
+      const next = await setConvBot({
+        data: {
+          conversationId: conversation.id,
+          botEnabled: !(conversation.botEnabled !== false),
+        },
+      });
+      if (!next) throw new Error("Conversa não encontrada.");
+      setConversations((current) =>
+        current.map((item) => (item.id === next.id ? { ...item, ...next } : item)),
+      );
+      if (active?.id === next.id) setActive((current) => (current ? { ...current, ...next } : next));
+      toast.success(next.botEnabled ? "Bot ativado nesta conversa" : "Bot pausado nesta conversa");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao alterar Bot");
+    } finally {
+      setTogglingBotConversationId(null);
     }
   }
 
@@ -402,6 +435,7 @@ export function ChatInboxScreen({
             lastMessageAt: now,
             lastMessagePreview: `📷 ${caption || "Imagem"}`,
             aiEnabled: false,
+            botEnabled: false,
           }
         : prev,
     );
@@ -413,6 +447,7 @@ export function ChatInboxScreen({
               lastMessageAt: now,
               lastMessagePreview: `📷 ${caption || "Imagem"}`,
               aiEnabled: false,
+              botEnabled: false,
             }
           : conversation,
       ),
@@ -501,6 +536,7 @@ export function ChatInboxScreen({
               lastMessageAt: now,
               lastMessagePreview: body.slice(0, 120),
               aiEnabled: false,
+              botEnabled: false,
             }
           : c,
       ),
@@ -511,6 +547,7 @@ export function ChatInboxScreen({
         lastMessageAt: now,
         lastMessagePreview: body.slice(0, 120),
         aiEnabled: false,
+        botEnabled: false,
       });
     }
 
@@ -542,22 +579,30 @@ export function ChatInboxScreen({
     const next = !aiGlobalEnabled;
     setTogglingAiGlobal(true);
     setAiGlobalEnabled(next); // otimista
+    if (next) setBotGlobalEnabled(false);
     try {
       const saved = await setAiGlobal({ data: { enabled: next } });
       setAiGlobalEnabled(saved.aiGlobalEnabled);
-      // O comando geral aplica o estado a todas; depois cada chat pode sobrescrever.
+      setBotGlobalEnabled(saved.botGlobalEnabled !== false);
       setConversations((prev) =>
         prev.map((conversation) => ({
           ...conversation,
           aiEnabled: saved.aiGlobalEnabled,
+          botEnabled: saved.aiGlobalEnabled ? false : conversation.botEnabled,
         })),
       );
       setActive((prev) =>
-        prev ? { ...prev, aiEnabled: saved.aiGlobalEnabled } : prev,
+        prev
+          ? {
+              ...prev,
+              aiEnabled: saved.aiGlobalEnabled,
+              botEnabled: saved.aiGlobalEnabled ? false : prev.botEnabled,
+            }
+          : prev,
       );
       toast.success(
         saved.aiGlobalEnabled
-          ? "IA ligada em todos os atendimentos"
+          ? "IA ligada em todos os atendimentos (Bot desligado)"
           : "IA desligada em todos os atendimentos",
       );
     } catch (error) {
@@ -565,6 +610,44 @@ export function ChatInboxScreen({
       toast.error(error instanceof Error ? error.message : "Falha ao alterar IA global");
     } finally {
       setTogglingAiGlobal(false);
+    }
+  }
+
+  async function handleToggleBotGlobal() {
+    const next = !botGlobalEnabled;
+    setTogglingBotGlobal(true);
+    setBotGlobalEnabled(next);
+    if (next) setAiGlobalEnabled(false);
+    try {
+      const saved = await setBotGlobal({ data: { enabled: next } });
+      setBotGlobalEnabled(saved.botGlobalEnabled !== false);
+      setAiGlobalEnabled(saved.aiGlobalEnabled);
+      setConversations((prev) =>
+        prev.map((conversation) => ({
+          ...conversation,
+          botEnabled: saved.botGlobalEnabled !== false,
+          aiEnabled: saved.botGlobalEnabled !== false ? false : conversation.aiEnabled,
+        })),
+      );
+      setActive((prev) =>
+        prev
+          ? {
+              ...prev,
+              botEnabled: saved.botGlobalEnabled !== false,
+              aiEnabled: saved.botGlobalEnabled !== false ? false : prev.aiEnabled,
+            }
+          : prev,
+      );
+      toast.success(
+        saved.botGlobalEnabled !== false
+          ? "Bot ligado em todos os atendimentos (IA desligada)"
+          : "Bot desligado em todos os atendimentos",
+      );
+    } catch (error) {
+      setBotGlobalEnabled(!next);
+      toast.error(error instanceof Error ? error.message : "Falha ao alterar Bot global");
+    } finally {
+      setTogglingBotGlobal(false);
     }
   }
 
@@ -595,39 +678,72 @@ export function ChatInboxScreen({
             <div>
               <h2 className="font-display text-sm font-semibold">Inbox WhatsApp</h2>
               <p className="text-[11px] text-muted-foreground">
-                IA global: {aiGlobalEnabled ? "ligada" : "desligada"}
+                Bot: {botGlobalEnabled ? "ligado" : "desligado"} · IA:{" "}
+                {aiGlobalEnabled ? "ligada" : "desligada"}
               </p>
             </div>
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className={cn(
-                "size-9 shrink-0 cursor-pointer transition-colors",
-                aiGlobalEnabled
-                  ? "border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white"
-                  : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-              disabled={togglingAiGlobal}
-              aria-pressed={aiGlobalEnabled}
-              aria-label={
-                aiGlobalEnabled
-                  ? "Desligar IA em todos os atendimentos"
-                  : "Ligar IA em todos os atendimentos"
-              }
-              title={
-                aiGlobalEnabled
-                  ? "Desligar IA em todos os atendimentos"
-                  : "Ligar IA em todos os atendimentos"
-              }
-              onClick={() => void handleToggleAiGlobal()}
-            >
-              {togglingAiGlobal ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Sparkles className="size-4" />
-              )}
-            </Button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className={cn(
+                  "size-9 shrink-0 cursor-pointer transition-colors",
+                  botGlobalEnabled
+                    ? "border-sky-600 bg-sky-600 text-white hover:border-sky-700 hover:bg-sky-700 hover:text-white"
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                disabled={togglingBotGlobal || togglingAiGlobal}
+                aria-pressed={botGlobalEnabled}
+                aria-label={
+                  botGlobalEnabled
+                    ? "Desligar Bot em todos os atendimentos"
+                    : "Ligar Bot em todos os atendimentos"
+                }
+                title={
+                  botGlobalEnabled
+                    ? "Desligar Bot em todos os atendimentos"
+                    : "Ligar Bot em todos os atendimentos (desliga a IA)"
+                }
+                onClick={() => void handleToggleBotGlobal()}
+              >
+                {togglingBotGlobal ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Bot className="size-4" />
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className={cn(
+                  "size-9 shrink-0 cursor-pointer transition-colors",
+                  aiGlobalEnabled
+                    ? "border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white"
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                disabled={togglingAiGlobal || togglingBotGlobal}
+                aria-pressed={aiGlobalEnabled}
+                aria-label={
+                  aiGlobalEnabled
+                    ? "Desligar IA em todos os atendimentos"
+                    : "Ligar IA em todos os atendimentos"
+                }
+                title={
+                  aiGlobalEnabled
+                    ? "Desligar IA em todos os atendimentos"
+                    : "Ligar IA em todos os atendimentos (desliga o Bot)"
+                }
+                onClick={() => void handleToggleAiGlobal()}
+              >
+                {togglingAiGlobal ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+              </Button>
+            </div>
           </div>
           <div
             className="inline-flex w-full gap-1 rounded-lg bg-muted p-1 text-muted-foreground"
@@ -716,6 +832,40 @@ export function ChatInboxScreen({
                       ) : null}
                       <button
                         type="button"
+                        aria-pressed={conv.botEnabled !== false}
+                        aria-label={
+                          conv.botEnabled !== false
+                            ? "Pausar Bot nesta conversa"
+                            : "Ativar Bot nesta conversa"
+                        }
+                        title={
+                          conv.botEnabled !== false
+                            ? "Bot ativo — clique para pausar"
+                            : "Bot pausado — clique para ativar (desliga a IA)"
+                        }
+                        disabled={
+                          togglingBotConversationId === conv.id ||
+                          togglingConversationId === conv.id
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void toggleConversationBot(conv);
+                        }}
+                        className={cn(
+                          "grid size-7 shrink-0 cursor-pointer place-items-center rounded-lg border transition-colors disabled:cursor-wait disabled:opacity-60",
+                          conv.botEnabled !== false
+                            ? "border-sky-600 bg-sky-600 text-white hover:border-sky-700 hover:bg-sky-700 hover:text-white"
+                            : "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                        )}
+                      >
+                        {togglingBotConversationId === conv.id ? (
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Bot className="size-3.5" aria-hidden="true" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
                         aria-pressed={conv.aiEnabled}
                         aria-label={
                           conv.aiEnabled
@@ -725,9 +875,12 @@ export function ChatInboxScreen({
                         title={
                           conv.aiEnabled
                             ? "IA ativa — clique para pausar"
-                            : "IA pausada — clique para ativar"
+                            : "IA pausada — clique para ativar (desliga o Bot)"
                         }
-                        disabled={togglingConversationId === conv.id}
+                        disabled={
+                          togglingConversationId === conv.id ||
+                          togglingBotConversationId === conv.id
+                        }
                         onClick={(event) => {
                           event.stopPropagation();
                           void toggleConversationAi(conv);
@@ -923,6 +1076,42 @@ export function ChatInboxScreen({
                 variant="outline"
                 className={cn(
                   "size-9 shrink-0 cursor-pointer transition-colors",
+                  active?.botEnabled !== false
+                    ? "border-sky-600 bg-sky-600 text-white hover:border-sky-700 hover:bg-sky-700 hover:text-white"
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                aria-pressed={Boolean(active && active.botEnabled !== false)}
+                aria-label={
+                  active?.botEnabled !== false
+                    ? "Pausar Bot nesta conversa"
+                    : "Ativar Bot nesta conversa"
+                }
+                title={
+                  active?.botEnabled !== false
+                    ? "Pausar Bot nesta conversa"
+                    : "Ativar Bot nesta conversa (desliga a IA)"
+                }
+                disabled={
+                  !active ||
+                  togglingBotConversationId === active.id ||
+                  togglingConversationId === active.id
+                }
+                onClick={() => {
+                  if (active) void toggleConversationBot(active);
+                }}
+              >
+                {active && togglingBotConversationId === active.id ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Bot className="size-4" />
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className={cn(
+                  "size-9 shrink-0 cursor-pointer transition-colors",
                   active?.aiEnabled
                     ? "border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 hover:text-white"
                     : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -931,8 +1120,16 @@ export function ChatInboxScreen({
                 aria-label={
                   active?.aiEnabled ? "Pausar IA nesta conversa" : "Ativar IA nesta conversa"
                 }
-                title={active?.aiEnabled ? "Pausar IA nesta conversa" : "Ativar IA nesta conversa"}
-                disabled={!active || togglingConversationId === active.id}
+                title={
+                  active?.aiEnabled
+                    ? "Pausar IA nesta conversa"
+                    : "Ativar IA nesta conversa (desliga o Bot)"
+                }
+                disabled={
+                  !active ||
+                  togglingConversationId === active.id ||
+                  togglingBotConversationId === active.id
+                }
                 onClick={() => {
                   if (active) void toggleConversationAi(active);
                 }}
