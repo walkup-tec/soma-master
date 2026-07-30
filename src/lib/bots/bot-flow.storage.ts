@@ -5,11 +5,11 @@ import {
 } from "@/lib/bots/bot-flow.normalize";
 import type { BotFlowDraft } from "@/lib/bots/bot.types";
 
-const STORAGE_KEY = "soma-bots-flows-v1";
+export const BOT_FLOWS_STORAGE_KEY = "soma-bots-flows-v1";
 
 function readStored(): BotFlowDraft[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(BOT_FLOWS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as BotFlowDraft[];
     if (!Array.isArray(parsed)) return [];
@@ -21,7 +21,7 @@ function readStored(): BotFlowDraft[] {
 
 function writeStored(items: BotFlowDraft[]) {
   localStorage.setItem(
-    STORAGE_KEY,
+    BOT_FLOWS_STORAGE_KEY,
     JSON.stringify(items.map((item) => ensureBotHasStart(normalizeBotDraft(item)))),
   );
 }
@@ -55,10 +55,77 @@ export function deleteStoredBotFlow(id: string): boolean {
   return true;
 }
 
-/** Substitui o cache local pelos fluxos do servidor (hidratação). */
+/** Une listas por id — preserva o rascunho mais recente (`updatedAt`). */
+export function mergeBotFlowLists(
+  local: BotFlowDraft[],
+  remote: BotFlowDraft[],
+): BotFlowDraft[] {
+  const map = new Map<string, BotFlowDraft>();
+  for (const flow of [...local, ...remote]) {
+    const normalized = ensureBotHasStart(normalizeBotDraft(flow));
+    const prev = map.get(normalized.id);
+    if (!prev || normalized.updatedAt.localeCompare(prev.updatedAt) > 0) {
+      map.set(normalized.id, normalized);
+    }
+  }
+  return [...map.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/**
+ * Atualiza o cache local.
+ * Proteção: nunca sobrescreve um cache local não-vazio com lista vazia
+ * (evita apagar bots do navegador quando o servidor ainda não tem dados).
+ */
 export function replaceStoredBotFlows(flows: BotFlowDraft[]): BotFlowDraft[] {
-  const next = flows.map((item) => ensureBotHasStart(normalizeBotDraft(item)));
-  writeStored(next);
+  const existing = readStored();
+  const incoming = flows.map((item) => ensureBotHasStart(normalizeBotDraft(item)));
+  if (incoming.length === 0 && existing.length > 0) {
+    return listStoredBotFlows();
+  }
+  writeStored(incoming);
+  return listStoredBotFlows();
+}
+
+/**
+ * Hidrata local ↔ servidor sem perda:
+ * 1) merge por id
+ * 2) envia ao servidor o que o local tem a mais / mais novo
+ * 3) grava o resultado no localStorage
+ */
+export async function syncBotFlowsWithServer(input: {
+  listRemote: () => Promise<BotFlowDraft[]>;
+  upsertRemote: (flow: BotFlowDraft) => Promise<BotFlowDraft>;
+}): Promise<BotFlowDraft[]> {
+  const local = listStoredBotFlows();
+  let remote: BotFlowDraft[] = [];
+  try {
+    remote = await input.listRemote();
+  } catch {
+    return local;
+  }
+
+  const merged = mergeBotFlowLists(local, remote);
+
+  for (const flow of merged) {
+    const onServer = remote.find((item) => item.id === flow.id);
+    if (!onServer || flow.updatedAt.localeCompare(onServer.updatedAt) > 0) {
+      try {
+        await input.upsertRemote(flow);
+      } catch {
+        /* mantém merge local mesmo se um upsert falhar */
+      }
+    }
+  }
+
+  let afterUpload = remote;
+  try {
+    afterUpload = await input.listRemote();
+  } catch {
+    afterUpload = remote;
+  }
+
+  const final = mergeBotFlowLists(merged, afterUpload);
+  writeStored(final);
   return listStoredBotFlows();
 }
 

@@ -24,7 +24,7 @@ import { BotBuilderModal } from "@/components/bots/bot-builder-modal";
 import {
   deleteStoredBotFlow,
   listStoredBotFlows,
-  replaceStoredBotFlows,
+  syncBotFlowsWithServer,
 } from "@/lib/bots/bot-flow.storage";
 import { deleteBotFlowFn, listBotFlowsFn, upsertBotFlowFn } from "@/lib/bots/bots.server";
 import type { BotFlowDraft } from "@/lib/bots/bot.types";
@@ -40,16 +40,11 @@ export function BotsPanel() {
 
   const reload = useCallback(async () => {
     try {
-      let remote = await listBotFlows();
-      const local = listStoredBotFlows();
-      // Migra fluxos antigos (só localStorage) para o servidor na primeira carga.
-      if (remote.length === 0 && local.length > 0) {
-        for (const flow of local) {
-          await upsertBotFlow({ data: flow });
-        }
-        remote = await listBotFlows();
-      }
-      setFlows(replaceStoredBotFlows(remote.length > 0 ? remote : local));
+      const synced = await syncBotFlowsWithServer({
+        listRemote: () => listBotFlows(),
+        upsertRemote: (flow) => upsertBotFlow({ data: flow }),
+      });
+      setFlows(synced);
     } catch {
       setFlows(listStoredBotFlows());
     }

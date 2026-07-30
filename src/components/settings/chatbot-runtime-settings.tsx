@@ -24,8 +24,8 @@ import type {
   SystemSettings,
   WeekdayId,
 } from "@/lib/config/settings-types";
-import { listStoredBotFlows, replaceStoredBotFlows } from "@/lib/bots/bot-flow.storage";
-import { listBotFlowsFn } from "@/lib/bots/bots.server";
+import { listStoredBotFlows, syncBotFlowsWithServer } from "@/lib/bots/bot-flow.storage";
+import { listBotFlowsFn, upsertBotFlowFn } from "@/lib/bots/bots.server";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -89,6 +89,7 @@ function BotSelect({
 
 export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
   const listBotFlows = useServerFn(listBotFlowsFn);
+  const upsertBotFlow = useServerFn(upsertBotFlowFn);
   const [runtime, setRuntime] = useState<ChatbotRuntimeConfig>(() =>
     normalizeChatbotRuntime(settings.chatbotRuntime ?? createDefaultChatbotRuntime()),
   );
@@ -104,15 +105,15 @@ export function ChatbotRuntimeSettings({ settings, onChange }: Props) {
   }, [settings.chatbotRuntime]);
 
   useEffect(() => {
-    void listBotFlows()
-      .then((remote) => {
-        replaceStoredBotFlows(remote);
-        setBotsTick((value) => value + 1);
-      })
+    void syncBotFlowsWithServer({
+      listRemote: () => listBotFlows(),
+      upsertRemote: (flow) => upsertBotFlow({ data: flow }),
+    })
+      .then(() => setBotsTick((value) => value + 1))
       .catch(() => {
         /* mantém localStorage */
       });
-  }, [listBotFlows]);
+  }, [listBotFlows, upsertBotFlow]);
 
   const patchDay = (day: WeekdayId, patch: Partial<ChatbotDaySchedule>) => {
     setRuntime((current) => ({
