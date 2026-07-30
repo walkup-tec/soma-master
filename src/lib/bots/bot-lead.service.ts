@@ -42,11 +42,7 @@ export async function applyBotLeadFieldUpdates(input: {
     const linked = await findClientIdByPhone(normalizeWhatsAppPhone(input.phone) || input.phone);
     if (linked?.clientId) {
       clientId = linked.clientId;
-      await linkConversationClient({
-        conversationId: input.conversationId,
-        clientId,
-      });
-    }
+      await linkConversationClient(input.conversationId, clientId);    }
   }
 
   if (clientId) {

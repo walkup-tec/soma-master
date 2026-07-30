@@ -227,35 +227,6 @@ export async function updateConversationContactName(input: {
   );
 }
 
-export async function linkConversationClient(input: {
-  conversationId: string;
-  clientId: string;
-}): Promise<void> {
-  const clientId = String(input.clientId || "").trim();
-  if (!clientId) return;
-
-  if (isDatabaseEnabled()) {
-    await withChatDb(
-      (sql) => sql`
-        update crm.chat_conversations
-        set client_id = ${clientId}, updated_at = now()
-        where id = ${input.conversationId}
-      `,
-    );
-    return;
-  }
-
-  const conversations = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
-  await writeJsonFile(
-    CONV_FILE,
-    conversations.map((conversation) =>
-      conversation.id === input.conversationId
-        ? { ...conversation, clientId, updatedAt: new Date().toISOString() }
-        : conversation,
-    ),
-  );
-}
-
 export async function getOrCreateConversationByPhone(input: {
   phone: string;
   contactName?: string | null;
