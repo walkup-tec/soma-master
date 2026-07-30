@@ -70,6 +70,8 @@ export type BotNodeLogEntry = {
 };
 
 /** Campos extraíveis no Mapear dados (produto + extras de holerite/contracheque). */
+export type BotTransferMode = "random" | "round_robin" | "specific";
+
 export type BotMapFieldId =
   | "nome"
   | "cpf"
@@ -126,6 +128,13 @@ export type BotNodeConfig = {
   // sistema
   tags?: string[];
   statusId?: string;
+  /**
+   * Transferir Atendente:
+   * - random: entre atendentes online (logados no CRM)
+   * - round_robin: 1 para 1 na fila de cadastrados
+   * - specific: atendente fixo (fica na fila dele se offline)
+   */
+  transferMode?: BotTransferMode;
   attendantUserId?: string;
   /** Mapeamento campo → expressão/variável (ex.: nome → {{ultima_resposta}}). */
   leadFields?: Record<string, string>;

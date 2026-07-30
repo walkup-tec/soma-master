@@ -354,7 +354,7 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
     executionKind: "system",
     label: "Transferir Atendente",
     description: "Transfere para um humano",
-    defaultConfig: { attendantUserId: "" },
+    defaultConfig: { transferMode: "random", attendantUserId: "" },
   }),
 ];
 

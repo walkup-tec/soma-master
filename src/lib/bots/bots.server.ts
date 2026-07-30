@@ -15,6 +15,7 @@ import {
   listBotFlowsFromServer,
   upsertBotFlowOnServer,
 } from "@/lib/bots/bot-flow.repository";
+import { listChatAttendants } from "@/lib/bots/bot-transfer-agent.service";
 import type { BotFlowDraft, BotFlowNode, BotMapFieldId, BotRunState } from "@/lib/bots/bot.types";
 import {
   SOMA_EVOLUTION_INSTANCE_DEFAULT,
@@ -50,6 +51,12 @@ function parseFlow(data: unknown): BotFlowDraft {
 export const listBotFlowsFn = createServerFn({ method: "GET" }).handler(async () => {
   await requireBotsAccess();
   return toPlain(await listBotFlowsFromServer());
+});
+
+/** Atendentes elegíveis para o nó Transferir Atendente. */
+export const listBotTransferAttendantsFn = createServerFn({ method: "GET" }).handler(async () => {
+  await requireBotsAccess();
+  return toPlain(await listChatAttendants());
 });
 
 export const upsertBotFlowFn = createServerFn({ method: "POST" })

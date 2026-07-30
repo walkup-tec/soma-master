@@ -8,8 +8,10 @@ import {
   loadSystemSettingsFromDisk,
 } from "@/lib/config/settings.repository";
 import { verifyPassword } from "@/lib/auth/password";
+import { sessionCanAccessMenu } from "@/lib/auth/menu-access";
 import { sessionConfig, type SessionData } from "@/lib/auth/session-config";
 import { normalizeEmail } from "@/lib/auth/master-user";
+import { clearAgentPresence, touchAgentPresence } from "@/lib/chat/agent-presence.repository";
 import { findUserByEmail, findUserById } from "@/lib/users/user.repository";
 import { getPartnerAccess } from "@/lib/partners/partner.repository";
 
@@ -135,7 +137,11 @@ export const getAuthSessionFn = createServerFn({ method: "GET" }).handler(async 
   const session = await getSession<SessionData>(sessionConfig);
   const user = session.data;
   if (!user?.userId) return null;
-  return enrichSession(user as SessionData);
+  const enriched = await enrichSession(user as SessionData);
+  if (enriched?.userId && sessionCanAccessMenu(enriched, "chat")) {
+    void touchAgentPresence(enriched.userId);
+  }
+  return enriched;
 });
 
 export const loginFn = createServerFn({ method: "POST" })
@@ -169,11 +175,17 @@ export const loginFn = createServerFn({ method: "POST" })
       expiresAt: Date.now() + ENRICH_TTL_MS,
       data: sessionData,
     };
+    if (sessionCanAccessMenu(sessionData, "chat")) {
+      void touchAgentPresence(sessionData.userId);
+    }
     return sessionData;
   });
 
 export const logoutFn = createServerFn({ method: "POST" }).handler(async () => {
+  const session = await getSession<SessionData>(sessionConfig);
+  const userId = session.data?.userId;
   invalidateAuthEnrichCache();
+  if (userId) void clearAgentPresence(userId);
   await clearSession(sessionConfig);
   return { ok: true as const };
 });

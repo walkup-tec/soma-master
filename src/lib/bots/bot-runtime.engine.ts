@@ -1,6 +1,7 @@
 import { getBotNodeDefinition } from "@/lib/bots/bot-node.registry";
 import { resolveBrasiliaExpedienteTurno } from "@/lib/bots/bot-expediente";
 import { applyBotLeadFieldUpdates } from "@/lib/bots/bot-lead.service";
+import { applyBotTransferAgent } from "@/lib/bots/bot-transfer-agent.service";
 import { generateSaudacaoText } from "@/lib/bots/bot-saudacao.service";
 import type {
   BotFlowDraft,
@@ -357,8 +358,7 @@ export async function executeBotNode(
 
       case "create_lead":
       case "add_tags":
-      case "add_status":
-      case "transfer_agent": {
+      case "add_status": {
         const label = definition?.label || kind;
         return {
           ok: true,
@@ -372,8 +372,33 @@ export async function executeBotNode(
           data: {
             tags: (config.tags || null) as BotJson,
             statusId: config.statusId || null,
-            attendantUserId: config.attendantUserId || null,
             leadFields: (config.leadFields || null) as BotJson,
+          },
+        };
+      }
+
+      case "transfer_agent": {
+        const transferred = await applyBotTransferAgent({
+          conversationId: conversationId || "",
+          config,
+          dryRun,
+        });
+        return {
+          ok: transferred.ok,
+          status: transferred.ok ? "success" : "error",
+          message: transferred.message,
+          nextHandle: transferred.ok ? "out" : undefined,
+          variables: transferred.ok
+            ? {
+                [config.outputVariable || "atendente_id"]: transferred.attendantUserId,
+                atendente_nome: transferred.attendantUserName,
+              }
+            : undefined,
+          data: {
+            transferMode: transferred.transferMode,
+            attendantUserId: transferred.attendantUserId,
+            attendantUserName: transferred.attendantUserName,
+            online: transferred.online,
           },
         };
       }

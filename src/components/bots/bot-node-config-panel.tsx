@@ -16,9 +16,10 @@ import type {
   BotNodeData,
   BotNodeExecuteResult,
   BotNodeLogEntry,
+  BotTransferMode,
 } from "@/lib/bots/bot.types";
 import { getBotNodeDefinition, resolveBotNodeOutputs } from "@/lib/bots/bot-node.registry";
-import { mapBotDataFn, testBotNodeFn } from "@/lib/bots/bots.server";
+import { mapBotDataFn, listBotTransferAttendantsFn, testBotNodeFn } from "@/lib/bots/bots.server";
 import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
 import { clientFieldLabel } from "@/lib/config/client-fields";
 import { BotMessageTextEditor } from "@/components/bots/bot-message-text-editor";
@@ -26,6 +27,24 @@ import { BotMessageTextEditor } from "@/components/bots/bot-message-text-editor"
 function newOptionId() {
   return `opt-${crypto.randomUUID().slice(0, 6)}`;
 }
+
+const TRANSFER_MODE_OPTIONS: Array<{ value: BotTransferMode; label: string; hint: string }> = [
+  {
+    value: "random",
+    label: "De forma aleatória",
+    hint: "Distribui aleatoriamente para um atendente que estiver logado (online).",
+  },
+  {
+    value: "round_robin",
+    label: "Distribuição um para um",
+    hint: "Alterna 1 a 1 na fila de atendentes cadastrados, de forma igualitária.",
+  },
+  {
+    value: "specific",
+    label: "Atendente específico",
+    hint: "Envia para o atendente escolhido. Se estiver offline, fica na fila dele até ficar online.",
+  },
+];
 
 export type PreviousNodeOutputInfo = {
   nodeId: string;
@@ -51,8 +70,13 @@ export function BotNodeConfigPanel({
 }) {
   const testNode = useServerFn(testBotNodeFn);
   const mapData = useServerFn(mapBotDataFn);
+  const listTransferAttendants = useServerFn(listBotTransferAttendantsFn);
   const [busy, setBusy] = useState(false);
   const [mapFileBusy, setMapFileBusy] = useState(false);
+  const [transferAttendants, setTransferAttendants] = useState<
+    Array<{ id: string; name: string; email: string }>
+  >([]);
+  const [transferAttendantsLoading, setTransferAttendantsLoading] = useState(false);
   const definition = getBotNodeDefinition(data.kind);
   const dynamicOutputs = useMemo(() => resolveBotNodeOutputs(data), [data]);
   const optionInputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -133,6 +157,35 @@ export function BotNodeConfigPanel({
     }
     setFocusOptionIndex(null);
   }, [focusOptionIndex, buttonOptions.length]);
+
+  useEffect(() => {
+    if (data.kind !== "transfer_agent") return;
+    let cancelled = false;
+    setTransferAttendantsLoading(true);
+    void listTransferAttendants()
+      .then((rows) => {
+        if (cancelled) return;
+        setTransferAttendants(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTransferAttendants([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTransferAttendantsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.kind, listTransferAttendants]);
+
+  const transferMode: BotTransferMode =
+    data.config.transferMode === "round_robin" ||
+    data.config.transferMode === "specific" ||
+    data.config.transferMode === "random"
+      ? data.config.transferMode
+      : data.config.attendantUserId
+        ? "specific"
+        : "random";
 
   const selectedMapFields = useMemo(
     () => new Set(data.config.mapFields || []),
@@ -765,7 +818,62 @@ export function BotNodeConfigPanel({
               </div>
             )}
 
-            {data.kind !== "update_lead" && data.kind !== "message" ? (
+            {data.kind === "transfer_agent" && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Forma de distribuição</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={transferMode}
+                    onChange={(event) => {
+                      const next = event.target.value as BotTransferMode;
+                      patchConfig({
+                        transferMode: next,
+                        attendantUserId:
+                          next === "specific" ? data.config.attendantUserId || "" : "",
+                      });
+                    }}
+                  >
+                    {TRANSFER_MODE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    {TRANSFER_MODE_OPTIONS.find((item) => item.value === transferMode)?.hint}
+                  </p>
+                </div>
+
+                {transferMode === "specific" ? (
+                  <div className="space-y-1.5">
+                    <Label>Atendente</Label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={data.config.attendantUserId || ""}
+                      onChange={(event) => patchConfig({ attendantUserId: event.target.value })}
+                      disabled={transferAttendantsLoading}
+                    >
+                      <option value="">
+                        {transferAttendantsLoading ? "Carregando…" : "Selecione…"}
+                      </option>
+                      {transferAttendants.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!transferAttendantsLoading && transferAttendants.length === 0 ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Nenhum usuário com acesso ao Chat cadastrado.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {data.kind !== "update_lead" && data.kind !== "message" && data.kind !== "transfer_agent" ? (
               <div className="space-y-1.5">
                 <Label>Variável de saída</Label>
                 <Input

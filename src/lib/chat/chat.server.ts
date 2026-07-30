@@ -65,15 +65,17 @@ import {
 import { isValidAttendanceStatus } from "@/lib/clients/client-status";
 import type { ClientFieldId } from "@/lib/config/client-fields";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
+import { touchAgentPresence } from "@/lib/chat/agent-presence.repository";
 import { findUserById, listAllUsers } from "@/lib/users/user.repository";
 
 async function requireChatUser(): Promise<SessionData> {
   const session = await getSession(sessionConfig);
-  const user = session.data;
+  const user = session.data as SessionData | undefined;
   if (!user?.userId) throw new Error("Não autenticado.");
   if (!sessionCanAccessMenu(user, "chat")) {
     throw new Error("Sem permissão para acessar o Chat.");
   }
+  void touchAgentPresence(user.userId);
   return user;
 }
 

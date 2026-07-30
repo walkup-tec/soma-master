@@ -489,6 +489,8 @@ export async function joinConversationAsAgent(input: {
   conversationId: string;
   userId: string;
   userName: string;
+  /** Se informado, substitui a mensagem padrão "entrou no atendimento". */
+  systemMessage?: string;
 }): Promise<ChatConversation> {
   const before = await getConversation(input.conversationId);
   if (!before) throw new Error("Conversa não encontrada.");
@@ -529,7 +531,7 @@ export async function joinConversationAsAgent(input: {
   await appendMessage({
     conversationId: input.conversationId,
     direction: "outbound",
-    body: `${input.userName} entrou no atendimento.`,
+    body: input.systemMessage?.trim() || `${input.userName} entrou no atendimento.`,
     senderType: "system",
     senderName: "Sistema",
   });
