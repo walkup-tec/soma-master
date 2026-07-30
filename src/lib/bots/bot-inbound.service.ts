@@ -4,6 +4,7 @@ import {
   findStartNode,
 } from "@/lib/bots/bot-runtime.engine";
 import { getBotFlowFromServer } from "@/lib/bots/bot-flow.repository";
+import { loadBotLeadVariables } from "@/lib/bots/bot-lead.service";
 import type { BotRunState } from "@/lib/bots/bot.types";
 import {
   appendMessage,
@@ -56,6 +57,18 @@ export async function maybeRunChatbotRuntime(input: {
   if (shouldRestartRun(run, botId)) {
     run = createBotRunState({ flow, testPhone: input.phone });
   }
+
+  const leadVars = await loadBotLeadVariables({
+    conversationId: input.conversationId,
+    phone: input.phone,
+  });
+  run = {
+    ...run,
+    variables: {
+      ...leadVars,
+      ...run.variables,
+    },
+  };
 
   const advanced = await advanceBotRun({
     flow,

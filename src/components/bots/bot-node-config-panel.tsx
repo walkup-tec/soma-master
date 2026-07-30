@@ -21,6 +21,7 @@ import { getBotNodeDefinition, resolveBotNodeOutputs } from "@/lib/bots/bot-node
 import { mapBotDataFn, testBotNodeFn } from "@/lib/bots/bots.server";
 import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
 import { clientFieldLabel } from "@/lib/config/client-fields";
+import { BotMessageTextEditor } from "@/components/bots/bot-message-text-editor";
 
 function newOptionId() {
   return `opt-${crypto.randomUUID().slice(0, 6)}`;
@@ -256,8 +257,48 @@ export function BotNodeConfigPanel({
 
         <ScrollArea className="min-h-0 flex-1 px-4 py-3">
           <TabsContent value="config" className="mt-0 space-y-3">
-            {(data.kind === "message" ||
-              data.kind === "buttons" ||
+            {data.kind === "message" ? (
+              <BotMessageTextEditor
+                value={data.config.text || ""}
+                onChange={(text) => patchConfig({ text })}
+                products={products}
+                productId={data.config.productId || ""}
+                onProductIdChange={(productId) =>
+                  patchConfig({
+                    productId,
+                    leadFieldScopeRequired: data.config.leadFieldScopeRequired ?? true,
+                    leadFieldScopeOptional: data.config.leadFieldScopeOptional ?? false,
+                  })
+                }
+                scopeRequired={data.config.leadFieldScopeRequired !== false}
+                scopeOptional={Boolean(data.config.leadFieldScopeOptional)}
+                onScopeChange={(patch) =>
+                  patchConfig({
+                    leadFieldScopeRequired:
+                      patch.required == null
+                        ? data.config.leadFieldScopeRequired !== false
+                        : patch.required,
+                    leadFieldScopeOptional:
+                      patch.optional == null
+                        ? Boolean(data.config.leadFieldScopeOptional)
+                        : patch.optional,
+                  })
+                }
+                flowVariables={
+                  previousNodeOutput?.variable
+                    ? [
+                        {
+                          id: previousNodeOutput.variable,
+                          label: previousNodeOutput.variable,
+                          hint: `Saída de ${previousNodeOutput.title}`,
+                        },
+                      ]
+                    : []
+                }
+              />
+            ) : null}
+
+            {(data.kind === "buttons" ||
               data.kind === "list" ||
               data.kind === "menu" ||
               data.kind === "confirm_data" ||
@@ -724,7 +765,7 @@ export function BotNodeConfigPanel({
               </div>
             )}
 
-            {data.kind !== "update_lead" ? (
+            {data.kind !== "update_lead" && data.kind !== "message" ? (
               <div className="space-y-1.5">
                 <Label>Variável de saída</Label>
                 <Input

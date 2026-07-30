@@ -1,11 +1,13 @@
+import type { BotJson } from "@/lib/bots/bot.types";
 import {
   findClientIdByPhone,
   getConversation,
   linkConversationClient,
   updateConversationContactName,
 } from "@/lib/chat/chat.repository";
-import { patchClientDataFields } from "@/lib/clients/clients.repository";
 import { normalizeWhatsAppPhone } from "@/lib/chat/phone";
+import { patchClientDataFields } from "@/lib/clients/clients.repository";
+import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
 
 /**
  * Aplica campos do node Atualizar Lead no contato da conversa e, se houver, no cliente CRM.
@@ -42,7 +44,8 @@ export async function applyBotLeadFieldUpdates(input: {
     const linked = await findClientIdByPhone(normalizeWhatsAppPhone(input.phone) || input.phone);
     if (linked?.clientId) {
       clientId = linked.clientId;
-      await linkConversationClient(input.conversationId, clientId);    }
+      await linkConversationClient(input.conversationId, clientId);
+    }
   }
 
   if (clientId) {
@@ -68,4 +71,53 @@ export async function applyBotLeadFieldUpdates(input: {
     message: "Sem lead CRM vinculado — não foi possível gravar os campos",
     clientId: null,
   };
+}
+
+/** Carrega dados do contato/lead para uso em templates {{nome}}, {{telefone}}, etc. */
+export async function loadBotLeadVariables(input: {
+  conversationId: string;
+  phone: string;
+}): Promise<Record<string, BotJson>> {
+  const phone = normalizeWhatsAppPhone(input.phone) || input.phone;
+  const vars: Record<string, BotJson> = {
+    telefone: phone,
+    whatsapp: phone,
+  };
+
+  const conversation = await getConversation(input.conversationId);
+  if (conversation?.contactName) {
+    vars.nome = conversation.contactName;
+  }
+
+  let clientId = conversation?.clientId || null;
+  if (!clientId && phone) {
+    const linked = await findClientIdByPhone(phone);
+    clientId = linked?.clientId || null;
+  }
+
+  if (clientId && isDatabaseEnabled()) {
+    try {
+      const sql = await getSql();
+      const rows = await sql<{ data: Record<string, unknown> | null }[]>`
+        select data from crm.clients where id = ${clientId} limit 1
+      `;
+      const data = rows[0]?.data;
+      if (data && typeof data === "object") {
+        for (const [key, value] of Object.entries(data)) {
+          if (value == null) continue;
+          if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+            vars[key] = value;
+          }
+        }
+      }
+    } catch {
+      /* mantém o que já tiver da conversa */
+    }
+  }
+
+  if (!vars.nome && conversation?.contactName) {
+    vars.nome = conversation.contactName;
+  }
+
+  return vars;
 }

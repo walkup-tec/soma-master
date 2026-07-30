@@ -423,6 +423,11 @@ export async function executeBotNode(
           status: applied.ok ? "success" : "error",
           message: applied.message,
           nextHandle: applied.ok ? "out" : undefined,
+          variables: applied.ok
+            ? (Object.fromEntries(
+                Object.entries(fields).map(([key, value]) => [key, value]),
+              ) as Record<string, BotJson>)
+            : undefined,
           data: {
             leadFields: fields as unknown as BotJson,
             clientId: applied.clientId,
