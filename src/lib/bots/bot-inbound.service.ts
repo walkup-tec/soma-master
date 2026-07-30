@@ -61,6 +61,8 @@ export async function maybeRunChatbotRuntime(input: {
     flow,
     run,
     inboundText: inboundForAdvance,
+    conversationId: input.conversationId,
+    phone: input.phone,
   });
   run = advanced.run;
 

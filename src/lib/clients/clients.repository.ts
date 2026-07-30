@@ -805,6 +805,50 @@ export async function getClientByIdForUser(
   return client;
 }
 
+/** Mescla campos em `clients.data` (bot Atualizar Lead / integrações). */
+export async function patchClientDataFields(input: {
+  clientId: string;
+  fields: Record<string, string>;
+}): Promise<boolean> {
+  const clientId = String(input.clientId || "").trim();
+  const patchEntries = Object.entries(input.fields)
+    .map(([key, value]) => [String(key || "").trim(), String(value || "").trim()] as const)
+    .filter(([key, value]) => Boolean(key) && Boolean(value));
+  if (!clientId || patchEntries.length === 0) return false;
+
+  const patch = Object.fromEntries(patchEntries);
+
+  if (isDatabaseEnabled()) {
+    const sql = await getSql();
+    const rows = await sql<{ id: string }[]>`
+      update crm.clients
+      set
+        data = coalesce(data, '{}'::jsonb) || ${sql.json(patch)},
+        updated_at = now()
+      where id = ${clientId}
+      returning id
+    `;
+    return rows.length > 0;
+  }
+
+  const clients = await readClientsFromDisk();
+  let found = false;
+  const next = clients.map((client) => {
+    if (client.id !== clientId) return client;
+    found = true;
+    return {
+      ...client,
+      data: {
+        ...client.data,
+        ...patch,
+      },
+    };
+  });
+  if (!found) return false;
+  await writeClientsToDisk(next);
+  return true;
+}
+
 export async function listClientsForUser(userId: string, isMaster: boolean): Promise<ClientRecord[]> {
   if (isDatabaseEnabled()) {
     return listClientsFromPostgres(userId, isMaster);

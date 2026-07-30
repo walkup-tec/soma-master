@@ -1,5 +1,6 @@
 import { getBotNodeDefinition } from "@/lib/bots/bot-node.registry";
 import { resolveBrasiliaExpedienteTurno } from "@/lib/bots/bot-expediente";
+import { applyBotLeadFieldUpdates } from "@/lib/bots/bot-lead.service";
 import { generateSaudacaoText } from "@/lib/bots/bot-saudacao.service";
 import type {
   BotFlowDraft,
@@ -61,7 +62,7 @@ function evalSimpleCondition(expression: string, variables: Record<string, BotJs
 export async function executeBotNode(
   ctx: BotNodeExecuteContext,
 ): Promise<BotNodeExecuteResult> {
-  const { node, variables, dryRun, inboundText } = ctx;
+  const { node, variables, dryRun, inboundText, conversationId, phone } = ctx;
   const { kind, config } = node.data;
   const definition = getBotNodeDefinition(kind);
 
@@ -355,7 +356,6 @@ export async function executeBotNode(
       }
 
       case "create_lead":
-      case "update_lead":
       case "add_tags":
       case "add_status":
       case "transfer_agent": {
@@ -374,6 +374,58 @@ export async function executeBotNode(
             statusId: config.statusId || null,
             attendantUserId: config.attendantUserId || null,
             leadFields: (config.leadFields || null) as BotJson,
+          },
+        };
+      }
+
+      case "update_lead": {
+        const fields: Record<string, string> = {};
+        for (const [fieldId, expression] of Object.entries(config.leadFields || {})) {
+          const key = String(fieldId || "").trim();
+          const value = resolveTemplate(String(expression || ""), variables).trim();
+          if (key && value) fields[key] = value;
+        }
+        const target = String(config.targetFieldId || "").trim();
+        const source = String(config.sourceVariable || "").trim();
+        if (target && source) {
+          const value = resolveTemplate(`{{${source}}}`, variables).trim();
+          if (value) fields[target] = value;
+        }
+
+        if (Object.keys(fields).length === 0) {
+          return {
+            ok: false,
+            status: "error",
+            message: "Atualizar Lead sem campo/valor resolvido",
+            nextHandle: undefined,
+          };
+        }
+
+        if (dryRun || !conversationId) {
+          return {
+            ok: true,
+            status: "success",
+            message: dryRun
+              ? `Atualizar Lead (simulado): ${Object.keys(fields).join(", ")}`
+              : `Atualizar Lead preparado (sem conversa): ${Object.keys(fields).join(", ")}`,
+            nextHandle: "out",
+            data: { leadFields: fields as unknown as BotJson },
+          };
+        }
+
+        const applied = await applyBotLeadFieldUpdates({
+          conversationId,
+          phone: phone || String(variables.telefone_teste || ""),
+          fields,
+        });
+        return {
+          ok: applied.ok,
+          status: applied.ok ? "success" : "error",
+          message: applied.message,
+          nextHandle: applied.ok ? "out" : undefined,
+          data: {
+            leadFields: fields as unknown as BotJson,
+            clientId: applied.clientId,
           },
         };
       }
@@ -433,6 +485,8 @@ export async function advanceBotRun(input: {
   flow: BotFlowDraft;
   run: BotRunState;
   inboundText?: string;
+  conversationId?: string;
+  phone?: string;
 }): Promise<{ run: BotRunState; outboundTexts: string[] }> {
   const outboundTexts: string[] = [];
   let run: BotRunState = {
@@ -471,6 +525,8 @@ export async function advanceBotRun(input: {
       testPhone: run.testPhone,
       dryRun: false,
       inboundText: input.inboundText,
+      conversationId: input.conversationId,
+      phone: input.phone || run.testPhone,
     });
 
     run.logs.push(

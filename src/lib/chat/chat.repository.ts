@@ -179,7 +179,7 @@ export async function updateConversationContactNote(
   return updated;
 }
 
-async function findClientIdByPhone(phone: string): Promise<{ clientId: string; name: string | null } | null> {
+export async function findClientIdByPhone(phone: string): Promise<{ clientId: string; name: string | null } | null> {
   if (!isDatabaseEnabled()) return null;
   const normalized = normalizeWhatsAppPhone(phone);
   const sql = await getSql();
@@ -196,6 +196,64 @@ async function findClientIdByPhone(phone: string): Promise<{ clientId: string; n
     }
   }
   return null;
+}
+
+export async function updateConversationContactName(input: {
+  conversationId: string;
+  contactName: string;
+}): Promise<void> {
+  const name = String(input.contactName || "").trim();
+  if (!name) return;
+
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) => sql`
+        update crm.chat_conversations
+        set contact_name = ${name}, updated_at = now()
+        where id = ${input.conversationId}
+      `,
+    );
+    return;
+  }
+
+  const conversations = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  await writeJsonFile(
+    CONV_FILE,
+    conversations.map((conversation) =>
+      conversation.id === input.conversationId
+        ? { ...conversation, contactName: name, updatedAt: new Date().toISOString() }
+        : conversation,
+    ),
+  );
+}
+
+export async function linkConversationClient(input: {
+  conversationId: string;
+  clientId: string;
+}): Promise<void> {
+  const clientId = String(input.clientId || "").trim();
+  if (!clientId) return;
+
+  if (isDatabaseEnabled()) {
+    await withChatDb(
+      (sql) => sql`
+        update crm.chat_conversations
+        set client_id = ${clientId}, updated_at = now()
+        where id = ${input.conversationId}
+      `,
+    );
+    return;
+  }
+
+  const conversations = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  await writeJsonFile(
+    CONV_FILE,
+    conversations.map((conversation) =>
+      conversation.id === input.conversationId
+        ? { ...conversation, clientId, updatedAt: new Date().toISOString() }
+        : conversation,
+    ),
+  );
 }
 
 export async function getOrCreateConversationByPhone(input: {

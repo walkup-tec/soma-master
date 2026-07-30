@@ -127,7 +127,16 @@ export type BotNodeConfig = {
   tags?: string[];
   statusId?: string;
   attendantUserId?: string;
+  /** Mapeamento campo → expressão/variável (ex.: nome → {{ultima_resposta}}). */
   leadFields?: Record<string, string>;
+  /**
+   * Atualizar Lead — UI:
+   * variável de origem (saída do node anterior), escopo obrigatório/opcional e campo alvo.
+   */
+  sourceVariable?: string;
+  leadFieldScopeRequired?: boolean;
+  leadFieldScopeOptional?: boolean;
+  targetFieldId?: string;
   // variáveis locais do node
   outputVariable?: string;
 };
@@ -199,6 +208,9 @@ export type BotNodeExecuteContext = {
   dryRun?: boolean;
   /** Resposta do contato neste tick (botões / wait_reply). */
   inboundText?: string | null;
+  /** Conversa WhatsApp (persistência de Atualizar Lead). */
+  conversationId?: string;
+  phone?: string;
 };
 
 export type BotNodeExecuteResult = {

@@ -322,9 +322,14 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
     category: "sistema",
     executionKind: "system",
     label: "Atualizar Lead",
-    description: "Atualiza campos do lead",
+    description: "Atualiza um campo do lead com a saída do node anterior",
     defaultConfig: {
-      leadFields: { margem_disponivel: "{{dados_mapeados.margem_disponivel}}" },
+      productId: "",
+      sourceVariable: "",
+      leadFieldScopeRequired: true,
+      leadFieldScopeOptional: false,
+      targetFieldId: "",
+      leadFields: {},
     },
   }),
   def({
@@ -355,6 +360,40 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
 
 export function getBotNodeDefinition(kind: BotNodeKind): BotNodeDefinition | undefined {
   return BOT_NODE_REGISTRY.find((item) => item.kind === kind);
+}
+
+/** Variável de saída efetiva do node (config ou padrão do kind). */
+export function resolveBotNodeOutputVariable(
+  data: Pick<BotNodeData, "kind" | "config">,
+): string | null {
+  const configured = String(data.config.outputVariable || "").trim();
+  if (configured) return configured;
+  switch (data.kind) {
+    case "wait_reply":
+      return "ultima_resposta";
+    case "buttons":
+    case "list":
+    case "menu":
+      return "opcao_escolhida";
+    case "expediente":
+      return "turno";
+    case "saudacao":
+      return "saudacao";
+    case "prompt":
+      return "resposta_ia";
+    case "map_data":
+      return "dados_mapeados";
+    case "confirm_data":
+      return "dados_confirmados";
+    case "calc_margin":
+      return "margem_calculada";
+    case "create_lead":
+      return "lead_id";
+    case "loop":
+      return "loop_index";
+    default:
+      return null;
+  }
 }
 
 export function listBotNodesByCategory(category: BotNodeCategory): BotNodeDefinition[] {

@@ -30,6 +30,7 @@ import {
   BOT_NODE_REGISTRY,
   createBotNodeData,
   listBotNodesByCategory,
+  resolveBotNodeOutputVariable,
   resolveBotNodeOutputs,
 } from "@/lib/bots/bot-node.registry";
 import type { BotFlowDraft, BotNodeCategory, BotNodeData, BotNodeKind } from "@/lib/bots/bot.types";
@@ -511,6 +512,19 @@ function BotCanvasInner({
             onChange={updateSelectedData}
             products={products}
             attendanceStatuses={attendanceStatuses}
+            previousNodeOutput={(() => {
+              const incoming = edges.find((edge) => edge.target === selectedNodeId);
+              if (!incoming) return null;
+              const source = nodes.find((node) => node.id === incoming.source);
+              if (!source) return null;
+              const variable = resolveBotNodeOutputVariable(source.data);
+              return {
+                nodeId: source.id,
+                title: source.data.title || source.data.kind,
+                kind: source.data.kind,
+                variable,
+              };
+            })()}
           />
         ) : selectedNodeIds.length > 1 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 border-l border-border p-6 text-center">

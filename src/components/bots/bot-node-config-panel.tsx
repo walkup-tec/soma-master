@@ -20,10 +20,18 @@ import type {
 import { getBotNodeDefinition, resolveBotNodeOutputs } from "@/lib/bots/bot-node.registry";
 import { mapBotDataFn, testBotNodeFn } from "@/lib/bots/bots.server";
 import type { AttendanceStatusConfig, ProductConfig } from "@/lib/config/settings-types";
+import { clientFieldLabel } from "@/lib/config/client-fields";
 
 function newOptionId() {
   return `opt-${crypto.randomUUID().slice(0, 6)}`;
 }
+
+export type PreviousNodeOutputInfo = {
+  nodeId: string;
+  title: string;
+  kind: string;
+  variable: string | null;
+};
 
 export function BotNodeConfigPanel({
   data,
@@ -31,12 +39,14 @@ export function BotNodeConfigPanel({
   products,
   attendanceStatuses,
   nodeId,
+  previousNodeOutput = null,
 }: {
   data: BotNodeData;
   onChange: (next: BotNodeData) => void;
   products: ProductConfig[];
   attendanceStatuses: AttendanceStatusConfig[];
   nodeId: string;
+  previousNodeOutput?: PreviousNodeOutputInfo | null;
 }) {
   const testNode = useServerFn(testBotNodeFn);
   const mapData = useServerFn(mapBotDataFn);
@@ -52,6 +62,66 @@ export function BotNodeConfigPanel({
   };
 
   const buttonOptions = data.config.options || [];
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.id === data.config.productId) || null,
+    [products, data.config.productId],
+  );
+
+  const updateLeadFieldOptions = useMemo(() => {
+    if (!selectedProduct) return [] as Array<{ id: string; label: string }>;
+    const showRequired = data.config.leadFieldScopeRequired !== false;
+    const showOptional = Boolean(data.config.leadFieldScopeOptional);
+    const ids: string[] = [];
+    if (showRequired) ids.push(...(selectedProduct.requiredFieldIds || []));
+    if (showOptional) ids.push(...(selectedProduct.availableFieldIds || []));
+    const unique = [...new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))];
+    return unique.map((id) => ({
+      id,
+      label: clientFieldLabel(id, selectedProduct.customFields),
+    }));
+  }, [
+    selectedProduct,
+    data.config.leadFieldScopeRequired,
+    data.config.leadFieldScopeOptional,
+  ]);
+
+  /** Mantém leadFields alinhado ao mapeamento 1:1 da UI. */
+  function patchUpdateLead(patch: Partial<BotNodeData["config"]>) {
+    const next = { ...data.config, ...patch };
+    const source = String(next.sourceVariable || "").trim();
+    const target = String(next.targetFieldId || "").trim();
+    const leadFields =
+      source && target ? { [target]: `{{${source}}}` } : ({} as Record<string, string>);
+    onChange({
+      ...data,
+      config: {
+        ...next,
+        leadFields,
+      },
+    });
+  }
+
+  useEffect(() => {
+    if (data.kind !== "update_lead") return;
+    const incomingVar = previousNodeOutput?.variable?.trim() || "";
+    if (!incomingVar) return;
+    if (String(data.config.sourceVariable || "").trim()) return;
+    const target = String(data.config.targetFieldId || "").trim();
+    onChange({
+      ...data,
+      config: {
+        ...data.config,
+        sourceVariable: incomingVar,
+        leadFields: target ? { [target]: `{{${incomingVar}}}` } : {},
+      },
+    });
+  }, [
+    data,
+    onChange,
+    previousNodeOutput?.nodeId,
+    previousNodeOutput?.variable,
+  ]);
 
   useEffect(() => {
     if (focusOptionIndex == null) return;
@@ -483,6 +553,142 @@ export function BotNodeConfigPanel({
               </div>
             )}
 
+            {data.kind === "update_lead" && (
+              <div className="space-y-4">
+                <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
+                  <Label>Saída do node anterior</Label>
+                  {previousNodeOutput ? (
+                    <>
+                      <p className="text-sm text-foreground">
+                        {previousNodeOutput.title}{" "}
+                        <span className="text-muted-foreground">({previousNodeOutput.kind})</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Variável:{" "}
+                        <span className="font-medium text-foreground">
+                          {previousNodeOutput.variable
+                            ? `{{${previousNodeOutput.variable}}}`
+                            : "sem variável de saída"}
+                        </span>
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Conecte um node anterior a este para usar a variável de saída.
+                    </p>
+                  )}
+                  <div className="space-y-1.5 pt-1">
+                    <Label htmlFor="update-lead-source">Variável de origem</Label>
+                    <Input
+                      id="update-lead-source"
+                      value={data.config.sourceVariable || ""}
+                      onChange={(event) =>
+                        patchUpdateLead({ sourceVariable: event.target.value.trim() })
+                      }
+                      placeholder="ex.: ultima_resposta"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="update-lead-product">Produto</Label>
+                  <select
+                    id="update-lead-product"
+                    className="flex h-9 w-full cursor-pointer rounded-md border border-input bg-background px-3 text-sm"
+                    value={data.config.productId || ""}
+                    onChange={(event) =>
+                      patchUpdateLead({
+                        productId: event.target.value,
+                        targetFieldId: "",
+                      })
+                    }
+                  >
+                    <option value="">Selecione o produto…</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {data.config.productId ? (
+                  <div className="space-y-2">
+                    <Label>Campos do produto</Label>
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={data.config.leadFieldScopeRequired !== false}
+                          onCheckedChange={(checked) =>
+                            patchUpdateLead({
+                              leadFieldScopeRequired: checked === true,
+                              targetFieldId: "",
+                            })
+                          }
+                        />
+                        Obrigatórios
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={Boolean(data.config.leadFieldScopeOptional)}
+                          onCheckedChange={(checked) =>
+                            patchUpdateLead({
+                              leadFieldScopeOptional: checked === true,
+                              targetFieldId: "",
+                            })
+                          }
+                        />
+                        Opcionais
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+
+                {data.config.productId &&
+                (data.config.leadFieldScopeRequired !== false ||
+                  data.config.leadFieldScopeOptional) ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="update-lead-field">Campo a atualizar</Label>
+                    <select
+                      id="update-lead-field"
+                      className="flex h-9 w-full cursor-pointer rounded-md border border-input bg-background px-3 text-sm"
+                      value={data.config.targetFieldId || ""}
+                      onChange={(event) =>
+                        patchUpdateLead({ targetFieldId: event.target.value })
+                      }
+                      disabled={updateLeadFieldOptions.length === 0}
+                    >
+                      <option value="">
+                        {updateLeadFieldOptions.length === 0
+                          ? "Nenhum campo neste filtro"
+                          : "Selecione o campo…"}
+                      </option>
+                      {updateLeadFieldOptions.map((field) => (
+                        <option key={field.id} value={field.id}>
+                          {field.label}
+                        </option>
+                      ))}
+                    </select>
+                    {data.config.targetFieldId && data.config.sourceVariable ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Mapeamento:{" "}
+                        <span className="font-medium text-foreground">
+                          {clientFieldLabel(
+                            data.config.targetFieldId,
+                            selectedProduct?.customFields,
+                          )}
+                        </span>{" "}
+                        ←{" "}
+                        <span className="font-medium text-foreground">
+                          {`{{${data.config.sourceVariable}}}`}
+                        </span>
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             {data.kind === "add_tags" && (
               <div className="space-y-1.5">
                 <Label>Tags (vírgula)</Label>
@@ -518,14 +724,16 @@ export function BotNodeConfigPanel({
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label>Variável de saída</Label>
-              <Input
-                value={data.config.outputVariable || ""}
-                onChange={(event) => patchConfig({ outputVariable: event.target.value })}
-                placeholder="ex.: dados_mapeados"
-              />
-            </div>
+            {data.kind !== "update_lead" ? (
+              <div className="space-y-1.5">
+                <Label>Variável de saída</Label>
+                <Input
+                  value={data.config.outputVariable || ""}
+                  onChange={(event) => patchConfig({ outputVariable: event.target.value })}
+                  placeholder="ex.: dados_mapeados"
+                />
+              </div>
+            ) : null}
 
             <div className="rounded-lg border border-border/60 bg-muted/20 p-2 text-xs text-muted-foreground">
               Status: <span className="font-medium text-foreground">{data.status}</span>
