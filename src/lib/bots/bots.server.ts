@@ -10,6 +10,11 @@ import {
   findStartNode,
 } from "@/lib/bots/bot-runtime.engine";
 import { normalizeBotDraft } from "@/lib/bots/bot-flow.normalize";
+import {
+  deleteBotFlowOnServer,
+  listBotFlowsFromServer,
+  upsertBotFlowOnServer,
+} from "@/lib/bots/bot-flow.repository";
 import type { BotFlowDraft, BotFlowNode, BotMapFieldId, BotRunState } from "@/lib/bots/bot.types";
 import {
   SOMA_EVOLUTION_INSTANCE_DEFAULT,
@@ -22,7 +27,11 @@ async function requireBotsAccess(): Promise<SessionData> {
   const session = await getSession(sessionConfig);
   const user = session.data as SessionData | undefined;
   if (!user?.userId) throw new Error("Não autenticado.");
-  if (!sessionCanAccessMenu(user, "bots") && !sessionCanAccessMenu(user, "marketing")) {
+  if (
+    !sessionCanAccessMenu(user, "bots") &&
+    !sessionCanAccessMenu(user, "marketing") &&
+    !sessionCanAccessMenu(user, "configuracoes")
+  ) {
     throw new Error("Sem permissão para Bots.");
   }
   return user;
@@ -37,6 +46,30 @@ const runs = new Map<string, BotRunState>();
 function parseFlow(data: unknown): BotFlowDraft {
   return normalizeBotDraft(data);
 }
+
+export const listBotFlowsFn = createServerFn({ method: "GET" }).handler(async () => {
+  await requireBotsAccess();
+  return toPlain(await listBotFlowsFromServer());
+});
+
+export const upsertBotFlowFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => parseFlow(data))
+  .handler(async ({ data }) => {
+    await requireBotsAccess();
+    return toPlain(await upsertBotFlowOnServer(data));
+  });
+
+export const deleteBotFlowFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data && typeof data === "object" ? data : {}) as { id?: string };
+    return { id: String(body.id || "").trim() };
+  })
+  .handler(async ({ data }) => {
+    await requireBotsAccess();
+    if (!data.id) return { ok: false as const };
+    const ok = await deleteBotFlowOnServer(data.id);
+    return { ok };
+  });
 
 export const testBotNodeFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {

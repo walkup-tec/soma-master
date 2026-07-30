@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,9 @@ import { BotBuilderModal } from "@/components/bots/bot-builder-modal";
 import {
   deleteStoredBotFlow,
   listStoredBotFlows,
+  replaceStoredBotFlows,
 } from "@/lib/bots/bot-flow.storage";
+import { deleteBotFlowFn, listBotFlowsFn, upsertBotFlowFn } from "@/lib/bots/bots.server";
 import type { BotFlowDraft } from "@/lib/bots/bot.types";
 
 export function BotsPanel() {
@@ -31,29 +34,50 @@ export function BotsPanel() {
   const [editing, setEditing] = useState<BotFlowDraft | null>(null);
   const [flows, setFlows] = useState<BotFlowDraft[]>([]);
   const [pendingDelete, setPendingDelete] = useState<BotFlowDraft | null>(null);
+  const listBotFlows = useServerFn(listBotFlowsFn);
+  const deleteBotFlow = useServerFn(deleteBotFlowFn);
+  const upsertBotFlow = useServerFn(upsertBotFlowFn);
 
-  const reload = useCallback(() => {
-    setFlows(listStoredBotFlows());
-  }, []);
+  const reload = useCallback(async () => {
+    try {
+      let remote = await listBotFlows();
+      const local = listStoredBotFlows();
+      // Migra fluxos antigos (só localStorage) para o servidor na primeira carga.
+      if (remote.length === 0 && local.length > 0) {
+        for (const flow of local) {
+          await upsertBotFlow({ data: flow });
+        }
+        remote = await listBotFlows();
+      }
+      setFlows(replaceStoredBotFlows(remote.length > 0 ? remote : local));
+    } catch {
+      setFlows(listStoredBotFlows());
+    }
+  }, [listBotFlows, upsertBotFlow]);
 
   useEffect(() => {
-    reload();
+    void reload();
   }, [reload]);
 
-  function confirmDelete() {
+  async function confirmDelete() {
     const flow = pendingDelete;
     if (!flow) return;
-    if (!deleteStoredBotFlow(flow.id)) {
-      toast.error("Não foi possível excluir o bot.");
-      setPendingDelete(null);
-      return;
+    try {
+      await deleteBotFlow({ data: { id: flow.id } });
+      deleteStoredBotFlow(flow.id);
+    } catch {
+      if (!deleteStoredBotFlow(flow.id)) {
+        toast.error("Não foi possível excluir o bot.");
+        setPendingDelete(null);
+        return;
+      }
     }
     if (editing?.id === flow.id) {
       setEditing(null);
       setBuilderOpen(false);
     }
     setPendingDelete(null);
-    reload();
+    await reload();
     toast.success("Bot excluído");
   }
 
@@ -179,7 +203,7 @@ export function BotsPanel() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="cursor-pointer">Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="cursor-pointer" onClick={confirmDelete}>
+            <AlertDialogAction className="cursor-pointer" onClick={() => void confirmDelete()}>
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

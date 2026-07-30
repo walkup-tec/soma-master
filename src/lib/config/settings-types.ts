@@ -91,12 +91,18 @@ export type ChatTagConfig = {
 
 export type WeekdayId = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
-export type ChatbotDaySchedule = {
-  enabled: boolean;
+/** Um turno contínuo dentro do dia (HH:mm). */
+export type ChatbotTimeShift = {
   /** HH:mm */
   start: string;
   /** HH:mm */
   end: string;
+};
+
+export type ChatbotDaySchedule = {
+  enabled: boolean;
+  /** Turnos do dia — ex.: 09:00–12:00 e 13:00–20:00. */
+  shifts: ChatbotTimeShift[];
 };
 
 /** Bots de atendimento por janela de expediente + grade horária. */

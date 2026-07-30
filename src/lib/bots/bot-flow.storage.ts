@@ -55,6 +55,13 @@ export function deleteStoredBotFlow(id: string): boolean {
   return true;
 }
 
+/** Substitui o cache local pelos fluxos do servidor (hidratação). */
+export function replaceStoredBotFlows(flows: BotFlowDraft[]): BotFlowDraft[] {
+  const next = flows.map((item) => ensureBotHasStart(normalizeBotDraft(item)));
+  writeStored(next);
+  return listStoredBotFlows();
+}
+
 export function createFreshBotDraft(): BotFlowDraft {
   return ensureBotHasStart(createDefaultBotDraft());
 }

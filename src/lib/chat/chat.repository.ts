@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { BotRunState } from "@/lib/bots/bot.types";
 import {
   DEFAULT_CHAT_AI_SETTINGS,
   type ChatAiExample,
@@ -51,6 +52,7 @@ type ConvRow = {
   assigned_user_name: string | null;
   contact_note: string | null;
   ai_enabled: boolean;
+  bot_run?: unknown;
   last_message_at: Date | null;
   last_message_preview: string | null;
   unread_count: number;
@@ -60,6 +62,11 @@ type ConvRow = {
   client_status?: string | null;
   client_product_ids?: string[] | null;
 };
+
+function mapBotRun(raw: unknown): BotRunState | null {
+  if (!raw || typeof raw !== "object") return null;
+  return raw as BotRunState;
+}
 
 function mapConv(row: ConvRow): ChatConversation {
   return {
@@ -71,6 +78,7 @@ function mapConv(row: ConvRow): ChatConversation {
     assignedUserName: row.assigned_user_name,
     contactNote: row.contact_note ?? null,
     aiEnabled: row.ai_enabled,
+    botRun: mapBotRun(row.bot_run),
     lastMessageAt: row.last_message_at ? row.last_message_at.toISOString() : null,
     lastMessagePreview: row.last_message_preview,
     unreadCount: row.unread_count,
@@ -101,7 +109,7 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
       select
         c.id, c.phone, c.contact_name, c.client_id, c.assigned_user_id, c.assigned_user_name,
         c.contact_note,
-        c.ai_enabled, c.last_message_at, c.last_message_preview, c.unread_count,
+        c.ai_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
         cl.data->>'nome' as client_name,
         cl.status as client_status,
@@ -124,7 +132,11 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
   return enrichConversations(
     [...items]
-      .map((item) => ({ ...item, contactNote: item.contactNote ?? null }))
+      .map((item) => ({
+        ...item,
+        contactNote: item.contactNote ?? null,
+        botRun: item.botRun ?? null,
+      }))
       .sort((a, b) =>
         (b.lastMessageAt ?? b.updatedAt).localeCompare(a.lastMessageAt ?? a.updatedAt),
       )
@@ -197,7 +209,7 @@ export async function getOrCreateConversationByPhone(input: {
     return withChatDb(async (sql) => {
       const existing = await sql<ConvRow[]>`
         select id, phone, contact_name, client_id, assigned_user_id, assigned_user_name, contact_note,
-               ai_enabled, last_message_at, last_message_preview, unread_count, created_at, updated_at
+               ai_enabled, bot_run, last_message_at, last_message_preview, unread_count, created_at, updated_at
         from crm.chat_conversations where phone = ${phone} limit 1
       `;
       if (existing[0]) {
@@ -244,6 +256,7 @@ export async function getOrCreateConversationByPhone(input: {
         assignedUserName: null,
         contactNote: null,
         aiEnabled: initialAiEnabled,
+        botRun: null,
         lastMessageAt: null,
         lastMessagePreview: null,
         unreadCount: 0,
@@ -255,7 +268,7 @@ export async function getOrCreateConversationByPhone(input: {
 
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
   const found = items.find((c) => c.phone === phone);
-  if (found) return found;
+  if (found) return { ...found, botRun: found.botRun ?? null };
   const initialAiEnabled = (await getChatAiSettings()).aiGlobalEnabled;
   const now = new Date().toISOString();
   const created: ChatConversation = {
@@ -267,6 +280,7 @@ export async function getOrCreateConversationByPhone(input: {
     assignedUserName: null,
     contactNote: null,
     aiEnabled: initialAiEnabled,
+    botRun: null,
     lastMessageAt: null,
     lastMessagePreview: null,
     unreadCount: 0,
@@ -622,6 +636,32 @@ export async function setConversationAiEnabled(input: {
     convs.map((c) =>
       c.id === input.conversationId
         ? { ...c, aiEnabled: input.aiEnabled, updatedAt: new Date().toISOString() }
+        : c,
+    ),
+  );
+}
+
+export async function setConversationBotRun(input: {
+  conversationId: string;
+  botRun: BotRunState | null;
+}): Promise<void> {
+  if (isDatabaseEnabled()) {
+    await withChatDb(async (sql) => {
+      await sql`
+        update crm.chat_conversations
+        set bot_run = ${input.botRun == null ? null : sql.json(input.botRun)},
+            updated_at = now()
+        where id = ${input.conversationId}
+      `;
+    });
+    return;
+  }
+  const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  await writeJsonFile(
+    CONV_FILE,
+    convs.map((c) =>
+      c.id === input.conversationId
+        ? { ...c, botRun: input.botRun, updatedAt: new Date().toISOString() }
         : c,
     ),
   );

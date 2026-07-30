@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useServerFn } from "@tanstack/react-start";
 import { Play, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import {
   getStoredBotFlowById,
   saveStoredBotFlow,
 } from "@/lib/bots/bot-flow.storage";
+import { upsertBotFlowFn } from "@/lib/bots/bots.server";
 import {
   ensureBotHasStart,
   normalizeBotDraft,
@@ -34,6 +36,7 @@ export function BotBuilderModal({
   onSaved?: (draft: BotFlowDraft) => void;
 }) {
   const { settings } = useSystemSettings();
+  const upsertBotFlow = useServerFn(upsertBotFlowFn);
   const [draft, setDraft] = useState<BotFlowDraft>(() => ({
     id: "bot-draft-pending",
     name: "Novo bot",
@@ -43,6 +46,7 @@ export function BotBuilderModal({
   }));
   const [canvasKey, setCanvasKey] = useState(0);
   const [runOpen, setRunOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const wasOpenRef = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -84,13 +88,22 @@ export function BotBuilderModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  function handleSave() {
+  async function handleSave() {
     const current = draftRef.current;
     const name = current.name.trim() || "Novo bot";
-    const next = saveStoredBotFlow({ ...current, name });
-    setDraft(next);
-    onSaved?.(next);
-    toast.success(`Bot salvo · ${next.nodes.length} node(s)`);
+    setSaving(true);
+    try {
+      const local = saveStoredBotFlow({ ...current, name });
+      const next = await upsertBotFlow({ data: local });
+      const synced = saveStoredBotFlow(next);
+      setDraft(synced);
+      onSaved?.(synced);
+      toast.success(`Bot salvo · ${synced.nodes.length} node(s)`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar bot no servidor.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (!open || typeof document === "undefined") return null;
@@ -128,9 +141,15 @@ export function BotBuilderModal({
           <Play className="size-4" />
           Execução de fluxo
         </Button>
-        <Button type="button" variant="outline" className="cursor-pointer gap-1.5" onClick={handleSave}>
+        <Button
+          type="button"
+          variant="outline"
+          className="cursor-pointer gap-1.5"
+          disabled={saving}
+          onClick={() => void handleSave()}
+        >
           <Save className="size-4" />
-          Salvar
+          {saving ? "Salvando…" : "Salvar"}
         </Button>
         <Button
           type="button"

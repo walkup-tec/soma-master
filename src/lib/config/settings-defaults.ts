@@ -12,6 +12,7 @@ import type {
   BankConfig,
   ChatbotDaySchedule,
   ChatbotRuntimeConfig,
+  ChatbotTimeShift,
   ChatTagConfig,
   ProductCustomField,
   ProductOperationalGuide,
@@ -38,8 +39,12 @@ export const WEEKDAY_LABELS: Record<WeekdayId, string> = {
   sun: "Domingo",
 };
 
+function defaultShift(start = "08:00", end = "18:00"): ChatbotTimeShift {
+  return { start, end };
+}
+
 function defaultDay(enabled: boolean, start = "08:00", end = "18:00"): ChatbotDaySchedule {
-  return { enabled, start, end };
+  return { enabled, shifts: [defaultShift(start, end)] };
 }
 
 export function createDefaultChatbotRuntime(): ChatbotRuntimeConfig {
@@ -281,11 +286,36 @@ function normalizeTimeHm(value: unknown, fallback: string): string {
   return fallback;
 }
 
+function normalizeChatbotShifts(
+  src: Partial<ChatbotDaySchedule> & { start?: unknown; end?: unknown } | undefined,
+  fallback: ChatbotDaySchedule,
+): ChatbotTimeShift[] {
+  const fallbackShift = fallback.shifts[0] ?? defaultShift();
+  if (Array.isArray(src?.shifts) && src.shifts.length > 0) {
+    return src.shifts.map((shift) => ({
+      start: normalizeTimeHm(shift?.start, fallbackShift.start),
+      end: normalizeTimeHm(shift?.end, fallbackShift.end),
+    }));
+  }
+  // Legado: um único start/end por dia
+  if (src && (src.start != null || src.end != null)) {
+    return [
+      {
+        start: normalizeTimeHm(src.start, fallbackShift.start),
+        end: normalizeTimeHm(src.end, fallbackShift.end),
+      },
+    ];
+  }
+  return fallback.shifts.map((shift) => ({ ...shift }));
+}
+
 export function normalizeChatbotRuntime(raw: unknown): ChatbotRuntimeConfig {
   const base = createDefaultChatbotRuntime();
   if (!raw || typeof raw !== "object") return base;
   const input = raw as Partial<ChatbotRuntimeConfig> & {
-    schedule?: Partial<Record<WeekdayId, Partial<ChatbotDaySchedule>>>;
+    schedule?: Partial<
+      Record<WeekdayId, Partial<ChatbotDaySchedule> & { start?: string; end?: string }>
+    >;
     /** Legado: um único bot ativo. */
     activeBotId?: string | null;
   };
@@ -295,8 +325,7 @@ export function normalizeChatbotRuntime(raw: unknown): ChatbotRuntimeConfig {
     const fallback = base.schedule[day];
     schedule[day] = {
       enabled: src?.enabled == null ? fallback.enabled : Boolean(src.enabled),
-      start: normalizeTimeHm(src?.start, fallback.start),
-      end: normalizeTimeHm(src?.end, fallback.end),
+      shifts: normalizeChatbotShifts(src, fallback),
     };
   }
   const legacyActive =

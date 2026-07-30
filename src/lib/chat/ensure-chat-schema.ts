@@ -9,6 +9,10 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
     add column if not exists contact_note text null
   `;
   await sql`
+    alter table crm.chat_conversations
+    add column if not exists bot_run jsonb null
+  `;
+  await sql`
     alter table crm.chat_ai_settings
     add column if not exists webhook_public_base_url text null
   `;

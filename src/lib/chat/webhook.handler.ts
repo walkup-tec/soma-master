@@ -11,6 +11,7 @@ import {
 import { saveInboundChatMedia } from "@/lib/chat/chat-media.repository";
 import { generateAiReply, isOpenAiConfigured } from "@/lib/chat/openai.adapter";
 import { normalizeWhatsAppPhone } from "@/lib/chat/phone";
+import { maybeRunChatbotRuntime } from "@/lib/bots/bot-inbound.service";
 
 type EvolutionInboundMessage = {
   phone: string;
@@ -233,14 +234,29 @@ export async function handleEvolutionWebhook(request: Request): Promise<Response
       waMessageId: msg.messageId ?? null,
       bumpUnread: true,
     });
-    // Processa IA em background não bloqueante (fire-and-forget seguro o suficiente no Node)
-    void maybeReplyWithAi(
-      conversation.id,
+
+    const inboundText =
       msg.text ||
-        (msg.mediaType === "document"
-          ? "O cliente enviou um documento PDF sem legenda."
-          : "O cliente enviou uma imagem sem legenda."),
-    );
+      (msg.mediaType === "document"
+        ? "O cliente enviou um documento PDF sem legenda."
+        : "O cliente enviou uma imagem sem legenda.");
+
+    // Bot de expediente (turnos) tem prioridade sobre a IA do chat
+    void (async () => {
+      try {
+        const handledByBot = await maybeRunChatbotRuntime({
+          conversationId: conversation.id,
+          phone: conversation.phone,
+          inboundText,
+        });
+        if (!handledByBot) {
+          await maybeReplyWithAi(conversation.id, inboundText);
+        }
+      } catch (error) {
+        console.error("[chat] chatbot runtime failed", error);
+        await maybeReplyWithAi(conversation.id, inboundText);
+      }
+    })();
   }
 
   return Response.json({ ok: true, accepted: inbound.length });

@@ -1,5 +1,7 @@
 /** Tipos do módulo Chat WhatsApp (Soma). */
 
+import type { BotRunState } from "@/lib/bots/bot.types";
+
 export type ChatSenderType = "contact" | "agent" | "ai" | "system";
 export type ChatMessageDirection = "inbound" | "outbound";
 export type ChatMessageType = "text" | "image" | "document";
@@ -15,6 +17,8 @@ export type ChatConversation = {
   contactNote: string | null;
   /** IA local da conversa — false quando atendente entra. */
   aiEnabled: boolean;
+  /** Execução ativa do bot de expediente (JSON). */
+  botRun: BotRunState | null;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
   unreadCount: number;
