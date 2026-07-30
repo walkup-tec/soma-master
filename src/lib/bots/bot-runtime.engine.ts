@@ -10,6 +10,7 @@ import type {
   BotNodeExecuteContext,
   BotNodeExecuteResult,
   BotNodeLogEntry,
+  BotOutboundPayload,
   BotRunState,
 } from "@/lib/bots/bot.types";
 
@@ -111,7 +112,21 @@ export async function executeBotNode(
               : "Aguardando escolha do contato",
             waitForReply: !dryRun,
             nextHandle: dryRun ? options[0]?.id || "out" : undefined,
-            outboundText: text,
+            // Texto puro no menu numerado ou simulação; botões/lista vão como interativo.
+            outboundText: dryRun || kind === "menu" ? text : undefined,
+            outboundInteractive:
+              !dryRun && kind !== "menu" && options.length > 0
+                ? {
+                    kind: kind === "list" ? "list" : "buttons",
+                    text,
+                    options: options.map((opt) => ({
+                      id: String(opt.id),
+                      label: String(opt.label).trim(),
+                      value: String(opt.value || opt.label).trim(),
+                    })),
+                    listButtonText: "Ver opções",
+                  }
+                : undefined,
             data: { options: optionsPayload },
           };
         }
@@ -124,6 +139,29 @@ export async function executeBotNode(
           return normalized === label || normalized === value || normalized === id;
         });
 
+        // Sem match: permanece no mesmo node aguardando uma opção válida (não reinicia o fluxo).
+        if (!match && kind !== "menu") {
+          return {
+            ok: true,
+            status: "waiting",
+            message: `Resposta "${replyRaw}" não corresponde a uma opção — continua aguardando`,
+            waitForReply: true,
+            nextHandle: undefined,
+            outboundInteractive: {
+              kind: kind === "list" ? "list" : "buttons",
+              text: `${text}\n\nPor favor, escolha uma das opções.`,
+              options: options.map((opt) => ({
+                id: String(opt.id),
+                label: String(opt.label).trim(),
+                value: String(opt.value || opt.label).trim(),
+              })),
+              listButtonText: "Ver opções",
+            },
+            data: { options: optionsPayload, chosen: null },
+          };
+        }
+
+        // Menu numerado: aceita texto livre como fallback pela saída "out" se não casar.
         return {
           ok: true,
           status: "success",
@@ -517,8 +555,9 @@ export async function advanceBotRun(input: {
   inboundText?: string;
   conversationId?: string;
   phone?: string;
-}): Promise<{ run: BotRunState; outboundTexts: string[] }> {
+}): Promise<{ run: BotRunState; outboundTexts: string[]; outbound: BotOutboundPayload[] }> {
   const outboundTexts: string[] = [];
+  const outbound: BotOutboundPayload[] = [];
   let run: BotRunState = {
     ...input.run,
     updatedAt: nowIso(),
@@ -565,7 +604,13 @@ export async function advanceBotRun(input: {
     if (result.variables) {
       run.variables = { ...run.variables, ...result.variables };
     }
-    if (result.outboundText) outboundTexts.push(result.outboundText);
+    if (result.outboundInteractive) {
+      outbound.push({ type: "interactive", interactive: result.outboundInteractive });
+      outboundTexts.push(result.outboundInteractive.text);
+    } else if (result.outboundText) {
+      outbound.push({ type: "text", text: result.outboundText });
+      outboundTexts.push(result.outboundText);
+    }
 
     if (!result.ok) {
       run.phase = "error";
@@ -573,7 +618,8 @@ export async function advanceBotRun(input: {
       break;
     }
 
-    if (result.waitForReply && input.inboundText == null) {
+    // Continua aguardando (primeira pergunta OU resposta inválida em botões/lista).
+    if (result.waitForReply && (!result.nextHandle || input.inboundText == null)) {
       run.phase = "waiting_reply";
       break;
     }
@@ -605,5 +651,5 @@ export async function advanceBotRun(input: {
   }
 
   run.updatedAt = nowIso();
-  return { run, outboundTexts };
+  return { run, outboundTexts, outbound };
 }

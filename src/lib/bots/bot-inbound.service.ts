@@ -5,21 +5,127 @@ import {
 } from "@/lib/bots/bot-runtime.engine";
 import { getBotFlowFromServer } from "@/lib/bots/bot-flow.repository";
 import { loadBotLeadVariables } from "@/lib/bots/bot-lead.service";
-import type { BotRunState } from "@/lib/bots/bot.types";
+import type { BotOutboundPayload, BotRunState } from "@/lib/bots/bot.types";
 import {
   appendMessage,
   getConversation,
   setConversationBotRun,
 } from "@/lib/chat/chat.repository";
-import { evolutionSendText } from "@/lib/chat/evolution.adapter";
+import {
+  evolutionSendButtons,
+  evolutionSendList,
+  evolutionSendText,
+} from "@/lib/chat/evolution.adapter";
 import { resolveChatbotRuntimeSelection } from "@/lib/config/chatbot-runtime-schedule";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
+
+/** Serializa execuções do bot por conversa (evita reinício por race em mensagens rápidas). */
+const conversationBotLocks = new Map<string, Promise<unknown>>();
+
+async function withConversationBotLock<T>(conversationId: string, fn: () => Promise<T>): Promise<T> {
+  const previous = conversationBotLocks.get(conversationId) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(fn);
+  conversationBotLocks.set(
+    conversationId,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return run;
+}
 
 function shouldRestartRun(run: BotRunState | null | undefined, botId: string): boolean {
   if (!run) return true;
   if (run.flowId !== botId) return true;
+  // Em andamento / aguardando resposta: NUNCA reinicia — continua o fluxo.
+  if (run.phase === "waiting_reply" || run.phase === "running" || run.phase === "starting") {
+    return false;
+  }
   if (run.phase === "finished" || run.phase === "error" || run.phase === "idle") return true;
   return false;
+}
+
+async function dispatchBotOutbound(input: {
+  conversationId: string;
+  phone: string;
+  botName: string;
+  payloads: BotOutboundPayload[];
+}): Promise<void> {
+  for (const payload of input.payloads) {
+    if (payload.type === "text") {
+      const body = String(payload.text || "").trim();
+      if (!body) continue;
+      await appendMessage({
+        conversationId: input.conversationId,
+        direction: "outbound",
+        body,
+        senderType: "ai",
+        senderName: input.botName,
+      });
+      await evolutionSendText({ phone: input.phone, text: body });
+      continue;
+    }
+
+    const interactive = payload.interactive;
+    const body = String(interactive.text || "").trim();
+    if (!body) continue;
+    const optionLabels = interactive.options.map((opt) => opt.label).filter(Boolean);
+    const crmBody =
+      optionLabels.length > 0 ? `${body}\n\nOpções: ${optionLabels.join(" · ")}` : body;
+
+    await appendMessage({
+      conversationId: input.conversationId,
+      direction: "outbound",
+      body: crmBody,
+      senderType: "ai",
+      senderName: input.botName,
+    });
+
+    if (interactive.kind === "list") {
+      const send = await evolutionSendList({
+        phone: input.phone,
+        title: body.slice(0, 60),
+        description: body.length > 60 ? body : undefined,
+        buttonText: interactive.listButtonText || "Ver opções",
+        sections: [
+          {
+            title: "Opções",
+            rows: interactive.options.slice(0, 10).map((opt) => ({
+              rowId: opt.id,
+              title: opt.label.slice(0, 24),
+              description: opt.value && opt.value !== opt.label ? opt.value.slice(0, 72) : undefined,
+            })),
+          },
+        ],
+      });
+      if (!send.ok) {
+        // Fallback: texto + opções numeradas
+        const fallback = `${body}\n\n${interactive.options
+          .map((opt, index) => `${index + 1}. ${opt.label}`)
+          .join("\n")}`;
+        await evolutionSendText({ phone: input.phone, text: fallback });
+      }
+      continue;
+    }
+
+    // buttons (máx. 3 no WhatsApp)
+    const send = await evolutionSendButtons({
+      phone: input.phone,
+      title: body.slice(0, 60),
+      description: body.length > 60 ? body : undefined,
+      buttons: interactive.options.slice(0, 3).map((opt) => ({
+        id: opt.id,
+        displayText: opt.label.slice(0, 20),
+      })),
+    });
+    if (!send.ok) {
+      const fallback = `${body}\n\n${interactive.options
+        .map((opt, index) => `${index + 1}. ${opt.label}`)
+        .join("\n")}`;
+      await evolutionSendText({ phone: input.phone, text: fallback });
+    }
+  }
 }
 
 /**
@@ -31,73 +137,73 @@ export async function maybeRunChatbotRuntime(input: {
   phone: string;
   inboundText: string;
 }): Promise<boolean> {
-  const conversation = await getConversation(input.conversationId);
-  if (!conversation) return false;
+  return withConversationBotLock(input.conversationId, async () => {
+    // Releitura dentro do lock — evita dois "Oi" criarem dois runs em paralelo.
+    const conversation = await getConversation(input.conversationId);
+    if (!conversation) return false;
 
-  // Atendente humano assume a conversa
-  if (conversation.assignedUserId) return false;
-  // Bot pausado nesta conversa
-  if (!conversation.botEnabled) return false;
+    // Atendente humano assume a conversa
+    if (conversation.assignedUserId) return false;
+    // Bot pausado nesta conversa
+    if (!conversation.botEnabled) return false;
 
-  const settings = await loadSystemSettingsFromDisk();
-  const selection = resolveChatbotRuntimeSelection(settings.chatbotRuntime);
-  const botId = selection.botId;
-  if (!botId) return false;
+    const settings = await loadSystemSettingsFromDisk();
+    const selection = resolveChatbotRuntimeSelection(settings.chatbotRuntime);
+    const botId = selection.botId;
+    if (!botId) return false;
 
-  const flow = await getBotFlowFromServer(botId);
-  if (!flow || !findStartNode(flow)) {
-    console.warn("[chatbot-runtime] fluxo ausente ou sem Início", { botId, window: selection.window });
-    return false;
-  }
+    const flow = await getBotFlowFromServer(botId);
+    if (!flow || !findStartNode(flow)) {
+      console.warn("[chatbot-runtime] fluxo ausente ou sem Início", {
+        botId,
+        window: selection.window,
+      });
+      return false;
+    }
 
-  let run = conversation.botRun ?? null;
-  const inboundForAdvance =
-    run && !shouldRestartRun(run, botId) && run.phase === "waiting_reply"
-      ? input.inboundText
-      : undefined;
+    let run = conversation.botRun ?? null;
+    const continueWaiting =
+      Boolean(run) && !shouldRestartRun(run, botId) && run?.phase === "waiting_reply";
+    const inboundForAdvance = continueWaiting ? input.inboundText : undefined;
 
-  if (shouldRestartRun(run, botId)) {
-    run = createBotRunState({ flow, testPhone: input.phone });
-  }
+    if (shouldRestartRun(run, botId)) {
+      run = createBotRunState({ flow, testPhone: input.phone });
+    }
 
-  const leadVars = await loadBotLeadVariables({
-    conversationId: input.conversationId,
-    phone: input.phone,
-  });
-  run = {
-    ...run,
-    variables: {
-      ...leadVars,
-      ...run.variables,
-    },
-  };
-
-  const advanced = await advanceBotRun({
-    flow,
-    run,
-    inboundText: inboundForAdvance,
-    conversationId: input.conversationId,
-    phone: input.phone,
-  });
-  run = advanced.run;
-
-  for (const text of advanced.outboundTexts) {
-    const body = String(text || "").trim();
-    if (!body) continue;
-    await appendMessage({
+    const leadVars = await loadBotLeadVariables({
       conversationId: input.conversationId,
-      direction: "outbound",
-      body,
-      senderType: "ai",
-      senderName: flow.name || "Bot Soma",
+      phone: input.phone,
     });
-    await evolutionSendText({ phone: input.phone, text: body });
-  }
+    run = {
+      ...run!,
+      variables: {
+        ...leadVars,
+        ...run!.variables,
+      },
+    };
 
-  await setConversationBotRun({
-    conversationId: input.conversationId,
-    botRun: run,
+    const advanced = await advanceBotRun({
+      flow,
+      run,
+      inboundText: inboundForAdvance,
+      conversationId: input.conversationId,
+      phone: input.phone,
+    });
+    run = advanced.run;
+
+    // Persiste o estado ANTES do envio WhatsApp — reduz janela de race no próximo inbound.
+    await setConversationBotRun({
+      conversationId: input.conversationId,
+      botRun: run,
+    });
+
+    await dispatchBotOutbound({
+      conversationId: input.conversationId,
+      phone: input.phone,
+      botName: flow.name || "Bot Soma",
+      payloads: advanced.outbound,
+    });
+
+    return true;
   });
-
-  return true;
 }

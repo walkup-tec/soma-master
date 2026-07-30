@@ -53,12 +53,42 @@ function extractInboundFromEvolution(payload: unknown): EvolutionInboundMessage[
     const fromMe = Boolean(key.fromMe ?? row.fromMe);
     const remoteJid = String(key.remoteJid ?? row.remoteJid ?? "");
     const phone = normalizeWhatsAppPhone(remoteJid.split("@")[0] ?? "");
+
+    const buttonsResponse =
+      message.buttonsResponseMessage && typeof message.buttonsResponseMessage === "object"
+        ? (message.buttonsResponseMessage as Record<string, unknown>)
+        : null;
+    const templateButtonReply =
+      message.templateButtonReplyMessage && typeof message.templateButtonReplyMessage === "object"
+        ? (message.templateButtonReplyMessage as Record<string, unknown>)
+        : null;
+    const listResponse =
+      message.listResponseMessage && typeof message.listResponseMessage === "object"
+        ? (message.listResponseMessage as Record<string, unknown>)
+        : null;
+    const listSingle =
+      listResponse?.singleSelectReply && typeof listResponse.singleSelectReply === "object"
+        ? (listResponse.singleSelectReply as Record<string, unknown>)
+        : null;
+
+    const interactiveText =
+      (typeof buttonsResponse?.selectedDisplayText === "string" &&
+        buttonsResponse.selectedDisplayText) ||
+      (typeof buttonsResponse?.selectedButtonId === "string" && buttonsResponse.selectedButtonId) ||
+      (typeof templateButtonReply?.selectedDisplayText === "string" &&
+        templateButtonReply.selectedDisplayText) ||
+      (typeof templateButtonReply?.selectedId === "string" && templateButtonReply.selectedId) ||
+      (typeof listResponse?.title === "string" && listResponse.title) ||
+      (typeof listSingle?.selectedRowId === "string" && listSingle.selectedRowId) ||
+      "";
+
     const text =
       (typeof message.conversation === "string" && message.conversation) ||
       (typeof (message.extendedTextMessage as { text?: string } | undefined)?.text === "string" &&
         (message.extendedTextMessage as { text: string }).text) ||
       (typeof row.text === "string" && row.text) ||
       (typeof mediaMessage?.caption === "string" && mediaMessage.caption) ||
+      interactiveText ||
       "";
     const mediaBase64 =
       (typeof row.base64 === "string" && row.base64) ||

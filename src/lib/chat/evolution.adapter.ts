@@ -468,6 +468,99 @@ export async function evolutionSendText(input: {
   return { ok: false, raw: lastRaw, error: lastError };
 }
 
+/** Envia mensagem com botões de resposta rápida (até 3 no WhatsApp). */
+export async function evolutionSendButtons(input: {
+  phone: string;
+  title: string;
+  description?: string;
+  footer?: string;
+  buttons: Array<{ id: string; displayText: string }>;
+  instanceName?: string;
+}): Promise<{ ok: boolean; raw?: unknown; error?: string }> {
+  if (!isEvolutionConfigured()) {
+    return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE)." };
+  }
+
+  const { instance: defaultInstance } = evolutionEnv();
+  const instance = String(input.instanceName || defaultInstance).trim() || defaultInstance;
+  assertSomaOwnedInstance(instance);
+  const number = String(input.phone || "").replace(/\D+/g, "");
+  const title = String(input.title || "").trim();
+  const buttons = (input.buttons || [])
+    .map((btn) => ({
+      type: "reply" as const,
+      id: String(btn.id || "").trim().slice(0, 256),
+      displayText: String(btn.displayText || "").trim().slice(0, 20),
+    }))
+    .filter((btn) => btn.id && btn.displayText)
+    .slice(0, 3);
+
+  if (!number || !title || buttons.length === 0) {
+    return { ok: false, error: "Destino, título ou botões inválidos para Evolution." };
+  }
+
+  const body = {
+    number,
+    title,
+    description: String(input.description || "").trim() || undefined,
+    footer: String(input.footer || "").trim() || undefined,
+    buttons,
+  };
+
+  const result = await evolutionFetch(`/message/sendButtons/${encodeURIComponent(instance)}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (result.ok) return { ok: true, raw: result.raw };
+  return { ok: false, raw: result.raw, error: result.error || "Falha ao enviar botões na Evolution." };
+}
+
+/** Envia lista interativa (menu) pela Evolution. */
+export async function evolutionSendList(input: {
+  phone: string;
+  title: string;
+  description?: string;
+  buttonText?: string;
+  footer?: string;
+  sections: Array<{
+    title: string;
+    rows: Array<{ rowId: string; title: string; description?: string }>;
+  }>;
+  instanceName?: string;
+}): Promise<{ ok: boolean; raw?: unknown; error?: string }> {
+  if (!isEvolutionConfigured()) {
+    return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL / KEY / INSTANCE)." };
+  }
+
+  const { instance: defaultInstance } = evolutionEnv();
+  const instance = String(input.instanceName || defaultInstance).trim() || defaultInstance;
+  assertSomaOwnedInstance(instance);
+  const number = String(input.phone || "").replace(/\D+/g, "");
+  const title = String(input.title || "").trim();
+  const sections = input.sections || [];
+  if (!number || !title || sections.length === 0) {
+    return { ok: false, error: "Destino, título ou seções inválidos para lista Evolution." };
+  }
+
+  const body = {
+    number,
+    title,
+    description: String(input.description || "").trim() || undefined,
+    buttonText: String(input.buttonText || "Ver opções").trim() || "Ver opções",
+    footer: String(input.footer || "").trim() || undefined,
+    sections,
+  };
+
+  const result = await evolutionFetch(`/message/sendList/${encodeURIComponent(instance)}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (result.ok) return { ok: true, raw: result.raw };
+  return { ok: false, raw: result.raw, error: result.error || "Falha ao enviar lista na Evolution." };
+}
+
 /**
  * Envia imagem pela Evolution v2.
  * Doc oficial: POST /message/sendMedia/{instance}; `media` aceita URL ou base64.

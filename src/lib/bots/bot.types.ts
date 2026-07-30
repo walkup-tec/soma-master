@@ -230,6 +230,20 @@ export type BotNodeExecuteResult = {
   nextHandle?: string;
   variables?: Record<string, BotJson>;
   outboundText?: string;
+  /** Mensagem interativa WhatsApp (botões / lista). */
+  outboundInteractive?: BotOutboundInteractive;
   waitForReply?: boolean;
   data?: Record<string, BotJson>;
 };
+
+export type BotOutboundInteractive = {
+  kind: "buttons" | "list";
+  text: string;
+  options: Array<{ id: string; label: string; value?: string }>;
+  /** Texto do botão que abre a lista (só kind=list). */
+  listButtonText?: string;
+};
+
+export type BotOutboundPayload =
+  | { type: "text"; text: string }
+  | { type: "interactive"; interactive: BotOutboundInteractive };
