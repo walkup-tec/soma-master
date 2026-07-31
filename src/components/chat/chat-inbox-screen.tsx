@@ -36,6 +36,7 @@ import {
   attachChatMediaToClientFn,
   finalizeAndSendChatImageFn,
   getChatThreadFn,
+  loadOlderChatMessagesFn,
   initChatImageUploadFn,
   joinChatConversationFn,
   listChatConversationsFn,
@@ -66,6 +67,39 @@ type Bootstrap = {
 type FilterTab = "mine" | "unassigned" | "all";
 type ComposerMode = "reply" | "note";
 
+const THREAD_PAGE_SIZE = 20;
+
+function mergeThreadMessages(prev: ChatMessage[], latestPage: ChatMessage[]): ChatMessage[] {
+  if (latestPage.length === 0) return prev;
+
+  const latestIds = new Set(latestPage.map((m) => m.id));
+  const oldestLatest = latestPage[0]?.createdAt ?? "";
+
+  const olderKept = prev.filter((msg) => {
+    if (latestIds.has(msg.id)) return false;
+    if (msg.id.startsWith("temp-")) {
+      return !latestPage.some(
+        (real) =>
+          real.direction === msg.direction &&
+          real.body === msg.body &&
+          Math.abs(Date.parse(real.createdAt) - Date.parse(msg.createdAt)) < 120_000,
+      );
+    }
+    return !oldestLatest || msg.createdAt < oldestLatest;
+  });
+
+  const next = [...olderKept, ...latestPage].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (
+    prev.length === next.length &&
+    prev[0]?.id === next[0]?.id &&
+    prev.at(-1)?.id === next.at(-1)?.id &&
+    prev.at(-1)?.body === next.at(-1)?.body
+  ) {
+    return prev;
+  }
+  return next;
+}
+
 /**
  * Inbox estilo Chatwoot / BotConversa:
  * lista (Mine/Unassigned/All) | thread | cartão do contato.
@@ -84,6 +118,7 @@ export function ChatInboxScreen({
 }) {
   const listConversations = useServerFn(listChatConversationsFn);
   const getThread = useServerFn(getChatThreadFn);
+  const loadOlderMessages = useServerFn(loadOlderChatMessagesFn);
   const joinChat = useServerFn(joinChatConversationFn);
   const unassignChat = useServerFn(unassignChatConversationFn);
   const sendMessage = useServerFn(sendChatMessageFn);
@@ -105,6 +140,8 @@ export function ChatInboxScreen({
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
   const [loadingThread, setLoadingThread] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [sending, setSending] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -114,6 +151,11 @@ export function ChatInboxScreen({
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRootRef = useRef<HTMLDivElement>(null);
+  const skipStickToBottomRef = useRef(false);
+  const loadingOlderRef = useRef(false);
+  const hasMoreOlderRef = useRef(false);
+  const messagesRef = useRef<ChatMessage[]>([]);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [query, setQuery] = useState("");
   const [composer, setComposer] = useState<ComposerMode>("reply");
@@ -266,16 +308,72 @@ export function ChatInboxScreen({
     setContactDraft({ name: "", phone: "" });
     clearSelectedImage();
     setLoadingThread(true);
+    setHasMoreOlder(false);
+    setMessages([]);
     try {
       // Abrir só carrega o thread e marca como lido — atribuição é explícita (botão Atribuir).
-      const thread = await getThread({ data: { conversationId: id } });
+      const thread = await getThread({
+        data: { conversationId: id, markAsRead: true, limit: THREAD_PAGE_SIZE },
+      });
       setActive(thread.conversation);
       setMessages(thread.messages);
-      await refreshList();
+      setHasMoreOlder(Boolean(thread.hasMore));
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === thread.conversation.id
+            ? { ...item, ...thread.conversation, unreadCount: 0 }
+            : item,
+        ),
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao abrir conversa");
     } finally {
       setLoadingThread(false);
+    }
+  }
+
+  async function loadOlderThreadMessages() {
+    if (!selectedId || loadingOlderRef.current || !hasMoreOlderRef.current) return;
+    const oldest = messagesRef.current[0];
+    if (!oldest?.createdAt) return;
+
+    const root = messagesScrollRootRef.current;
+    const viewport = root?.querySelector(
+      "[data-radix-scroll-area-viewport]",
+    ) as HTMLElement | null;
+    const prevHeight = viewport?.scrollHeight ?? 0;
+    const prevTop = viewport?.scrollTop ?? 0;
+
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    skipStickToBottomRef.current = true;
+    try {
+      const page = await loadOlderMessages({
+        data: {
+          conversationId: selectedId,
+          beforeCreatedAt: oldest.createdAt,
+          limit: THREAD_PAGE_SIZE,
+        },
+      });
+      setHasMoreOlder(Boolean(page.hasMore));
+      setMessages((prev) => {
+        const existing = new Set(prev.map((m) => m.id));
+        const older = page.messages.filter((m) => !existing.has(m.id));
+        return [...older, ...prev];
+      });
+      requestAnimationFrame(() => {
+        if (!viewport) return;
+        const delta = viewport.scrollHeight - prevHeight;
+        viewport.scrollTop = prevTop + delta;
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao carregar histórico");
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+      window.setTimeout(() => {
+        skipStickToBottomRef.current = false;
+      }, 50);
     }
   }
 
@@ -336,6 +434,7 @@ export function ChatInboxScreen({
     setSelectedId(null);
     setActive(null);
     setMessages([]);
+    setHasMoreOlder(false);
     setViewingConversationId(null);
   }
 
@@ -345,32 +444,32 @@ export function ChatInboxScreen({
   }, [selectedId, setViewingConversationId]);
 
   useEffect(() => {
-    if (loadingThread) return;
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    hasMoreOlderRef.current = hasMoreOlder;
+  }, [hasMoreOlder]);
+
+  useEffect(() => {
+    if (loadingThread || loadingOlder || skipStickToBottomRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, selectedId, loadingThread]);
+  }, [messages, selectedId, loadingThread, loadingOlder]);
 
   // Poll rápido do thread aberto + lista em paralelo (antes era 5s em série = atraso perceptível).
   useEffect(() => {
-    const THREAD_POLL_MS = 1_200;
-    const LIST_POLL_MS = 3_000;
+    const THREAD_POLL_MS = 2_000;
+    const LIST_POLL_MS = 4_000;
 
     const refreshThread = () => {
       if (!selectedId || document.visibilityState !== "visible") return;
-      void getThread({ data: { conversationId: selectedId } })
+      void getThread({
+        data: { conversationId: selectedId, markAsRead: false, limit: THREAD_PAGE_SIZE },
+      })
         .then((thread) => {
           setActive(thread.conversation);
-          setMessages((prev) => {
-            // Evita re-render inútil quando nada mudou (mesmo tamanho + mesmo último id).
-            const next = thread.messages;
-            if (
-              prev.length === next.length &&
-              prev.at(-1)?.id === next.at(-1)?.id &&
-              prev.at(-1)?.body === next.at(-1)?.body
-            ) {
-              return prev;
-            }
-            return next;
-          });
+          setMessages((prev) => mergeThreadMessages(prev, thread.messages));
+          // hasMore só muda no open / loadOlder — poll não redefine o histórico superior.
         })
         .catch(() => undefined);
     };
@@ -402,6 +501,23 @@ export function ChatInboxScreen({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  useEffect(() => {
+    const root = messagesScrollRootRef.current;
+    if (!root || !selectedId) return;
+    const viewport = root.querySelector(
+      "[data-radix-scroll-area-viewport]",
+    ) as HTMLElement | null;
+    if (!viewport) return;
+
+    const onScroll = () => {
+      if (viewport.scrollTop > 48) return;
+      void loadOlderThreadMessages();
+    };
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", onScroll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, loadingThread]);
 
   async function handleSendImage() {
     if (!selectedId || !selectedImage || !selectedImageUrl) return;
@@ -1142,13 +1258,27 @@ export function ChatInboxScreen({
               </Button>
             </header>
 
-            <ScrollArea className="flex-1 px-4 py-3">
+            <ScrollArea ref={messagesScrollRootRef} className="flex-1 px-4 py-3">
               {loadingThread ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground">
                   <Loader2 className="size-5 animate-spin" />
                 </div>
               ) : (
                 <div className="mx-auto max-w-3xl space-y-2">
+                  {loadingOlder ? (
+                    <div className="flex justify-center py-2 text-xs text-muted-foreground">
+                      <Loader2 className="mr-2 size-3.5 animate-spin" />
+                      Carregando mensagens anteriores…
+                    </div>
+                  ) : hasMoreOlder ? (
+                    <div className="py-1 text-center text-[11px] text-muted-foreground">
+                      Role para cima para carregar mais
+                    </div>
+                  ) : messages.length > 0 ? (
+                    <div className="py-1 text-center text-[11px] text-muted-foreground">
+                      Início da conversa
+                    </div>
+                  ) : null}
                   {messages.map((msg) => {
                     const mine = msg.direction === "outbound" && msg.senderType !== "system";
                     const isSystem = msg.senderType === "system";

@@ -15,6 +15,7 @@ import {
   listConversations,
   getOrCreateConversationByPhone,
   listMessages,
+  listMessagesPage,
   markConversationRead,
   saveChatAiSettings,
   setAiEnabledForAllConversations,
@@ -124,7 +125,7 @@ export const listChatConversationsFn = createServerFn({ method: "GET" }).handler
  */
 export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handler(async () => {
   await requireChatUser();
-  const conversations = await listConversations(200);
+  const conversations = await listConversations(80);
   const unreadByConversationId: Record<string, number> = {};
   for (const conversation of conversations) {
     if (conversation.unreadCount > 0) {
@@ -146,19 +147,73 @@ export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handl
   };
 });
 
+const CHAT_THREAD_PAGE_SIZE = 20;
+
 export const getChatThreadFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    const conversationId = String((data as { conversationId?: string })?.conversationId ?? "").trim();
+    const body = data as {
+      conversationId?: string;
+      markAsRead?: boolean;
+      limit?: number;
+    };
+    const conversationId = String(body?.conversationId ?? "").trim();
     if (!conversationId) throw new Error("Conversa obrigatória.");
-    return { conversationId };
+    const limitRaw = Number(body?.limit);
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(Math.trunc(limitRaw), 1), 100)
+      : CHAT_THREAD_PAGE_SIZE;
+    return {
+      conversationId,
+      markAsRead: body?.markAsRead === true,
+      limit,
+    };
   })
   .handler(async ({ data }) => {
     await requireChatUser();
     const conversation = await getConversation(data.conversationId);
     if (!conversation) throw new Error("Conversa não encontrada.");
-    await markConversationRead(data.conversationId);
-    const messages = await listMessages(data.conversationId);
-    return { conversation, messages };
+    if (data.markAsRead) {
+      await markConversationRead(data.conversationId);
+      conversation.unreadCount = 0;
+    }
+    const page = await listMessagesPage({
+      conversationId: data.conversationId,
+      limit: data.limit,
+    });
+    return {
+      conversation,
+      messages: page.messages,
+      hasMore: page.hasMore,
+    };
+  });
+
+/** Carrega mensagens mais antigas (scroll para cima). */
+export const loadOlderChatMessagesFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as {
+      conversationId?: string;
+      beforeCreatedAt?: string;
+      limit?: number;
+    };
+    const conversationId = String(body?.conversationId ?? "").trim();
+    const beforeCreatedAt = String(body?.beforeCreatedAt ?? "").trim();
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    if (!beforeCreatedAt) throw new Error("Cursor de paginação obrigatório.");
+    const limitRaw = Number(body?.limit);
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(Math.trunc(limitRaw), 1), 100)
+      : CHAT_THREAD_PAGE_SIZE;
+    return { conversationId, beforeCreatedAt, limit };
+  })
+  .handler(async ({ data }) => {
+    await requireChatUser();
+    const conversation = await getConversation(data.conversationId);
+    if (!conversation) throw new Error("Conversa não encontrada.");
+    return listMessagesPage({
+      conversationId: data.conversationId,
+      beforeCreatedAt: data.beforeCreatedAt,
+      limit: data.limit,
+    });
   });
 
 export const saveChatContactNoteFn = createServerFn({ method: "POST" })

@@ -148,8 +148,49 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
 }
 
 export async function getConversation(id: string): Promise<ChatConversation | null> {
-  const all = await listConversations(500);
-  return all.find((c) => c.id === id) ?? null;
+  const conversationId = String(id || "").trim();
+  if (!conversationId) return null;
+
+  if (isDatabaseEnabled()) {
+    const rows = await withChatDb((sql) => sql<ConvRow[]>`
+      select
+        c.id, c.phone, c.contact_name, c.client_id, c.assigned_user_id, c.assigned_user_name,
+        c.contact_note,
+        c.ai_enabled, c.bot_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
+        c.created_at, c.updated_at,
+        cl.data->>'nome' as client_name,
+        cl.status as client_status,
+        case when cl.id is null then array[]::text[] else (
+          select coalesce(array_agg(distinct product_id), array[cl.product_id])
+          from (
+            select cl.product_id as product_id
+            union
+            select cp.product_id from crm.client_products cp where cp.client_id = cl.id
+          ) products
+        ) end as client_product_ids
+      from crm.chat_conversations c
+      left join crm.clients cl on cl.id = c.client_id
+      where c.id = ${conversationId}
+      limit 1
+    `);
+    const row = rows[0];
+    if (!row) return null;
+    const [enriched] = await enrichConversations([mapConv(row)]);
+    return enriched ?? null;
+  }
+
+  const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+  const item = items.find((c) => c.id === conversationId);
+  if (!item) return null;
+  const [enriched] = await enrichConversations([
+    {
+      ...item,
+      contactNote: item.contactNote ?? null,
+      botEnabled: item.botEnabled !== false,
+      botRun: item.botRun ?? null,
+    },
+  ]);
+  return enriched ?? null;
 }
 
 export async function updateConversationContactNote(
@@ -342,62 +383,106 @@ export async function getOrCreateConversationByPhone(input: {
   return created;
 }
 
-export async function listMessages(conversationId: string, limit = 200): Promise<ChatMessage[]> {
+type MsgRow = {
+  id: string;
+  conversation_id: string;
+  direction: string;
+  body: string;
+  message_type: string;
+  media_id: string | null;
+  media_mime_type: string | null;
+  media_file_name: string | null;
+  sender_type: string;
+  sender_user_id: string | null;
+  sender_name: string | null;
+  wa_message_id: string | null;
+  created_at: Date;
+};
+
+function mapMessageRow(row: MsgRow): ChatMessage {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    direction: row.direction as ChatMessage["direction"],
+    body: row.body,
+    messageType:
+      row.message_type === "image"
+        ? "image"
+        : row.message_type === "document"
+          ? "document"
+          : "text",
+    mediaId: row.media_id,
+    mediaMimeType: row.media_mime_type,
+    mediaFileName: row.media_file_name,
+    senderType: row.sender_type as ChatSenderType,
+    senderUserId: row.sender_user_id,
+    senderName: row.sender_name,
+    waMessageId: row.wa_message_id,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function normalizeJsonMessage(message: ChatMessage): ChatMessage {
+  return {
+    ...message,
+    messageType: message.messageType ?? "text",
+    mediaId: message.mediaId ?? null,
+    mediaMimeType: message.mediaMimeType ?? null,
+    mediaFileName: message.mediaFileName ?? null,
+  };
+}
+
+/** Página de mensagens (mais recentes primeiro no banco; retorno em ordem cronológica). */
+export async function listMessagesPage(input: {
+  conversationId: string;
+  limit?: number;
+  /** Carrega mensagens estritamente anteriores a este instante (scroll para cima). */
+  beforeCreatedAt?: string | null;
+}): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
+  const conversationId = String(input.conversationId || "").trim();
+  const limit = Math.min(Math.max(Number(input.limit) || 20, 1), 100);
+  const beforeCreatedAt = String(input.beforeCreatedAt || "").trim() || null;
+  if (!conversationId) return { messages: [], hasMore: false };
+
+  const fetchLimit = limit + 1;
+
   if (isDatabaseEnabled()) {
-    const rows = await withChatDb((sql) => sql<{
-      id: string;
-      conversation_id: string;
-      direction: string;
-      body: string;
-      message_type: string;
-      media_id: string | null;
-      media_mime_type: string | null;
-      media_file_name: string | null;
-      sender_type: string;
-      sender_user_id: string | null;
-      sender_name: string | null;
-      wa_message_id: string | null;
-      created_at: Date;
-    }[]>`
-      select * from crm.chat_messages
-      where conversation_id = ${conversationId}
-      order by created_at asc
-      limit ${limit}
-    `);
-    return rows.map((row) => ({
-      id: row.id,
-      conversationId: row.conversation_id,
-      direction: row.direction as ChatMessage["direction"],
-      body: row.body,
-      messageType:
-        row.message_type === "image"
-          ? "image"
-          : row.message_type === "document"
-            ? "document"
-            : "text",
-      mediaId: row.media_id,
-      mediaMimeType: row.media_mime_type,
-      mediaFileName: row.media_file_name,
-      senderType: row.sender_type as ChatSenderType,
-      senderUserId: row.sender_user_id,
-      senderName: row.sender_name,
-      waMessageId: row.wa_message_id,
-      createdAt: row.created_at.toISOString(),
-    }));
+    const beforeDate = beforeCreatedAt ? new Date(beforeCreatedAt) : null;
+    const rows = beforeDate && !Number.isNaN(beforeDate.getTime())
+      ? await withChatDb((sql) => sql<MsgRow[]>`
+          select * from crm.chat_messages
+          where conversation_id = ${conversationId}
+            and created_at < ${beforeDate}
+          order by created_at desc
+          limit ${fetchLimit}
+        `)
+      : await withChatDb((sql) => sql<MsgRow[]>`
+          select * from crm.chat_messages
+          where conversation_id = ${conversationId}
+          order by created_at desc
+          limit ${fetchLimit}
+        `);
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit).reverse().map(mapMessageRow);
+    return { messages: page, hasMore };
   }
 
   const all = await readJsonFile<ChatMessage[]>(MSG_FILE, []);
-  return all
+  let filtered = all
     .filter((m) => m.conversationId === conversationId)
-    .map((message) => ({
-      ...message,
-      messageType: message.messageType ?? "text",
-      mediaId: message.mediaId ?? null,
-      mediaMimeType: message.mediaMimeType ?? null,
-      mediaFileName: message.mediaFileName ?? null,
-    }))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .slice(-limit);
+    .map(normalizeJsonMessage)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (beforeCreatedAt) {
+    filtered = filtered.filter((m) => m.createdAt < beforeCreatedAt);
+  }
+  const hasMore = filtered.length > limit;
+  const messages = filtered.slice(-limit);
+  return { messages, hasMore };
+}
+
+export async function listMessages(conversationId: string, limit = 20): Promise<ChatMessage[]> {
+  const page = await listMessagesPage({ conversationId, limit });
+  return page.messages;
 }
 
 export async function appendMessage(input: {
