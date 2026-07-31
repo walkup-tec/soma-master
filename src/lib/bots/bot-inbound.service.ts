@@ -12,8 +12,6 @@ import {
   setConversationBotRun,
 } from "@/lib/chat/chat.repository";
 import {
-  evolutionSendButtons,
-  evolutionSendList,
   evolutionSendText,
 } from "@/lib/chat/evolution.adapter";
 import { resolveChatbotRuntimeSelection } from "@/lib/config/chatbot-runtime-schedule";
@@ -63,13 +61,30 @@ async function dispatchBotOutbound(input: {
         senderType: "ai",
         senderName: input.botName,
       });
-      await evolutionSendText({ phone: input.phone, text: body });
+      const send = await evolutionSendText({ phone: input.phone, text: body });
+      if (!send.ok) {
+        console.error("[chatbot-runtime] sendText falhou", {
+          phone: input.phone,
+          error: send.error,
+        });
+        await appendMessage({
+          conversationId: input.conversationId,
+          direction: "outbound",
+          body: `⚠️ Bot salvou no CRM, mas não entregou no WhatsApp: ${send.error ?? "erro desconhecido"}`,
+          senderType: "system",
+          senderName: "Sistema",
+        });
+      }
       continue;
     }
 
     const interactive = payload.interactive;
     const body = String(interactive.text || "").trim();
     if (!body) continue;
+
+    const numbered = `${body}\n\n${interactive.options
+      .map((opt, index) => `${index + 1}. ${opt.label}`)
+      .join("\n")}`;
     const optionLabels = interactive.options.map((opt) => opt.label).filter(Boolean);
     const crmBody =
       optionLabels.length > 0 ? `${body}\n\nOpções: ${optionLabels.join(" · ")}` : body;
@@ -82,48 +97,21 @@ async function dispatchBotOutbound(input: {
       senderName: input.botName,
     });
 
-    if (interactive.kind === "list") {
-      const send = await evolutionSendList({
+    // Texto numerado — sendButtons da Evolution costuma retornar 201 com
+    // viewOnce/interactive que o WhatsApp do contato não exibe (envio "fantasma").
+    const textSend = await evolutionSendText({ phone: input.phone, text: numbered });
+    if (!textSend.ok) {
+      console.error("[chatbot-runtime] sendText (opções) falhou", {
         phone: input.phone,
-        title: body.slice(0, 60),
-        description: body.length > 60 ? body : undefined,
-        buttonText: interactive.listButtonText || "Ver opções",
-        sections: [
-          {
-            title: "Opções",
-            rows: interactive.options.slice(0, 10).map((opt) => ({
-              rowId: opt.id,
-              title: opt.label.slice(0, 24),
-              description: opt.value && opt.value !== opt.label ? opt.value.slice(0, 72) : undefined,
-            })),
-          },
-        ],
+        error: textSend.error,
       });
-      if (!send.ok) {
-        // Fallback: texto + opções numeradas
-        const fallback = `${body}\n\n${interactive.options
-          .map((opt, index) => `${index + 1}. ${opt.label}`)
-          .join("\n")}`;
-        await evolutionSendText({ phone: input.phone, text: fallback });
-      }
-      continue;
-    }
-
-    // buttons (máx. 3 no WhatsApp)
-    const send = await evolutionSendButtons({
-      phone: input.phone,
-      title: body.slice(0, 60),
-      description: body.length > 60 ? body : undefined,
-      buttons: interactive.options.slice(0, 3).map((opt) => ({
-        id: opt.id,
-        displayText: opt.label.slice(0, 20),
-      })),
-    });
-    if (!send.ok) {
-      const fallback = `${body}\n\n${interactive.options
-        .map((opt, index) => `${index + 1}. ${opt.label}`)
-        .join("\n")}`;
-      await evolutionSendText({ phone: input.phone, text: fallback });
+      await appendMessage({
+        conversationId: input.conversationId,
+        direction: "outbound",
+        body: `⚠️ Bot salvou no CRM, mas não entregou no WhatsApp: ${textSend.error ?? "erro desconhecido"}`,
+        senderType: "system",
+        senderName: "Sistema",
+      });
     }
   }
 }

@@ -132,12 +132,20 @@ export async function executeBotNode(
         }
 
         const normalized = replyRaw.toLowerCase();
-        const match = options.find((opt) => {
-          const label = String(opt.label || "").trim().toLowerCase();
-          const value = String(opt.value || "").trim().toLowerCase();
-          const id = String(opt.id || "").trim().toLowerCase();
-          return normalized === label || normalized === value || normalized === id;
-        });
+        const match =
+          options.find((opt) => {
+            const label = String(opt.label || "").trim().toLowerCase();
+            const value = String(opt.value || "").trim().toLowerCase();
+            const id = String(opt.id || "").trim().toLowerCase();
+            return normalized === label || normalized === value || normalized === id;
+          }) ||
+          (() => {
+            const asNumber = Number.parseInt(normalized.replace(/[^\d]/g, ""), 10);
+            if (!Number.isFinite(asNumber) || asNumber < 1 || asNumber > options.length) {
+              return undefined;
+            }
+            return options[asNumber - 1];
+          })();
 
         // Sem match: permanece no mesmo node aguardando uma opção válida (não reinicia o fluxo).
         if (!match && kind !== "menu") {
