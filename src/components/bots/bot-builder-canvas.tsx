@@ -116,6 +116,7 @@ function BotCanvasInner({
   const [nodes, setNodes] = useState<Node[]>(() => toFlowNodes(draft));
   const [edges, setEdges] = useState<Edge[]>(() => toFlowEdges(draft));
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
   const draftRef = useRef(draft);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -343,38 +344,57 @@ function BotCanvasInner({
   }, [persistGraph, selectedNodeIds]);
 
   const deleteSelected = useCallback(() => {
-    if (selectedNodeIds.length === 0) return;
-    const blocked = selectedNodeIds.some((id) => {
-      const node = nodesRef.current.find((item) => item.id === id);
-      return (node?.data as BotNodeData | undefined)?.kind === "start";
-    });
-    if (blocked && selectedNodeIds.length === 1) {
-      toast.message("O node Início é obrigatório.");
-      return;
-    }
+    const removeEdgeIds = new Set(selectedEdgeIds);
+    let nextEdges = edgesRef.current.filter((edge) => !removeEdgeIds.has(edge.id));
+    let nextNodes = nodesRef.current;
+    let removedEdgesOnly = false;
 
-    const removeIds = new Set(
-      selectedNodeIds.filter((id) => {
+    if (selectedNodeIds.length > 0) {
+      const blocked = selectedNodeIds.some((id) => {
         const node = nodesRef.current.find((item) => item.id === id);
-        return (node?.data as BotNodeData | undefined)?.kind !== "start";
-      }),
-    );
-    if (removeIds.size === 0) {
-      toast.message("O node Início é obrigatório.");
+        return (node?.data as BotNodeData | undefined)?.kind === "start";
+      });
+      if (blocked && selectedNodeIds.length === 1 && selectedEdgeIds.length === 0) {
+        toast.message("O node Início é obrigatório.");
+        return;
+      }
+
+      const removeIds = new Set(
+        selectedNodeIds.filter((id) => {
+          const node = nodesRef.current.find((item) => item.id === id);
+          return (node?.data as BotNodeData | undefined)?.kind !== "start";
+        }),
+      );
+      if (removeIds.size === 0 && selectedEdgeIds.length === 0) {
+        toast.message("O node Início é obrigatório.");
+        return;
+      }
+
+      nextNodes = nodesRef.current.filter((item) => !removeIds.has(item.id));
+      nextEdges = nextEdges.filter(
+        (edge) => !removeIds.has(edge.source) && !removeIds.has(edge.target),
+      );
+    } else if (selectedEdgeIds.length > 0) {
+      removedEdgesOnly = true;
+    } else {
       return;
     }
 
-    const nextNodes = nodesRef.current.filter((item) => !removeIds.has(item.id));
-    const nextEdges = edgesRef.current.filter(
-      (edge) => !removeIds.has(edge.source) && !removeIds.has(edge.target),
-    );
     nodesRef.current = nextNodes;
     edgesRef.current = nextEdges;
     setNodes(nextNodes);
     setEdges(nextEdges);
     setSelectedNodeIds([]);
+    setSelectedEdgeIds([]);
     persistGraph(nextNodes, nextEdges);
-  }, [persistGraph, selectedNodeIds]);
+    if (removedEdgesOnly) {
+      toast.success(
+        selectedEdgeIds.length === 1
+          ? "Conexão removida."
+          : `${selectedEdgeIds.length} conexões removidas.`,
+      );
+    }
+  }, [persistGraph, selectedEdgeIds, selectedNodeIds]);
 
   useEffect(() => {
     return () => {
@@ -396,14 +416,17 @@ function BotCanvasInner({
         duplicateSelected();
         return;
       }
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedNodeIds.length > 0) {
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        (selectedNodeIds.length > 0 || selectedEdgeIds.length > 0)
+      ) {
         event.preventDefault();
         deleteSelected();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [deleteSelected, duplicateSelected, selectedNodeIds.length]);
+  }, [deleteSelected, duplicateSelected, selectedEdgeIds.length, selectedNodeIds.length]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -446,18 +469,30 @@ function BotCanvasInner({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onSelectionChange={({ nodes: selected }) => {
-            const nextIds = selected.map((node) => node.id);
+          onSelectionChange={({ nodes: selectedNodes, edges: selectedEdges }) => {
+            const nextNodeIds = selectedNodes.map((node) => node.id);
             setSelectedNodeIds((current) => {
               if (
-                current.length === nextIds.length &&
-                current.every((id, index) => id === nextIds[index])
+                current.length === nextNodeIds.length &&
+                current.every((id, index) => id === nextNodeIds[index])
               ) {
                 return current;
               }
-              return nextIds;
+              return nextNodeIds;
+            });
+            const nextEdgeIds = selectedEdges.map((edge) => edge.id);
+            setSelectedEdgeIds((current) => {
+              if (
+                current.length === nextEdgeIds.length &&
+                current.every((id, index) => id === nextEdgeIds[index])
+              ) {
+                return current;
+              }
+              return nextEdgeIds;
             });
           }}
+          edgesFocusable
+          elementsSelectable
           selectionOnDrag
           selectionKeyCode={null}
           selectionMode={SelectionMode.Partial}
@@ -474,18 +509,20 @@ function BotCanvasInner({
           <MiniMap pannable zoomable />
         </ReactFlow>
 
-        {selectedNodeIds.length > 0 ? (
+        {selectedNodeIds.length > 0 || selectedEdgeIds.length > 0 ? (
           <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="cursor-pointer gap-1.5"
-              onClick={duplicateSelected}
-            >
-              <Copy className="size-3.5" />
-              Duplicar{selectedNodeIds.length > 1 ? ` (${selectedNodeIds.length})` : ""}
-            </Button>
+            {selectedNodeIds.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="cursor-pointer gap-1.5"
+                onClick={duplicateSelected}
+              >
+                <Copy className="size-3.5" />
+                Duplicar{selectedNodeIds.length > 1 ? ` (${selectedNodeIds.length})` : ""}
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -494,13 +531,17 @@ function BotCanvasInner({
               onClick={deleteSelected}
             >
               <Trash2 className="size-3.5" />
-              Remover{selectedNodeIds.length > 1 ? ` (${selectedNodeIds.length})` : ""}
+              {selectedEdgeIds.length > 0 && selectedNodeIds.length === 0
+                ? selectedEdgeIds.length === 1
+                  ? "Remover conexão"
+                  : `Remover conexões (${selectedEdgeIds.length})`
+                : `Remover${selectedNodeIds.length > 1 ? ` (${selectedNodeIds.length})` : ""}`}
             </Button>
           </div>
         ) : null}
 
         <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm">
-          Arraste no fundo para selecionar · Shift+clique · botão do meio para pan · Ctrl+D duplica
+          Clique no fio + Delete para desconectar · Arraste no fundo para selecionar · Ctrl+D duplica
         </div>
       </div>
 
