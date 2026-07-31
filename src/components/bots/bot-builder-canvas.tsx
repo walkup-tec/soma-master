@@ -50,15 +50,26 @@ function toFlowNodes(draft: BotFlowDraft): Node[] {
 }
 
 function toFlowEdges(draft: BotFlowDraft): Edge[] {
-  return draft.edges.map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    sourceHandle: edge.sourceHandle ?? undefined,
-    targetHandle: edge.targetHandle ?? undefined,
-    label: edge.label,
-    animated: true,
-  }));
+  const nodesById = new Map(draft.nodes.map((node) => [node.id, node]));
+  return draft.edges
+    .filter((edge) => {
+      const source = nodesById.get(edge.source);
+      if (!source) return false;
+      const kind = source.data.kind;
+      if (kind !== "buttons" && kind !== "list" && kind !== "menu") return true;
+      const valid = new Set(resolveBotNodeOutputs(source.data).map((port) => port.id));
+      if (!edge.sourceHandle) return valid.has("out");
+      return valid.has(edge.sourceHandle);
+    })
+    .map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle ?? undefined,
+      targetHandle: edge.targetHandle ?? undefined,
+      label: edge.label,
+      animated: true,
+    }));
 }
 
 function serializeDraftGraph(base: BotFlowDraft, nextNodes: Node[], nextEdges: Edge[]): BotFlowDraft {

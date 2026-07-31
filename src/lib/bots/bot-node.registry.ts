@@ -140,7 +140,6 @@ export const BOT_NODE_REGISTRY: BotNodeDefinition[] = [
     outputs: [
       { id: "opt-1", label: "Opção 1" },
       { id: "opt-2", label: "Opção 2" },
-      { id: "out", label: "Fallback" },
     ],
     defaultConfig: {
       text: "Escolha uma opção:",
@@ -430,13 +429,9 @@ export function resolveBotNodeOutputs(data: Pick<BotNodeData, "kind" | "config">
         label: String(opt.label).trim(),
       }));
     if (options.length === 0) {
-      return data.kind === "buttons"
-        ? [{ id: "out", label: "Fallback" }]
-        : [{ id: "out", label: "Saída" }];
+      return [{ id: "out", label: "Saída" }];
     }
-    if (data.kind === "buttons") {
-      return [...options, { id: "out", label: "Fallback" }];
-    }
+    // Botões/lista/menu: uma saída por opção (sem Fallback extra).
     return options;
   }
   return definition?.outputs?.length ? definition.outputs : [{ id: "out", label: "Saída" }];
