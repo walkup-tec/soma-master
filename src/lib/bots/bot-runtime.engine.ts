@@ -215,18 +215,35 @@ export async function executeBotNode(
         };
       }
 
-      case "wait_reply":
+      case "wait_reply": {
+        const outKey =
+          String(config.outputVariable || "ultima_resposta").trim() || "ultima_resposta";
+        const reply =
+          inboundText != null && String(inboundText).trim() !== ""
+            ? String(inboundText).trim()
+            : null;
+
+        // Sem resposta ainda: só espera — não sobrescreve a variável de saída com null.
+        if (!reply) {
+          return {
+            ok: true,
+            status: "waiting",
+            message: "Aguardando resposta do contato",
+            waitForReply: true,
+          };
+        }
+
         return {
           ok: true,
-          status: "waiting",
-          message: "Aguardando resposta do contato",
-          waitForReply: true,
+          status: "success",
+          message: `Resposta salva em {{${outKey}}}`,
           nextHandle: "out",
           variables: {
-            [config.outputVariable || "ultima_resposta"]:
-              variables[config.outputVariable || "ultima_resposta"] ?? null,
+            [outKey]: reply,
+            ultima_resposta: reply,
           },
         };
+      }
 
       case "condition": {
         const ok = evalSimpleCondition(config.expression || "", variables);
