@@ -9,6 +9,8 @@ import type { BotOutboundPayload, BotRunState } from "@/lib/bots/bot.types";
 import {
   appendMessage,
   getConversation,
+  setConversationAiEnabled,
+  setConversationBotEnabled,
   setConversationBotRun,
 } from "@/lib/chat/chat.repository";
 import {
@@ -158,8 +160,15 @@ export async function maybeRunChatbotRuntime(input: {
     const conversation = await getConversation(input.conversationId);
     if (!conversation) return false;
 
-    // Atendente humano assume a conversa
-    if (conversation.assignedUserId) return false;
+    // Atendente assume a conversa — mas se o bot já está ativo (ex.: enviado manualmente),
+    // continua o fluxo para não perder a resposta dos botões.
+    if (conversation.assignedUserId) {
+      const phase = conversation.botRun?.phase;
+      const botActive =
+        conversation.botEnabled !== false &&
+        (phase === "waiting_reply" || phase === "running" || phase === "starting");
+      if (!botActive) return false;
+    }
     // Bot pausado nesta conversa
     if (!conversation.botEnabled) return false;
 
@@ -221,5 +230,82 @@ export async function maybeRunChatbotRuntime(input: {
     });
 
     return true;
+  });
+}
+
+/**
+ * Atendente inicia manualmente um bot na conversa aberta (composer).
+ * Reinicia o fluxo do bot escolhido e envia as primeiras mensagens no WhatsApp.
+ */
+export async function startBotOnConversation(input: {
+  conversationId: string;
+  botId: string;
+  startedByName?: string;
+}): Promise<{ ok: true; flowName: string; outboundCount: number } | { ok: false; error: string }> {
+  const conversationId = String(input.conversationId || "").trim();
+  const botId = String(input.botId || "").trim();
+  if (!conversationId || !botId) {
+    return { ok: false, error: "Conversa e bot são obrigatórios." };
+  }
+
+  return withConversationBotLock(conversationId, async () => {
+    const conversation = await getConversation(conversationId);
+    if (!conversation) return { ok: false, error: "Conversa não encontrada." };
+
+    const flow = await getBotFlowFromServer(botId);
+    if (!flow || !findStartNode(flow)) {
+      return { ok: false, error: "Bot não encontrado ou sem node Início." };
+    }
+
+    // Liga bot / desliga IA para o fluxo continuar nas próximas respostas.
+    await setConversationBotEnabled({ conversationId, botEnabled: true });
+    await setConversationAiEnabled({ conversationId, aiEnabled: false });
+
+    const leadVars = await loadBotLeadVariables({
+      conversationId,
+      phone: conversation.phone,
+    });
+    let run = createBotRunState({ flow, testPhone: conversation.phone });
+    run = {
+      ...run,
+      variables: {
+        ...leadVars,
+        ...run.variables,
+      },
+    };
+
+    const advanced = await advanceBotRun({
+      flow,
+      run,
+      conversationId,
+      phone: conversation.phone,
+    });
+    run = advanced.run;
+
+    await setConversationBotRun({ conversationId, botRun: run });
+
+    const starter = String(input.startedByName || "").trim();
+    await appendMessage({
+      conversationId,
+      direction: "outbound",
+      body: starter
+        ? `${starter} iniciou o bot “${flow.name || "Bot"}”.`
+        : `Bot “${flow.name || "Bot"}” iniciado neste atendimento.`,
+      senderType: "system",
+      senderName: "Sistema",
+    });
+
+    await dispatchBotOutbound({
+      conversationId,
+      phone: conversation.phone,
+      botName: flow.name || "Bot Soma",
+      payloads: advanced.outbound,
+    });
+
+    return {
+      ok: true,
+      flowName: flow.name || "Bot",
+      outboundCount: advanced.outbound.length,
+    };
   });
 }

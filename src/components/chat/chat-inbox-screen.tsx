@@ -25,6 +25,14 @@ import { ChatTransferDialog } from "@/components/chat/chat-transfer-dialog";
 import { useChatbotAlert } from "@/components/chat/chatbot-alert-context";
 import { StatusBadge } from "@/components/clients/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,12 +47,14 @@ import {
   loadOlderChatMessagesFn,
   initChatImageUploadFn,
   joinChatConversationFn,
+  listChatBotsFn,
   listChatConversationsFn,
   sendChatMessageFn,
   setChatAiGlobalEnabledFn,
   setChatBotGlobalEnabledFn,
   setChatConversationAiFn,
   setChatConversationBotFn,
+  startChatBotFn,
   unassignChatConversationFn,
 } from "@/lib/chat/chat.server";
 import {
@@ -117,6 +127,8 @@ export function ChatInboxScreen({
   banks: BankConfig[];
 }) {
   const listConversations = useServerFn(listChatConversationsFn);
+  const listBots = useServerFn(listChatBotsFn);
+  const startBot = useServerFn(startChatBotFn);
   const getThread = useServerFn(getChatThreadFn);
   const loadOlderMessages = useServerFn(loadOlderChatMessagesFn);
   const joinChat = useServerFn(joinChatConversationFn);
@@ -143,6 +155,10 @@ export function ChatInboxScreen({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [sending, setSending] = useState(false);
+  const [startingBot, setStartingBot] = useState(false);
+  const [botOptions, setBotOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingBots, setLoadingBots] = useState(false);
+  const [botsMenuOpen, setBotsMenuOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [attachingMediaId, setAttachingMediaId] = useState<string | null>(null);
@@ -232,6 +248,45 @@ export function ChatInboxScreen({
   async function refreshList() {
     const next = await listConversations();
     setConversations(next);
+  }
+
+  async function ensureBotOptionsLoaded() {
+    if (botOptions.length > 0 || loadingBots) return;
+    setLoadingBots(true);
+    try {
+      const next = await listBots();
+      setBotOptions(Array.isArray(next) ? next : []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao listar bots");
+    } finally {
+      setLoadingBots(false);
+    }
+  }
+
+  async function handleStartBot(botId: string, botName: string) {
+    if (!selectedId || startingBot) return;
+    setStartingBot(true);
+    setBotsMenuOpen(false);
+    try {
+      const result = await startBot({
+        data: { conversationId: selectedId, botId },
+      });
+      if (result.conversation) {
+        applyConversationUpdate(result.conversation);
+      }
+      // Recarrega o thread para mostrar mensagens do bot recém-enviadas.
+      const thread = await getThread({
+        data: { conversationId: selectedId, markAsRead: false, limit: THREAD_PAGE_SIZE },
+      });
+      setActive(thread.conversation);
+      setMessages(thread.messages);
+      setHasMoreOlder(Boolean(thread.hasMore));
+      toast.success(`Bot “${result.flowName || botName}” enviado`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao enviar bot");
+    } finally {
+      setStartingBot(false);
+    }
   }
 
   async function toggleConversationAi(conversation: ChatConversation) {
@@ -1474,11 +1529,61 @@ export function ChatInboxScreen({
                       className="shrink-0 cursor-pointer"
                       aria-label="Enviar imagem"
                       title="Enviar imagem (JPG, PNG ou WEBP; até 10 MB)"
-                      disabled={sending}
+                      disabled={sending || startingBot}
                       onClick={() => imageInputRef.current?.click()}
                     >
                       <ImagePlus className="size-4" />
                     </Button>
+                    <DropdownMenu
+                      open={botsMenuOpen}
+                      onOpenChange={(open) => {
+                        setBotsMenuOpen(open);
+                        if (open) void ensureBotOptionsLoaded();
+                      }}
+                    >
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="shrink-0 cursor-pointer"
+                          aria-label="Enviar bot"
+                          title="Enviar um bot para este contato"
+                          disabled={!selectedId || sending || startingBot}
+                        >
+                          {startingBot || (botsMenuOpen && loadingBots) ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Bot className="size-4" />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-64">
+                        <DropdownMenuLabel>Enviar bot</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {loadingBots ? (
+                          <DropdownMenuItem disabled className="text-muted-foreground">
+                            Carregando bots…
+                          </DropdownMenuItem>
+                        ) : botOptions.length === 0 ? (
+                          <DropdownMenuItem disabled className="text-muted-foreground">
+                            Nenhum bot configurado
+                          </DropdownMenuItem>
+                        ) : (
+                          botOptions.map((bot) => (
+                            <DropdownMenuItem
+                              key={bot.id}
+                              className="cursor-pointer"
+                              disabled={startingBot}
+                              onSelect={() => void handleStartBot(bot.id, bot.name)}
+                            >
+                              <Bot className="size-3.5 text-muted-foreground" />
+                              <span className="truncate">{bot.name}</span>
+                            </DropdownMenuItem>
+                          ))
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Input
                       value={text}
                       onChange={(e) => setText(e.target.value)}
@@ -1497,7 +1602,7 @@ export function ChatInboxScreen({
                     <Button
                       className="cursor-pointer"
                       onClick={() => void handleSend()}
-                      disabled={sending || (!text.trim() && !selectedImage)}
+                      disabled={sending || startingBot || (!text.trim() && !selectedImage)}
                       aria-busy={sending}
                     >
                       {sending ? (

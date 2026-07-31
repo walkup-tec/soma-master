@@ -368,6 +368,41 @@ export const setChatConversationBotFn = createServerFn({ method: "POST" })
     return getConversation(data.conversationId);
   });
 
+/** Lista bots disponíveis para envio manual no Chat (id + nome). */
+export const listChatBotsFn = createServerFn({ method: "GET" }).handler(async () => {
+  await requireChatUser();
+  const { listBotFlowsFromServer } = await import("@/lib/bots/bot-flow.repository");
+  const flows = await listBotFlowsFromServer();
+  return flows
+    .map((flow) => ({
+      id: flow.id,
+      name: String(flow.name || "Bot sem nome").trim() || "Bot sem nome",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+});
+
+/** Atendente dispara um bot na conversa aberta. */
+export const startChatBotFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { conversationId?: string; botId?: string };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const botId = String(body.botId ?? "").trim();
+    if (!conversationId || !botId) throw new Error("Conversa e bot são obrigatórios.");
+    return { conversationId, botId };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatUser();
+    const { startBotOnConversation } = await import("@/lib/bots/bot-inbound.service");
+    const result = await startBotOnConversation({
+      conversationId: data.conversationId,
+      botId: data.botId,
+      startedByName: user.name || user.email || "Atendente",
+    });
+    if (!result.ok) throw new Error(result.error);
+    const conversation = await getConversation(data.conversationId);
+    return { ...result, conversation };
+  });
+
 /** Aplica o estado geral da IA a todos os atendimentos. Ligar IA desliga Bot. */
 export const setChatAiGlobalEnabledFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
