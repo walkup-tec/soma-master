@@ -273,22 +273,25 @@ export async function handleEvolutionWebhook(request: Request): Promise<Response
         ? "O cliente enviou um documento PDF sem legenda."
         : "O cliente enviou uma imagem sem legenda.");
 
-    // Bot de expediente (turnos) tem prioridade sobre a IA do chat
-    void (async () => {
-      try {
-        const handledByBot = await maybeRunChatbotRuntime({
-          conversationId: conversation.id,
-          phone: conversation.phone,
-          inboundText,
-        });
-        if (!handledByBot) {
-          await maybeReplyWithAi(conversation.id, inboundText);
-        }
-      } catch (error) {
-        console.error("[chat] chatbot runtime failed", error);
+    // Aguarda o bot (e a IA) antes de responder o webhook — evita perda do processamento
+    // em ambientes que descartam trabalho após o Response (Vite/dev e alguns proxies).
+    try {
+      const handledByBot = await maybeRunChatbotRuntime({
+        conversationId: conversation.id,
+        phone: conversation.phone,
+        inboundText,
+      });
+      if (!handledByBot) {
         await maybeReplyWithAi(conversation.id, inboundText);
       }
-    })();
+    } catch (error) {
+      console.error("[chat] chatbot runtime failed", error);
+      try {
+        await maybeReplyWithAi(conversation.id, inboundText);
+      } catch (aiError) {
+        console.error("[chat] AI fallback failed", aiError);
+      }
+    }
   }
 
   return Response.json({ ok: true, accepted: inbound.length });

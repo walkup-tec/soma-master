@@ -639,7 +639,24 @@ export async function advanceBotRun(input: {
     }
 
     // Após wait_reply / botões com inbound, segue pela saída
-    const next = findNextNode(input.flow, nodeId, result.nextHandle);
+    let next = findNextNode(input.flow, nodeId, result.nextHandle);
+    // Botões/lista/menu: se a saída da opção não tiver aresta, tenta Fallback (out).
+    if (
+      !next &&
+      result.nextHandle &&
+      result.nextHandle !== "out" &&
+      (node.data.kind === "buttons" || node.data.kind === "list" || node.data.kind === "menu")
+    ) {
+      next = findNextNode(input.flow, nodeId, "out");
+      if (next) {
+        run.logs.push(
+          log(
+            "warn",
+            `Saída "${result.nextHandle}" sem conexão — usando Fallback (out)`,
+          ),
+        );
+      }
+    }
     if (!next) {
       run.phase = "finished";
       run.logs.push(log("warn", `Sem conexão na saída "${result.nextHandle}"`));
