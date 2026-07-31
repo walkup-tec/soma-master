@@ -12,6 +12,7 @@ import {
   setConversationBotRun,
 } from "@/lib/chat/chat.repository";
 import {
+  evolutionSendButtons,
   evolutionSendText,
 } from "@/lib/chat/evolution.adapter";
 import { resolveChatbotRuntimeSelection } from "@/lib/config/chatbot-runtime-schedule";
@@ -42,6 +43,12 @@ function shouldRestartRun(run: BotRunState | null | undefined, botId: string): b
   }
   if (run.phase === "finished" || run.phase === "error" || run.phase === "idle") return true;
   return false;
+}
+
+function isGhostButtonsPayload(raw: unknown): boolean {
+  const text = JSON.stringify(raw ?? "");
+  // Só viewOnce é fantasma. Em 2.4.0+, nativeFlowMessage sem viewOnce é botão válido.
+  return text.includes("viewOnceMessage");
 }
 
 async function dispatchBotOutbound(input: {
@@ -82,12 +89,14 @@ async function dispatchBotOutbound(input: {
     const body = String(interactive.text || "").trim();
     if (!body) continue;
 
+    const optionLabels = interactive.options.map((opt) => opt.label).filter(Boolean);
     const numbered = `${body}\n\n${interactive.options
       .map((opt, index) => `${index + 1}. ${opt.label}`)
       .join("\n")}`;
-    const optionLabels = interactive.options.map((opt) => opt.label).filter(Boolean);
     const crmBody =
-      optionLabels.length > 0 ? `${body}\n\nOpções: ${optionLabels.join(" · ")}` : body;
+      optionLabels.length > 0
+        ? `${body}\n\n${optionLabels.map((label) => `• ${label}`).join("\n")}`
+        : body;
 
     await appendMessage({
       conversationId: input.conversationId,
@@ -97,8 +106,27 @@ async function dispatchBotOutbound(input: {
       senderName: input.botName,
     });
 
-    // Texto numerado — sendButtons da Evolution costuma retornar 201 com
-    // viewOnce/interactive que o WhatsApp do contato não exibe (envio "fantasma").
+    // Botões reply via Evolution. Em 2.4.0+ o payload válido usa interactive/nativeFlow
+    // (sem viewOnce). Se falhar ou vier fantasma, cai para texto numerado.
+    if (interactive.kind === "buttons" && optionLabels.length > 0) {
+      const buttonsSend = await evolutionSendButtons({
+        phone: input.phone,
+        title: body.slice(0, 60),
+        description: body.length > 60 ? body : undefined,
+        buttons: interactive.options.slice(0, 3).map((opt) => ({
+          id: opt.id,
+          displayText: opt.label.slice(0, 20),
+        })),
+      });
+      if (buttonsSend.ok && !isGhostButtonsPayload(buttonsSend.raw)) {
+        continue;
+      }
+      console.warn("[chatbot-runtime] sendButtons indisponível/fantasma neste Evolution", {
+        error: buttonsSend.error,
+        ghost: isGhostButtonsPayload(buttonsSend.raw),
+      });
+    }
+
     const textSend = await evolutionSendText({ phone: input.phone, text: numbered });
     if (!textSend.ok) {
       console.error("[chatbot-runtime] sendText (opções) falhou", {

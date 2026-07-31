@@ -512,8 +512,23 @@ export async function evolutionSendButtons(input: {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(12_000),
   });
-  if (result.ok) return { ok: true, raw: result.raw };
-  return { ok: false, raw: result.raw, error: result.error || "Falha ao enviar botões na Evolution." };
+  if (!result.ok) {
+    return { ok: false, raw: result.raw, error: result.error || "Falha ao enviar botões na Evolution." };
+  }
+
+  // Evolution 2.3.7: viewOnce wrapping = botões fantasma.
+  // Evolution 2.4.0+: interactiveMessage + nativeFlowMessage (sem viewOnce) é o formato válido.
+  const rawText = JSON.stringify(result.raw ?? "");
+  if (rawText.includes("viewOnceMessage")) {
+    return {
+      ok: false,
+      raw: result.raw,
+      error:
+        "Evolution gerou botões fantasma (viewOnce). Atualize a Evolution (≥2.4.0) ou use Cloud API.",
+    };
+  }
+
+  return { ok: true, raw: result.raw };
 }
 
 /** Envia lista interativa (menu) pela Evolution. */
