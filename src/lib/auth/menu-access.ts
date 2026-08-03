@@ -19,6 +19,9 @@ export function firstAllowedAppPath(session: SessionData): string {
   }
   if (sessionCanAccessMenu(session, "dashboard")) return "/app";
   const first = session.menuIds[0];
-  if (!first) return "/app";
+  if (!first) {
+    // Sem menus: não devolver /app (dashboard) — evita loop infinito de redirect + "Carregando…".
+    return "/login";
+  }
   return getMenuItemById(first)?.path ?? "/app";
 }

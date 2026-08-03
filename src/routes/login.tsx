@@ -14,7 +14,10 @@ export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
     const session = await getAuthSessionFn();
     if (session) {
-      throw redirect({ to: firstAllowedAppPath(session) });
+      const target = firstAllowedAppPath(session);
+      if (target !== "/login") {
+        throw redirect({ to: target });
+      }
     }
   },
   head: () => ({

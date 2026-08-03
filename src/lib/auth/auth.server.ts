@@ -13,7 +13,11 @@ import { sessionConfig, type SessionData } from "@/lib/auth/session-config";
 import { normalizeEmail } from "@/lib/auth/master-user";
 import { clearAgentPresence, touchAgentPresence } from "@/lib/chat/agent-presence.repository";
 import { findUserByEmail, findUserById } from "@/lib/users/user.repository";
-import { getPartnerAccess } from "@/lib/partners/partner.repository";
+import { isPartnerLinkedUserCategoryId } from "@/lib/partners/partner.constants";
+import {
+  getPartnerAccess,
+  getPartnerCategoryMenuAccess,
+} from "@/lib/partners/partner.repository";
 
 const ENRICH_TTL_MS = 60_000;
 
@@ -60,13 +64,36 @@ async function resolveSessionAccess(
         : "Esta conta está inativa. Contate seu responsável.",
     );
   }
-  const menuIds = partnerAccess?.uses_custom_menu_permissions
-    ? (partnerAccess.menu_ids.filter((id): id is MenuItemId =>
-        ALL_MENU_ITEM_IDS.includes(id as MenuItemId),
-      ) as MenuItemId[])
-    : getMenuIdsForCategory(settings, categoryId);
-  const preferred = getHomeMenuIdForCategory(settings, categoryId);
-  return { menuIds, homeMenuId: resolveCategoryHomeMenuId(menuIds, preferred) };
+
+  // Categorias partner-cat-* não entram em settings.categories — menus vêm do DB.
+  const partnerCategoryMenus = isPartnerLinkedUserCategoryId(categoryId)
+    ? await getPartnerCategoryMenuAccess(categoryId)
+    : null;
+
+  let menuIds: MenuItemId[] = [];
+  if (partnerAccess?.uses_custom_menu_permissions) {
+    menuIds = partnerAccess.menu_ids.filter((id): id is MenuItemId =>
+      ALL_MENU_ITEM_IDS.includes(id as MenuItemId),
+    );
+  } else if (partnerCategoryMenus) {
+    menuIds = partnerCategoryMenus.menuIds;
+  } else {
+    menuIds = getMenuIdsForCategory(settings, categoryId);
+  }
+
+  // Custom vazio (sem permissões salvas) — cai no menu padrão da categoria parceiro.
+  if (menuIds.length === 0 && partnerCategoryMenus) {
+    menuIds = partnerCategoryMenus.menuIds;
+  }
+
+  const preferred = partnerCategoryMenus
+    ? partnerCategoryMenus.homeMenuId
+    : getHomeMenuIdForCategory(settings, categoryId);
+  const homeMenuId = resolveCategoryHomeMenuId(menuIds, preferred);
+  if (menuIds.length === 0) {
+    throw new Error("Sua conta não tem menus liberados. Contate o administrador.");
+  }
+  return { menuIds, homeMenuId };
 }
 
 function sessionNeedsPersist(session: SessionData, next: SessionData): boolean {

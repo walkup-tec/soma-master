@@ -114,6 +114,45 @@ export async function getPartnerAccess(userId: string): Promise<PartnerAccessRow
   return rows[0] ?? null;
 }
 
+/**
+ * Menus da categoria técnica partner-cat-* (e home) direto do banco.
+ * Essas categorias não entram em settings.categories (filtro admin), então
+ * getMenuIdsForCategory(settings, ...) retorna [] e gera loop em /app.
+ */
+export async function getPartnerCategoryMenuAccess(
+  categoryId: string,
+): Promise<{ menuIds: MenuItemId[]; homeMenuId: MenuItemId | null }> {
+  if (!isDatabaseEnabled()) {
+    return { menuIds: ["parceiros"], homeMenuId: "parceiros" };
+  }
+  const sql = await getSql();
+  const [menuRows, homeRows] = await Promise.all([
+    sql<{ menu_id: string }[]>`
+      select menu_id
+      from crm.user_category_menus
+      where category_id = ${categoryId}
+      order by menu_id
+    `,
+    sql<{ home_menu_id: string | null }[]>`
+      select home_menu_id
+      from crm.user_categories
+      where id = ${categoryId}
+      limit 1
+    `,
+  ]);
+  const menuIds = menuRows
+    .map((row) => row.menu_id)
+    .filter((id): id is MenuItemId => ALL_MENU_ITEM_IDS.includes(id as MenuItemId));
+  const homeRaw = String(homeRows[0]?.home_menu_id || "").trim();
+  const homeMenuId = ALL_MENU_ITEM_IDS.includes(homeRaw as MenuItemId)
+    ? (homeRaw as MenuItemId)
+    : null;
+  return {
+    menuIds: menuIds.length > 0 ? menuIds : ["parceiros"],
+    homeMenuId: homeMenuId ?? "parceiros",
+  };
+}
+
 export async function partnerTaxIdExists(taxId: string, exceptUserId?: string): Promise<boolean> {
   requireDatabase();
   const sql = await getSql();
