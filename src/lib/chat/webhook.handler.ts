@@ -154,11 +154,20 @@ async function maybeReplyWithAi(conversationId: string, userText: string): Promi
       senderType: "ai",
       senderName: "Assistente Soma",
     });
-    await evolutionSendText({
+    const send = await evolutionSendText({
       phone: conversation.phone,
       text: reply,
       instanceName: conversation.instanceName ?? undefined,
     });
+    if (!send.ok) {
+      await appendMessage({
+        conversationId,
+        direction: "outbound",
+        body: `⚠️ IA salvou no CRM, mas não entregou no WhatsApp: ${send.error ?? "erro desconhecido"}`,
+        senderType: "system",
+        senderName: "Sistema",
+      });
+    }
   } catch (error) {
     console.error("[chat] AI reply failed", error);
     await appendMessage({

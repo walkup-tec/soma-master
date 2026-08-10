@@ -131,6 +131,115 @@ function formatEvolutionHttpError(status: number, raw: unknown): string {
   return detail ? `Evolution HTTP ${status}: ${detail}` : `Evolution HTTP ${status}`;
 }
 
+function extractEvolutionSendKeyId(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const key = record.key;
+  if (key && typeof key === "object") {
+    const id = (key as Record<string, unknown>).id;
+    if (typeof id === "string" && id.trim()) return id.trim();
+  }
+  if (typeof record.id === "string" && record.id.trim()) return record.id.trim();
+  return null;
+}
+
+function extractEvolutionSendStatus(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.status === "string" && record.status.trim()) {
+    return record.status.trim().toUpperCase();
+  }
+  return null;
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * HTTP 201 da Evolution não garante entrega: muitas vezes volta PENDING e depois ERROR.
+ * Confirma o status real antes de o CRM assumir sucesso.
+ */
+async function confirmEvolutionOutboundDelivery(input: {
+  instance: string;
+  raw: unknown;
+}): Promise<{ ok: boolean; raw: unknown; error?: string }> {
+  const initialStatus = extractEvolutionSendStatus(input.raw);
+  const keyId = extractEvolutionSendKeyId(input.raw);
+
+  if (initialStatus === "ERROR") {
+    return {
+      ok: false,
+      raw: input.raw,
+      error: "Evolution recusou a entrega (status ERROR).",
+    };
+  }
+
+  // Já acusou recebimento no servidor WhatsApp.
+  if (
+    initialStatus === "SERVER_ACK" ||
+    initialStatus === "DELIVERY_ACK" ||
+    initialStatus === "READ" ||
+    initialStatus === "PLAYED"
+  ) {
+    return { ok: true, raw: input.raw };
+  }
+
+  if (!keyId) {
+    // Sem id para auditar — mantém o comportamento anterior (HTTP ok).
+    return { ok: true, raw: input.raw };
+  }
+
+  // PENDING / ausente: consulta o status real por alguns segundos.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await sleepMs(1500);
+    const statusResult = await evolutionFetch(
+      `/chat/findStatusMessage/${encodeURIComponent(input.instance)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ where: { id: keyId } }),
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (!statusResult.ok) continue;
+
+    const rows = Array.isArray(statusResult.raw)
+      ? statusResult.raw
+      : statusResult.raw
+        ? [statusResult.raw]
+        : [];
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const status = String((row as Record<string, unknown>).status ?? "")
+        .trim()
+        .toUpperCase();
+      if (!status) continue;
+      if (status === "ERROR" || status === "INACTIVE") {
+        return {
+          ok: false,
+          raw: input.raw,
+          error: `Evolution não entregou no WhatsApp (status ${status}). Reconecte a instância ou peça para o contato enviar uma nova mensagem.`,
+        };
+      }
+      if (
+        status === "SERVER_ACK" ||
+        status === "DELIVERY_ACK" ||
+        status === "READ" ||
+        status === "PLAYED"
+      ) {
+        return { ok: true, raw: input.raw };
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    raw: input.raw,
+    error:
+      "Evolution aceitou o envio, mas a mensagem ficou PENDING sem confirmação. Ela provavelmente não chegou no WhatsApp.",
+  };
+}
+
 function extractEvolutionErrorDetail(raw: unknown): string {
   if (raw == null) return "";
   if (typeof raw === "string") return raw.slice(0, 280);
@@ -509,7 +618,9 @@ export async function evolutionSendText(input: {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(12_000),
     });
-    if (result.ok) return { ok: true, raw: result.raw };
+    if (result.ok) {
+      return confirmEvolutionOutboundDelivery({ instance, raw: result.raw });
+    }
     lastError = result.error || lastError;
     lastRaw = result.raw;
     const detail = `${result.error || ""} ${JSON.stringify(result.raw ?? "")}`.toLowerCase();
@@ -585,7 +696,7 @@ export async function evolutionSendButtons(input: {
     };
   }
 
-  return { ok: true, raw: result.raw };
+  return confirmEvolutionOutboundDelivery({ instance, raw: result.raw });
 }
 
 /** Envia lista interativa (menu) pela Evolution. */
@@ -629,7 +740,7 @@ export async function evolutionSendList(input: {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(12_000),
   });
-  if (result.ok) return { ok: true, raw: result.raw };
+  if (result.ok) return confirmEvolutionOutboundDelivery({ instance, raw: result.raw });
   return { ok: false, raw: result.raw, error: result.error || "Falha ao enviar lista na Evolution." };
 }
 
@@ -719,7 +830,9 @@ export async function evolutionSendImage(input: {
       }),
       signal: AbortSignal.timeout(60_000),
     });
-    if (result.ok) return { ok: true, raw: result.raw };
+    if (result.ok) {
+      return confirmEvolutionOutboundDelivery({ instance, raw: result.raw });
+    }
     lastError = result.error || lastError;
     lastRaw = result.raw;
     // Formato inválido → tenta próxima variante (raw ↔ data URI ↔ URL).
