@@ -1209,6 +1209,33 @@ export const refreshEvolutionQrFn = createServerFn({ method: "POST" })
         connected: true,
       };
     }
+
+    // Já em pareamento: NÃO regenerar QR (invalidaria o código que o WhatsApp acabou de ler).
+    if (connected.ok && connected.state === "connecting") {
+      const flash = takeEvolutionQrFlash(user.userId, data.instanceName);
+      if (flash?.qr?.base64 || flash?.qr?.code) {
+        putEvolutionQrFlash(
+          user.userId,
+          {
+            state: "connecting",
+            qr: flash.qr,
+            error: flash.error,
+          },
+          data.instanceName,
+        );
+        return {
+          config,
+          instanceName: data.instanceName,
+          state: "connecting" as const,
+          qr: flash.qr,
+          phone: null,
+          ok: true,
+          error: undefined,
+          connected: false,
+        };
+      }
+    }
+
     const connect = await evolutionConnectQr(data.instanceName);
     const phone =
       connect.state === "open"

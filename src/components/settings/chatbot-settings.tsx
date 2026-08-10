@@ -196,13 +196,16 @@ function ChannelCard({
     };
   }, [state, phone, channel.instanceName, refreshStatus]);
 
-  // Poll enquanto o QR estiver visível — fecha e alerta ao conectar.
+  // Poll enquanto o QR estiver visível — após o scan a Evolution pode ir
+  // connecting → close (515) → open; não desistir no close temporário.
   useEffect(() => {
     if (!qr.base64 || state === "open") return;
     let cancelled = false;
+    let ticks = 0;
     const timer = window.setInterval(() => {
       void (async () => {
         try {
+          ticks += 1;
           const result = await refreshStatus({ data: { instanceName: channel.instanceName } });
           if (cancelled) return;
           if (result.state === "open") {
@@ -213,17 +216,29 @@ function ChannelCard({
             setLocalMsg(null);
             window.setTimeout(() => setIntegratedAlert(false), 4500);
             await onChanged();
+            return;
+          }
+          if (result.state === "connecting" || result.state === "close") {
+            setState(result.state);
+            setLocalMsg(
+              "Aguardando confirmação do WhatsApp… após ler o QR, espere até ~40s e não gere outro código.",
+            );
+          }
+          if (ticks >= 30 && result.state === "close") {
+            setLocalMsg("Pareamento não concluiu. Gere um novo QR e escaneie imediatamente.");
           }
         } catch {
           /* ignore poll errors */
         }
       })();
-    }, 2500);
+    }, 2000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [qr.base64, state, channel.instanceName, refreshStatus, onChanged]);
+    // state de propósito fora das deps: setState(close/connecting) não deve reiniciar o timer
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pairing wait keyed by QR
+  }, [qr.base64, channel.instanceName, refreshStatus, onChanged]);
 
   async function runStatus() {
     setBusy("status");
@@ -263,9 +278,11 @@ function ChannelCard({
         setIntegratedAlert(true);
         window.setTimeout(() => setIntegratedAlert(false), 4500);
       } else {
-        setState(result.state);
+        setState(result.state === "close" ? "connecting" : result.state);
         setQr(result.qr ?? {});
-        setLocalMsg("QR gerado — escaneie no WhatsApp (expira ~60s).");
+        setLocalMsg(
+          "QR gerado — escaneie agora no WhatsApp e aguarde a confirmação (não gere outro código).",
+        );
       }
       await onChanged();
     } catch (error) {
