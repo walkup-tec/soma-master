@@ -196,10 +196,10 @@ function ChannelCard({
     };
   }, [state, phone, channel.instanceName, refreshStatus]);
 
-  // Poll enquanto o QR estiver visível — após o scan a Evolution pode ir
+  // Poll enquanto o QR/código estiver visível — após o scan a Evolution pode ir
   // connecting → close (515) → open; não desistir no close temporário.
   useEffect(() => {
-    if (!qr.base64 || state === "open") return;
+    if ((!qr.base64 && !qr.pairingCode) || state === "open") return;
     let cancelled = false;
     let ticks = 0;
     const timer = window.setInterval(() => {
@@ -238,7 +238,7 @@ function ChannelCard({
     };
     // state de propósito fora das deps: setState(close/connecting) não deve reiniciar o timer
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pairing wait keyed by QR
-  }, [qr.base64, channel.instanceName, refreshStatus, onChanged]);
+  }, [qr.base64, qr.pairingCode, channel.instanceName, refreshStatus, onChanged]);
 
   async function runStatus() {
     setBusy("status");
@@ -396,16 +396,31 @@ function ChannelCard({
         </Button>
       </div>
 
-      {qr.base64 ? (
+      {qr.base64 || qr.pairingCode ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-6">
-          <img
-            src={qr.base64}
-            alt={`QR Code ${channel.label}`}
-            className="size-56 rounded-lg border border-border bg-white object-contain p-2"
-          />
-          <p className="max-w-sm text-center text-xs text-muted-foreground">
-            WhatsApp → Dispositivos conectados → Conectar um dispositivo.
-          </p>
+          {qr.base64 ? (
+            <img
+              src={qr.base64}
+              alt={`QR Code ${channel.label}`}
+              className="size-56 rounded-lg border border-border bg-white object-contain p-2"
+            />
+          ) : null}
+          {qr.pairingCode ? (
+            <div className="w-full max-w-sm rounded-lg border border-border bg-muted/40 px-4 py-3 text-center">
+              <p className="text-xs text-muted-foreground">Código de pareamento</p>
+              <p className="mt-1 font-mono text-2xl font-semibold tracking-[0.2em]">
+                {qr.pairingCode}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                WhatsApp → Aparelhos conectados → Conectar um aparelho →{" "}
+                <strong>Conectar com número de telefone</strong>
+              </p>
+            </div>
+          ) : (
+            <p className="max-w-sm text-center text-xs text-muted-foreground">
+              WhatsApp → Dispositivos conectados → Conectar um dispositivo.
+            </p>
+          )}
         </div>
       ) : null}
     </div>

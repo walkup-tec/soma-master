@@ -541,8 +541,14 @@ export async function evolutionConnectionState(instanceName?: string | null): Pr
   return { ok: true, state: normalizeState(result.raw), raw: result.raw };
 }
 
-/** Gera/atualiza QR — cria a instância soma-* se ainda não existir. */
-export async function evolutionConnectQr(instanceName?: string | null): Promise<{
+/** Gera/atualiza QR — cria a instância soma-* se ainda não existir.
+ * Se `phoneNumber` for informado, a Evolution também devolve pairingCode
+ * (WhatsApp → Aparelhos conectados → Conectar com número).
+ */
+export async function evolutionConnectQr(
+  instanceName?: string | null,
+  phoneNumber?: string | null,
+): Promise<{
   ok: boolean;
   state: EvolutionConnectionState;
   qr: EvolutionQrPayload;
@@ -560,7 +566,9 @@ export async function evolutionConnectQr(instanceName?: string | null): Promise<
     };
   }
 
-  const result = await evolutionFetch(`/instance/connect/${encodeURIComponent(instance)}`, {
+  const digits = String(phoneNumber || "").replace(/\D+/g, "");
+  const qs = digits ? `?number=${encodeURIComponent(digits)}` : "";
+  const result = await evolutionFetch(`/instance/connect/${encodeURIComponent(instance)}${qs}`, {
     method: "GET",
   });
   if (!result.ok) {
@@ -576,7 +584,11 @@ export async function evolutionConnectQr(instanceName?: string | null): Promise<
   const qr = extractQr(result.raw);
   const state = normalizeState(result.raw);
   const inferred: EvolutionConnectionState =
-    state !== "unknown" ? state : qr.base64 || qr.code ? "connecting" : "unknown";
+    state !== "unknown"
+      ? state
+      : qr.base64 || qr.code || qr.pairingCode
+        ? "connecting"
+        : "unknown";
 
   return { ok: true, state: inferred, qr, raw: result.raw };
 }
