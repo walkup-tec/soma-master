@@ -214,11 +214,11 @@ export function ChatInboxScreen({
       .filter((conv) => {
         if (filter === "mine" && userId) return conv.assignedUserId === userId;
         if (filter === "unassigned") return !conv.assignedUserId;
-        // Todos = fila do agente: não atribuídos + meus.
-        // Após transferir, some daqui também (exceto master, que vê tudo).
+        // Todos: fila geral — atribuídos a mim ficam só em Meus.
+        if (userId && conv.assignedUserId === userId) return false;
         if (isMaster) return true;
         if (!userId) return true;
-        return !conv.assignedUserId || conv.assignedUserId === userId;
+        return !conv.assignedUserId;
       })
       .filter((conv) => {
         if (!q) return true;
