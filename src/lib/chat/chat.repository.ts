@@ -11,6 +11,7 @@ import {
   type ChatSenderType,
 } from "@/lib/chat/chat.types";
 import { ensureChatSchema } from "@/lib/chat/ensure-chat-schema";
+import { getDefaultSomaEvolutionInstance } from "@/lib/chat/evolution.adapter";
 import { normalizeWhatsAppPhone, phonesMatch } from "@/lib/chat/phone";
 import { resolveAttendanceStatusColor, resolveAttendanceStatusLabel } from "@/lib/clients/client-status";
 import { getSql, isDatabaseEnabled } from "@/lib/db/postgres";
@@ -48,6 +49,7 @@ type ConvRow = {
   phone: string;
   contact_name: string | null;
   client_id: string | null;
+  instance_name?: string | null;
   assigned_user_id: string | null;
   assigned_user_name: string | null;
   contact_note: string | null;
@@ -75,6 +77,7 @@ function mapConv(row: ConvRow): ChatConversation {
     phone: row.phone,
     contactName: row.contact_name,
     clientId: row.client_id,
+    instanceName: row.instance_name ?? null,
     assignedUserId: row.assigned_user_id,
     assignedUserName: row.assigned_user_name,
     contactNote: row.contact_note ?? null,
@@ -109,7 +112,7 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
   if (isDatabaseEnabled()) {
     const rows = await withChatDb((sql) => sql<ConvRow[]>`
       select
-        c.id, c.phone, c.contact_name, c.client_id, c.assigned_user_id, c.assigned_user_name,
+        c.id, c.phone, c.contact_name, c.client_id, c.instance_name, c.assigned_user_id, c.assigned_user_name,
         c.contact_note,
         c.ai_enabled, c.bot_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
@@ -147,14 +150,11 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
   );
 }
 
-export async function getConversation(id: string): Promise<ChatConversation | null> {
-  const conversationId = String(id || "").trim();
-  if (!conversationId) return null;
-
+async function fetchConversationById(conversationId: string): Promise<ChatConversation | null> {
   if (isDatabaseEnabled()) {
     const rows = await withChatDb((sql) => sql<ConvRow[]>`
       select
-        c.id, c.phone, c.contact_name, c.client_id, c.assigned_user_id, c.assigned_user_name,
+        c.id, c.phone, c.contact_name, c.client_id, c.instance_name, c.assigned_user_id, c.assigned_user_name,
         c.contact_note,
         c.ai_enabled, c.bot_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
@@ -191,6 +191,23 @@ export async function getConversation(id: string): Promise<ChatConversation | nu
     },
   ]);
   return enriched ?? null;
+}
+
+export async function getConversation(id: string): Promise<ChatConversation | null> {
+  const conversationId = String(id || "").trim();
+  if (!conversationId) return null;
+
+  const conversation = await fetchConversationById(conversationId);
+  if (!conversation || conversation.clientId) return conversation;
+
+  const linked = await linkConversationToExistingClientIfNeeded({
+    conversationId: conversation.id,
+    phone: conversation.phone,
+    contactName: conversation.contactName,
+  });
+  if (!linked) return conversation;
+
+  return (await fetchConversationById(conversationId)) ?? conversation;
 }
 
 export async function updateConversationContactNote(
@@ -242,6 +259,31 @@ export async function findClientIdByPhone(phone: string): Promise<{ clientId: st
   return null;
 }
 
+/**
+ * Se a conversa ainda não tem cliente e o telefone já existe no CRM,
+ * vincula e opcionalmente preenche o nome do contato.
+ * Retorna true quando houve vínculo novo.
+ */
+export async function linkConversationToExistingClientIfNeeded(input: {
+  conversationId: string;
+  phone: string;
+  contactName?: string | null;
+}): Promise<boolean> {
+  const linked = await findClientIdByPhone(input.phone);
+  if (!linked?.clientId) return false;
+
+  await linkConversationClient(input.conversationId, linked.clientId);
+
+  const name = (linked.name || "").trim();
+  if (name && !String(input.contactName || "").trim()) {
+    await updateConversationContactName({
+      conversationId: input.conversationId,
+      contactName: name,
+    });
+  }
+  return true;
+}
+
 export async function updateConversationContactName(input: {
   conversationId: string;
   contactName: string;
@@ -274,16 +316,19 @@ export async function updateConversationContactName(input: {
 export async function getOrCreateConversationByPhone(input: {
   phone: string;
   contactName?: string | null;
+  instanceName?: string | null;
 }): Promise<ChatConversation> {
   const phone = normalizeWhatsAppPhone(input.phone);
   if (!phone) throw new Error("Telefone inválido.");
+  const instanceName =
+    String(input.instanceName || "").trim() || getDefaultSomaEvolutionInstance();
 
   if (isDatabaseEnabled()) {
     return withChatDb(async (sql) => {
       const existing = await sql<ConvRow[]>`
-        select id, phone, contact_name, client_id, assigned_user_id, assigned_user_name, contact_note,
+        select id, phone, contact_name, client_id, instance_name, assigned_user_id, assigned_user_name, contact_note,
                ai_enabled, bot_enabled, bot_run, last_message_at, last_message_preview, unread_count, created_at, updated_at
-        from crm.chat_conversations where phone = ${phone} limit 1
+        from crm.chat_conversations where phone = ${phone} and instance_name = ${instanceName} limit 1
       `;
       if (existing[0]) {
         if (input.contactName && !existing[0].contact_name) {
@@ -293,7 +338,26 @@ export async function getOrCreateConversationByPhone(input: {
             where id = ${existing[0].id}
           `;
         }
-        return mapConv(existing[0]);
+        if (!existing[0].client_id) {
+          const linkedExisting = await linkConversationToExistingClientIfNeeded({
+            conversationId: existing[0].id,
+            phone,
+            contactName: input.contactName ?? existing[0].contact_name,
+          });
+          if (linkedExisting) {
+            const refreshed = await fetchConversationById(existing[0].id);
+            if (refreshed) return refreshed;
+          }
+        }
+        const mapped = mapConv({
+          ...existing[0],
+          contact_name:
+            input.contactName && !existing[0].contact_name
+              ? input.contactName
+              : existing[0].contact_name,
+        });
+        const [enriched] = await enrichConversations([mapped]);
+        return enriched ?? mapped;
       }
 
       const linked = await findClientIdByPhone(phone);
@@ -315,12 +379,13 @@ export async function getOrCreateConversationByPhone(input: {
       const now = new Date();
       await sql`
         insert into crm.chat_conversations (
-          id, phone, contact_name, client_id, ai_enabled, bot_enabled, created_at, updated_at
+          id, phone, contact_name, client_id, instance_name, ai_enabled, bot_enabled, created_at, updated_at
         ) values (
           ${id},
           ${phone},
           ${input.contactName ?? linked?.name ?? null},
           ${linked?.clientId ?? null},
+          ${instanceName},
           ${initialAiEnabled},
           ${initialBotEnabled},
           ${now},
@@ -332,6 +397,7 @@ export async function getOrCreateConversationByPhone(input: {
         phone,
         contactName: input.contactName ?? linked?.name ?? null,
         clientId: linked?.clientId ?? null,
+        instanceName,
         assignedUserId: null,
         assignedUserName: null,
         contactNote: null,
@@ -348,14 +414,28 @@ export async function getOrCreateConversationByPhone(input: {
   }
 
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
-  const found = items.find((c) => c.phone === phone);
+  const found = items.find(
+    (c) => c.phone === phone && (c.instanceName || getDefaultSomaEvolutionInstance()) === instanceName,
+  );
   if (found) {
+    if (!found.clientId) {
+      const linkedExisting = await linkConversationToExistingClientIfNeeded({
+        conversationId: found.id,
+        phone,
+        contactName: input.contactName ?? found.contactName,
+      });
+      if (linkedExisting) {
+        const refreshed = await fetchConversationById(found.id);
+        if (refreshed) return refreshed;
+      }
+    }
     return {
       ...found,
       botEnabled: found.botEnabled !== false,
       botRun: found.botRun ?? null,
     };
   }
+  const linked = await findClientIdByPhone(phone);
   const settings = await getChatAiSettings();
   let initialBotEnabled = settings.botGlobalEnabled;
   let initialAiEnabled = settings.aiGlobalEnabled;
@@ -364,8 +444,9 @@ export async function getOrCreateConversationByPhone(input: {
   const created: ChatConversation = {
     id: `chat-${crypto.randomUUID().slice(0, 10)}`,
     phone,
-    contactName: input.contactName ?? null,
-    clientId: null,
+    contactName: input.contactName ?? linked?.name ?? null,
+    clientId: linked?.clientId ?? null,
+    instanceName,
     assignedUserId: null,
     assignedUserName: null,
     contactNote: null,

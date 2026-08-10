@@ -65,6 +65,13 @@ import {
 import { readFileInChunksParallel } from "@/lib/clients/upload-file-chunks";
 import type { AttendanceStatusConfig, BankConfig, ProductConfig } from "@/lib/config/settings-types";
 
+const EMPTY_CONTACT_DRAFT = {
+  name: "",
+  phone: "",
+  statusId: null as string | null,
+  productId: null as string | null,
+};
+
 type Bootstrap = {
   conversations: ChatConversation[];
   aiSettings: ChatAiSettings;
@@ -183,11 +190,8 @@ export function ChatInboxScreen({
   const [togglingBotGlobal, setTogglingBotGlobal] = useState(false);
   const [togglingConversationId, setTogglingConversationId] = useState<string | null>(null);
   const [togglingBotConversationId, setTogglingBotConversationId] = useState<string | null>(null);
-  // Nome/WhatsApp digitados no formulário Vincular ao CRM — o cabeçalho Contato espelha
-  const [contactDraft, setContactDraft] = useState<{ name: string; phone: string }>({
-    name: "",
-    phone: "",
-  });
+  // Rascunho do Vincular ao CRM — cabeçalho Contato e card da lista espelham em tempo real
+  const [contactDraft, setContactDraft] = useState(EMPTY_CONTACT_DRAFT);
   const userId = bootstrap.currentUserId;
   const isMaster = bootstrap.currentUserRole === "master";
   const selectedConversation = useMemo(() => {
@@ -360,7 +364,7 @@ export function ChatInboxScreen({
   async function openConversation(id: string) {
     setSelectedId(id);
     setViewingConversationId(id);
-    setContactDraft({ name: "", phone: "" });
+    setContactDraft(EMPTY_CONTACT_DRAFT);
     clearSelectedImage();
     setLoadingThread(true);
     setHasMoreOlder(false);
@@ -968,9 +972,24 @@ export function ChatInboxScreen({
               </div>
             ) : (
               filtered.map((conv) => {
+                const isDraftTarget = selectedId === conv.id && !conv.clientId;
+                const draftStatus = isDraftTarget && contactDraft.statusId
+                  ? attendanceStatuses.find((status) => status.id === contactDraft.statusId) ?? null
+                  : null;
+                const draftProduct = isDraftTarget && contactDraft.productId
+                  ? products.find((product) => product.id === contactDraft.productId) ?? null
+                  : null;
                 const linkedProducts = products.filter((product) =>
                   (conv.clientProductIds ?? []).includes(product.id),
                 );
+                const displayProducts =
+                  linkedProducts.length > 0
+                    ? linkedProducts
+                    : draftProduct
+                      ? [draftProduct]
+                      : [];
+                const statusLabel = conv.clientStatusLabel ?? draftStatus?.label ?? null;
+                const statusColor = conv.clientStatusColor ?? draftStatus?.color ?? "#64748b";
                 return (
                   <div
                     key={conv.id}
@@ -1075,9 +1094,9 @@ export function ChatInboxScreen({
                       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         Produto
                       </p>
-                      {linkedProducts.length > 0 ? (
+                      {displayProducts.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {linkedProducts.map((product) => (
+                          {displayProducts.map((product) => (
                             <StatusBadge
                               key={product.id}
                               label={product.name}
@@ -1095,10 +1114,10 @@ export function ChatInboxScreen({
                       <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         Status
                       </p>
-                      {conv.clientStatusLabel ? (
+                      {statusLabel ? (
                         <StatusBadge
-                          label={conv.clientStatusLabel}
-                          color={conv.clientStatusColor ?? "#64748b"}
+                          label={statusLabel}
+                          color={statusColor}
                           className="max-w-full text-[10px]"
                         />
                       ) : (
@@ -1639,7 +1658,7 @@ export function ChatInboxScreen({
               banks={banks}
               onDraftChange={setContactDraft}
               onUpdated={(next) => {
-                setContactDraft({ name: "", phone: "" });
+                setContactDraft(EMPTY_CONTACT_DRAFT);
                 setActive(next);
                 void refreshList();
               }}

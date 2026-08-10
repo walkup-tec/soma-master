@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -6,19 +6,26 @@ import {
   Clock3,
   GraduationCap,
   Link2,
+  Plus,
   QrCode,
   RefreshCw,
   Tags,
+  Trash2,
   Wifi,
   WifiOff,
 } from "lucide-react";
+import { toast } from "sonner";
 import { ChatAiEducationScreen } from "@/components/chat/chat-ai-education-screen";
 import { ChatbotTagsSettings } from "@/components/settings/chatbot-tags-settings";
 import { ChatbotRuntimeSettings } from "@/components/settings/chatbot-runtime-settings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChatAiExample, ChatAiKnowledgeItem, ChatAiSettings } from "@/lib/chat/chat.types";
 import type { EvolutionConnectionState, EvolutionQrPayload } from "@/lib/chat/evolution.adapter";
 import {
+  createChatWhatsappInstanceFn,
+  deleteChatWhatsappInstanceFn,
   getEvolutionConnectionStatusFn,
   refreshEvolutionQrFn,
 } from "@/lib/chat/chat.server";
@@ -46,10 +53,21 @@ export function parseChatbotSub(value: unknown): ChatbotSubId {
   return (CHATBOT_SUBS.includes(raw as ChatbotSubId) ? raw : "conexao") as ChatbotSubId;
 }
 
+export type ChatbotChannelPayload = {
+  id: string;
+  instanceName: string;
+  label: string;
+  phone: string | null;
+  state: EvolutionConnectionState;
+  qr: EvolutionQrPayload;
+  error?: string | null;
+};
+
 export type ChatbotEvoPayload = {
   configured: boolean;
   apiUrlHost: string | null;
   instance: string | null;
+  channels?: ChatbotChannelPayload[];
   state: EvolutionConnectionState;
   qr: EvolutionQrPayload;
   error?: string | null;
@@ -89,79 +107,6 @@ type Props = {
   flashErr?: string;
 };
 
-function EvoConnectionActions({
-  configured,
-  state,
-}: {
-  configured: boolean;
-  state: EvolutionConnectionState;
-}) {
-  const router = useRouter();
-  const refreshStatus = useServerFn(getEvolutionConnectionStatusFn);
-  const refreshQr = useServerFn(refreshEvolutionQrFn);
-  const [busy, setBusy] = useState<"status" | "qr" | null>(null);
-  const [localMsg, setLocalMsg] = useState<string | null>(null);
-  const [localErr, setLocalErr] = useState<string | null>(null);
-
-  async function run(kind: "status" | "qr") {
-    setBusy(kind);
-    setLocalMsg(null);
-    setLocalErr(null);
-    try {
-      if (kind === "status") {
-        const result = await refreshStatus();
-        if (!result.ok) setLocalErr(result.error ?? "Falha ao atualizar status.");
-        else setLocalMsg("Status atualizado.");
-      } else {
-        const result = await refreshQr();
-        if (!result.ok) setLocalErr(result.error ?? "Falha ao gerar QR.");
-        else if (result.state === "open") setLocalMsg("WhatsApp já conectado nesta Evolution.");
-        else setLocalMsg("QR gerado — escaneie no WhatsApp (expira ~60s).");
-      }
-      await router.invalidate();
-    } catch (error) {
-      setLocalErr(error instanceof Error ? error.message : "Erro inesperado.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      {localMsg ? (
-        <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-          {localMsg}
-        </p>
-      ) : null}
-      {localErr ? (
-        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {localErr}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => void run("status")}
-          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-50"
-        >
-          <RefreshCw className={`size-4 ${busy === "status" ? "animate-spin" : ""}`} aria-hidden />
-          {busy === "status" ? "Atualizando…" : "Atualizar status"}
-        </button>
-        <button
-          type="button"
-          disabled={!configured || state === "open" || busy !== null}
-          onClick={() => void run("qr")}
-          className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <QrCode className="size-4" aria-hidden />
-          {busy === "qr" ? "Gerando…" : "Gerar / renovar QR Code"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function FlashMessages({ flashOk, flashErr, error }: { flashOk?: string; flashErr?: string; error?: string | null }) {
   return (
     <>
@@ -177,7 +122,7 @@ function FlashMessages({ flashOk, flashErr, error }: { flashOk?: string; flashEr
       ) : null}
       {flashOk === "webhook" ? (
         <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-          Webhook aplicado na instância Evolution.
+          Webhook aplicado nas instâncias Evolution.
         </p>
       ) : null}
       {flashOk === "status" ? (
@@ -199,6 +144,336 @@ function FlashMessages({ flashOk, flashErr, error }: { flashOk?: string; flashEr
         </p>
       ) : null}
     </>
+  );
+}
+
+function ChannelCard({
+  channel,
+  configured,
+  apiUrlHost,
+  canDelete,
+  onChanged,
+}: {
+  channel: ChatbotChannelPayload;
+  configured: boolean;
+  apiUrlHost: string | null;
+  canDelete: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const refreshStatus = useServerFn(getEvolutionConnectionStatusFn);
+  const refreshQr = useServerFn(refreshEvolutionQrFn);
+  const deleteInstance = useServerFn(deleteChatWhatsappInstanceFn);
+  const [busy, setBusy] = useState<"status" | "qr" | "delete" | null>(null);
+  const [state, setState] = useState(channel.state);
+  const [qr, setQr] = useState(channel.qr);
+  const [localMsg, setLocalMsg] = useState<string | null>(null);
+  const [localErr, setLocalErr] = useState<string | null>(null);
+  const [integratedAlert, setIntegratedAlert] = useState(false);
+
+  useEffect(() => {
+    setState(channel.state);
+    setQr(channel.qr);
+  }, [channel.state, channel.qr, channel.instanceName]);
+
+  // Poll enquanto o QR estiver visível — fecha e alerta ao conectar.
+  useEffect(() => {
+    if (!qr.base64 || state === "open") return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const result = await refreshStatus({ data: { instanceName: channel.instanceName } });
+          if (cancelled) return;
+          if (result.state === "open") {
+            setState("open");
+            setQr({});
+            setIntegratedAlert(true);
+            setLocalMsg(null);
+            window.setTimeout(() => setIntegratedAlert(false), 4500);
+            await onChanged();
+          }
+        } catch {
+          /* ignore poll errors */
+        }
+      })();
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [qr.base64, state, channel.instanceName, refreshStatus, onChanged]);
+
+  async function runStatus() {
+    setBusy("status");
+    setLocalMsg(null);
+    setLocalErr(null);
+    try {
+      const result = await refreshStatus({ data: { instanceName: channel.instanceName } });
+      if (!result.ok) setLocalErr(result.error ?? "Falha ao atualizar status.");
+      else {
+        setState(result.state);
+        setLocalMsg("Status atualizado.");
+        if (result.state === "open") {
+          setQr({});
+        }
+      }
+      await onChanged();
+    } catch (error) {
+      setLocalErr(error instanceof Error ? error.message : "Erro inesperado.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runQr() {
+    setBusy("qr");
+    setLocalMsg(null);
+    setLocalErr(null);
+    setIntegratedAlert(false);
+    try {
+      const result = await refreshQr({ data: { instanceName: channel.instanceName } });
+      if (!result.ok) setLocalErr(result.error ?? "Falha ao gerar QR.");
+      else if (result.state === "open" || result.connected) {
+        setState("open");
+        setQr({});
+        setIntegratedAlert(true);
+        window.setTimeout(() => setIntegratedAlert(false), 4500);
+      } else {
+        setState(result.state);
+        setQr(result.qr ?? {});
+        setLocalMsg("QR gerado — escaneie no WhatsApp (expira ~60s).");
+      }
+      await onChanged();
+    } catch (error) {
+      setLocalErr(error instanceof Error ? error.message : "Erro inesperado.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runDelete() {
+    if (!canDelete) return;
+    if (!window.confirm(`Excluir o canal "${channel.label}" (${channel.instanceName})?`)) return;
+    setBusy("delete");
+    setLocalErr(null);
+    try {
+      await deleteInstance({ data: { instanceName: channel.instanceName } });
+      toast.success("Canal removido");
+      await onChanged();
+    } catch (error) {
+      setLocalErr(error instanceof Error ? error.message : "Falha ao excluir canal");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-display text-sm font-semibold">{channel.label}</p>
+          <p className="text-xs text-muted-foreground">
+            Instância <code className="text-[11px]">{channel.instanceName}</code>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {state === "open" ? (
+            <Wifi className="size-4 text-success" />
+          ) : (
+            <WifiOff className="size-4 text-muted-foreground" />
+          )}
+          <span className="text-sm font-medium">{stateLabel(state)}</span>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-muted-foreground">API</p>
+          <p className="font-medium">{apiUrlHost ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Número</p>
+          <p className="font-medium">{channel.phone || "—"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Canal</p>
+          <p className="font-medium">{channel.label}</p>
+        </div>
+      </div>
+
+      {integratedAlert ? (
+        <p
+          role="status"
+          className="rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-200"
+        >
+          Número Integrado
+        </p>
+      ) : null}
+      {localMsg ? (
+        <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+          {localMsg}
+        </p>
+      ) : null}
+      {localErr || channel.error ? (
+        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {localErr || channel.error}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy !== null}
+          className="cursor-pointer"
+          onClick={() => void runStatus()}
+        >
+          <RefreshCw className={`size-4 ${busy === "status" ? "animate-spin" : ""}`} />
+          {busy === "status" ? "Atualizando…" : "Atualizar status"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={!configured || state === "open" || busy !== null}
+          className="cursor-pointer"
+          onClick={() => void runQr()}
+        >
+          <QrCode className="size-4" />
+          {busy === "qr" ? "Gerando…" : "Gerar / renovar QR Code"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!canDelete || busy !== null}
+          className="cursor-pointer text-destructive hover:text-destructive"
+          onClick={() => void runDelete()}
+        >
+          <Trash2 className="size-4" />
+          {busy === "delete" ? "Excluindo…" : "Excluir"}
+        </Button>
+      </div>
+
+      {qr.base64 ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-6">
+          <img
+            src={qr.base64}
+            alt={`QR Code ${channel.label}`}
+            className="size-56 rounded-lg border border-border bg-white object-contain p-2"
+          />
+          <p className="max-w-sm text-center text-xs text-muted-foreground">
+            WhatsApp → Dispositivos conectados → Conectar um dispositivo.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
+  const router = useRouter();
+  const createInstance = useServerFn(createChatWhatsappInstanceFn);
+  const [label, setLabel] = useState("");
+  const [creating, setCreating] = useState(false);
+  const refresh = useCallback(async () => {
+    await router.invalidate();
+  }, [router]);
+  const channels = evo.channels?.length
+    ? evo.channels
+    : evo.instance
+      ? [
+          {
+            id: "legacy",
+            instanceName: evo.instance,
+            label: "Principal",
+            phone: null,
+            state: evo.state,
+            qr: evo.qr,
+            error: evo.error,
+          },
+        ]
+      : [];
+
+  async function handleCreate() {
+    const name = label.trim();
+    if (!name) {
+      toast.error("Informe um nome para o canal.");
+      return;
+    }
+    setCreating(true);
+    try {
+      await createInstance({ data: { label: name } });
+      setLabel("");
+      toast.success("Canal adicionado");
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao adicionar canal");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-soft">
+      <div className="space-y-1.5 p-6">
+        <h4 className="flex items-center gap-2 font-display text-base font-semibold">
+          <QrCode className="size-4 text-primary" />
+          Conexão WhatsApp
+        </h4>
+        <p className="text-sm text-muted-foreground">
+          Vários canais (instâncias <code className="text-xs">soma-*</code>) no mesmo Evolution — o Chat
+          atende entradas de todos eles.
+        </p>
+      </div>
+      <div className="space-y-4 p-6 pt-0">
+        {!evo.configured ? (
+          <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+            Evolution não configurada. Defina <code className="text-xs">EVOLUTION_API_URL</code> e{" "}
+            <code className="text-xs">EVOLUTION_API_KEY</code> no <code className="text-xs">.env.local</code> e
+            reinicie o servidor.
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="min-w-0 flex-1 space-y-1.5">
+            <span className="text-sm font-medium">Novo canal</span>
+            <Input
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder="Ex.: Comercial SP"
+              disabled={!evo.configured || creating}
+            />
+          </label>
+          <Button
+            type="button"
+            className="cursor-pointer"
+            disabled={!evo.configured || creating || !label.trim()}
+            onClick={() => void handleCreate()}
+          >
+            <Plus className="size-4" />
+            {creating ? "Adicionando…" : "Adicionar instância"}
+          </Button>
+        </div>
+
+        {channels.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum canal cadastrado ainda.</p>
+        ) : (
+          <div className="space-y-4">
+            {channels.map((channel) => (
+              <ChannelCard
+                key={channel.id}
+                channel={channel}
+                configured={evo.configured}
+                apiUrlHost={evo.apiUrlHost}
+                canDelete={channels.length > 1}
+                onChanged={refresh}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -259,69 +534,7 @@ export function ChatbotSettings({
           {evo ? (
             <>
               <FlashMessages flashOk={flashOk} flashErr={flashErr} error={evo.error} />
-              <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-soft">
-                <div className="space-y-1.5 p-6">
-                  <h4 className="flex items-center gap-2 font-display text-base font-semibold">
-                    <QrCode className="size-4 text-primary" />
-                    Conexão WhatsApp
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Instância isolada <code className="text-xs">soma-crm</code> — não altera números
-                    do WABA.
-                  </p>
-                </div>
-                <div className="space-y-4 p-6 pt-0">
-                  <div className="grid gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm sm:grid-cols-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground">API</p>
-                      <p className="font-medium">{evo.apiUrlHost ?? "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Instância</p>
-                      <p className="font-medium">{evo.instance ?? "—"}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {evo.state === "open" ? (
-                        <Wifi className="size-4 text-success" />
-                      ) : (
-                        <WifiOff className="size-4 text-muted-foreground" />
-                      )}
-                      <div>
-                        <p className="text-xs text-muted-foreground">Status</p>
-                        <p className="font-medium">{stateLabel(evo.state)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {!evo.configured ? (
-                    <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-                      Evolution não configurada. Defina <code className="text-xs">EVOLUTION_*</code>{" "}
-                      no <code className="text-xs">.env.local</code> e reinicie o servidor.
-                    </div>
-                  ) : null}
-
-                  {evo.error && evo.configured && flashErr !== "webhook" ? (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {evo.error}
-                    </div>
-                  ) : null}
-
-                  <EvoConnectionActions configured={evo.configured} state={evo.state} />
-
-                  {evo.qr.base64 ? (
-                    <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-6">
-                      <img
-                        src={evo.qr.base64}
-                        alt="QR Code Evolution WhatsApp"
-                        className="size-56 rounded-lg border border-border bg-white object-contain p-2"
-                      />
-                      <p className="max-w-sm text-center text-xs text-muted-foreground">
-                        WhatsApp → Dispositivos conectados → Conectar um dispositivo.
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-              </section>
+              <WhatsappChannelsPanel evo={evo} />
             </>
           ) : null}
         </TabsContent>
@@ -337,7 +550,8 @@ export function ChatbotSettings({
                     Webhook
                   </h4>
                   <p className="text-sm text-muted-foreground">
-                    Informe o domínio público do CRM; o backend cadastra o webhook na Evolution.
+                    Informe o domínio público do CRM; o backend cadastra o webhook em todas as
+                    instâncias soma-*.
                   </p>
                 </div>
                 <div className="space-y-4 p-6 pt-0">

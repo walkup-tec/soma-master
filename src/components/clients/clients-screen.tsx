@@ -27,6 +27,10 @@ import type {
 } from "@/lib/clients/client.types";
 import { ClientImportWizard } from "@/components/clients/client-import-wizard";
 import { ClientCreateManualDialog } from "@/components/clients/client-create-manual-dialog";
+import {
+  ClientEditDialog,
+  clientRecordToListPatch,
+} from "@/components/clients/client-edit-dialog";
 import { ClientListActionLayer } from "@/components/clients/client-list-action-layer";
 import { ClientBulkActionsModal } from "@/components/clients/client-bulk-actions-modal";
 import { ClientsDataTable } from "@/components/clients/clients-data-table";
@@ -74,6 +78,7 @@ export function ClientsScreen({ initialPage }: Props) {
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [actionClient, setActionClient] = useState<ClientListItem | null>(null);
   const [actionKind, setActionKind] = useState<ClientActionKind | null>(null);
+  const [editClientId, setEditClientId] = useState<string | null>(null);
   const skipInitialSearchFetch = useRef(true);
   const requestIdRef = useRef(0);
   const filtersRef = useRef<ListFilters>({
@@ -510,6 +515,7 @@ export function ClientsScreen({ initialPage }: Props) {
                   statusLabel={statusLabel}
                   statusColor={statusColor}
                   onAction={openAction}
+                  onClientClick={(client) => setEditClientId(client.id)}
                   dimmed={loading}
                   selectedIds={selectedIds}
                   allFilteredSelected={allFilteredSelected}
@@ -583,6 +589,17 @@ export function ClientsScreen({ initialPage }: Props) {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={() => void refresh()}
+      />
+
+      <ClientEditDialog
+        clientId={editClientId}
+        open={Boolean(editClientId)}
+        onOpenChange={(open) => {
+          if (!open) setEditClientId(null);
+        }}
+        onSaved={(client) => {
+          patchClient(client.id, clientRecordToListPatch(client));
+        }}
       />
 
       <ClientImportWizard

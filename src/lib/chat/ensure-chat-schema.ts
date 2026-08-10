@@ -55,6 +55,35 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
       created_at timestamptz not null default now()
     )
   `;
+  await sql`
+    create table if not exists crm.chat_whatsapp_instances (
+      id text primary key,
+      instance_name text not null unique,
+      label text not null,
+      phone text null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `;
+  await sql`
+    alter table crm.chat_conversations
+    add column if not exists instance_name text null
+  `;
+  await sql`
+    update crm.chat_conversations
+    set instance_name = coalesce(nullif(trim(instance_name), ''), 'soma-crm')
+    where instance_name is null or trim(instance_name) = ''
+  `;
+  await sql`
+    alter table crm.chat_conversations
+    alter column instance_name set default 'soma-crm'
+  `;
+  // Troca unicidade só por telefone → telefone + canal (multi-instância).
+  await sql`drop index if exists crm.uq_chat_conversations_phone`;
+  await sql`
+    create unique index if not exists uq_chat_conversations_phone_instance
+    on crm.chat_conversations (phone, instance_name)
+  `;
 }
 
 /** Tabelas do Chat WhatsApp + educação da IA. */

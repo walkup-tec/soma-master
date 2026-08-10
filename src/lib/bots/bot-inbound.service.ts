@@ -58,6 +58,7 @@ async function dispatchBotOutbound(input: {
   phone: string;
   botName: string;
   payloads: BotOutboundPayload[];
+  instanceName?: string | null;
 }): Promise<void> {
   for (const payload of input.payloads) {
     if (payload.type === "text") {
@@ -70,7 +71,11 @@ async function dispatchBotOutbound(input: {
         senderType: "ai",
         senderName: input.botName,
       });
-      const send = await evolutionSendText({ phone: input.phone, text: body });
+      const send = await evolutionSendText({
+        phone: input.phone,
+        text: body,
+        instanceName: input.instanceName ?? undefined,
+      });
       if (!send.ok) {
         console.error("[chatbot-runtime] sendText falhou", {
           phone: input.phone,
@@ -119,6 +124,7 @@ async function dispatchBotOutbound(input: {
           id: opt.id,
           displayText: opt.label.slice(0, 20),
         })),
+        instanceName: input.instanceName ?? undefined,
       });
       if (buttonsSend.ok && !isGhostButtonsPayload(buttonsSend.raw)) {
         continue;
@@ -129,7 +135,11 @@ async function dispatchBotOutbound(input: {
       });
     }
 
-    const textSend = await evolutionSendText({ phone: input.phone, text: numbered });
+    const textSend = await evolutionSendText({
+      phone: input.phone,
+      text: numbered,
+      instanceName: input.instanceName ?? undefined,
+    });
     if (!textSend.ok) {
       console.error("[chatbot-runtime] sendText (opções) falhou", {
         phone: input.phone,
@@ -227,6 +237,7 @@ export async function maybeRunChatbotRuntime(input: {
       phone: input.phone,
       botName: flow.name || "Bot Soma",
       payloads: advanced.outbound,
+      instanceName: conversation.instanceName,
     });
 
     return true;
@@ -300,6 +311,7 @@ export async function startBotOnConversation(input: {
       phone: conversation.phone,
       botName: flow.name || "Bot Soma",
       payloads: advanced.outbound,
+      instanceName: conversation.instanceName,
     });
 
     return {

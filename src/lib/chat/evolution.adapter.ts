@@ -7,8 +7,9 @@
  * - https://doc.evolution-api.com/v2/api-reference/instance-controller/instance-connect
  * - Connection State / Connect / Create / sendText
  *
- * Isolamento: SOMA só opera em EVOLUTION_INSTANCE (padrão `soma-crm`).
+ * Isolamento: SOMA só opera em instâncias com prefixo `soma-` (padrão `soma-crm`).
  * Nunca logout/delete/send em instâncias WABA ou de outros apps no mesmo Easypanel.
+ * Múltiplos canais: várias instâncias `soma-*` no mesmo Evolution (URL/KEY no .env).
  */
 
 export type EvolutionConnectionState = "open" | "connecting" | "close" | "unknown";
@@ -31,6 +32,17 @@ function evolutionEnv() {
   return { base, apiKey, instance: instanceRaw };
 }
 
+/** Instância padrão (env) — usada no bootstrap e como fallback de envio. */
+export function getDefaultSomaEvolutionInstance(): string {
+  return evolutionEnv().instance;
+}
+
+function resolveTargetInstance(instanceName?: string | null): string {
+  const target = String(instanceName || evolutionEnv().instance).trim() || SOMA_EVOLUTION_INSTANCE_DEFAULT;
+  assertSomaOwnedInstance(target);
+  return target;
+}
+
 /** Bloqueia operação se o nome da instância não for exclusiva do Soma. */
 export function assertSomaOwnedInstance(instance: string): void {
   const name = instance.trim().toLowerCase();
@@ -42,14 +54,8 @@ export function assertSomaOwnedInstance(instance: string): void {
 }
 
 export function isEvolutionConfigured(): boolean {
-  const { base, apiKey, instance } = evolutionEnv();
-  if (!base || !apiKey || !instance) return false;
-  try {
-    assertSomaOwnedInstance(instance);
-    return true;
-  } catch {
-    return false;
-  }
+  const { base, apiKey } = evolutionEnv();
+  return Boolean(base && apiKey);
 }
 
 /** Resumo seguro para UI (sem API key). */
@@ -67,15 +73,8 @@ export function getEvolutionPublicConfig(): {
       apiUrlHost = base.slice(0, 80);
     }
   }
-  let owned = false;
-  try {
-    assertSomaOwnedInstance(instance);
-    owned = true;
-  } catch {
-    owned = false;
-  }
   return {
-    configured: Boolean(base && apiKey && instance && owned),
+    configured: Boolean(base && apiKey),
     apiUrlHost,
     instance: instance || null,
   };
@@ -87,23 +86,13 @@ async function evolutionFetch(path: string, init?: RequestInit): Promise<{
   raw: unknown;
   error?: string;
 }> {
-  const { base, apiKey, instance } = evolutionEnv();
+  const { base, apiKey } = evolutionEnv();
   if (!base || !apiKey) {
     return {
       ok: false,
       status: 0,
       raw: null,
       error: "Evolution API não configurada (EVOLUTION_API_URL / KEY).",
-    };
-  }
-  try {
-    assertSomaOwnedInstance(instance);
-  } catch (error) {
-    return {
-      ok: false,
-      status: 0,
-      raw: null,
-      error: error instanceof Error ? error.message : "Instância não permitida",
     };
   }
 
@@ -240,14 +229,15 @@ export function getResolvedWebhookUrl(publicBaseOverride?: string | null): strin
  */
 export async function ensureSomaEvolutionInstance(options?: {
   webhookPublicBaseUrl?: string | null;
+  instanceName?: string | null;
 }): Promise<{
   ok: boolean;
   created: boolean;
   error?: string;
 }> {
-  const { instance } = evolutionEnv();
+  let instance: string;
   try {
-    assertSomaOwnedInstance(instance);
+    instance = resolveTargetInstance(options?.instanceName);
   } catch (error) {
     return {
       ok: false,
@@ -261,7 +251,7 @@ export async function ensureSomaEvolutionInstance(options?: {
   if (state.ok) {
     // Mantém instâncias existentes atualizadas (inclui base64=true para imagens recebidas).
     if (webhookUrl) {
-      await evolutionSetInstanceWebhook(webhookUrl, options?.webhookPublicBaseUrl).catch(
+      await evolutionSetInstanceWebhook(webhookUrl, options?.webhookPublicBaseUrl, instance).catch(
         () => undefined,
       );
     }
@@ -303,7 +293,7 @@ export async function ensureSomaEvolutionInstance(options?: {
 
   if (created.ok || created.status === 409) {
     if (webhookUrl) {
-      await evolutionSetInstanceWebhook(webhookUrl, options?.webhookPublicBaseUrl).catch(
+      await evolutionSetInstanceWebhook(webhookUrl, options?.webhookPublicBaseUrl, instance).catch(
         () => undefined,
       );
     }
@@ -321,13 +311,13 @@ export async function ensureSomaEvolutionInstance(options?: {
 export async function evolutionSetInstanceWebhook(
   webhookUrl?: string | null,
   publicBaseOverride?: string | null,
+  instanceName?: string | null,
 ): Promise<{
   ok: boolean;
   error?: string;
   webhookUrl?: string | null;
 }> {
-  const { instance } = evolutionEnv();
-  assertSomaOwnedInstance(instance);
+  const instance = resolveTargetInstance(instanceName);
   const url = webhookUrl ?? resolveWebhookUrl(publicBaseOverride);
   if (!url) {
     return {
@@ -360,14 +350,13 @@ export async function evolutionSetInstanceWebhook(
   return { ok: result.ok, error: result.error, webhookUrl: url };
 }
 
-export async function evolutionConnectionState(): Promise<{
+export async function evolutionConnectionState(instanceName?: string | null): Promise<{
   ok: boolean;
   state: EvolutionConnectionState;
   raw?: unknown;
   error?: string;
 }> {
-  const { instance } = evolutionEnv();
-  assertSomaOwnedInstance(instance);
+  const instance = resolveTargetInstance(instanceName);
   const result = await evolutionFetch(`/instance/connectionState/${encodeURIComponent(instance)}`);
   if (!result.ok) {
     return { ok: false, state: "unknown", raw: result.raw, error: result.error };
@@ -376,14 +365,15 @@ export async function evolutionConnectionState(): Promise<{
 }
 
 /** Gera/atualiza QR — cria a instância soma-* se ainda não existir. */
-export async function evolutionConnectQr(): Promise<{
+export async function evolutionConnectQr(instanceName?: string | null): Promise<{
   ok: boolean;
   state: EvolutionConnectionState;
   qr: EvolutionQrPayload;
   raw?: unknown;
   error?: string;
 }> {
-  const ensured = await ensureSomaEvolutionInstance();
+  const instance = resolveTargetInstance(instanceName);
+  const ensured = await ensureSomaEvolutionInstance({ instanceName: instance });
   if (!ensured.ok) {
     return {
       ok: false,
@@ -393,7 +383,6 @@ export async function evolutionConnectQr(): Promise<{
     };
   }
 
-  const { instance } = evolutionEnv();
   const result = await evolutionFetch(`/instance/connect/${encodeURIComponent(instance)}`, {
     method: "GET",
   });
@@ -713,6 +702,29 @@ export async function evolutionGetMediaBase64(messageKey: Record<string, unknown
     : { ok: false, error: "Evolution não retornou o conteúdo da imagem." };
 }
 
+/** Remove permanentemente uma instância soma-* no Evolution. */
+export async function evolutionDeleteInstance(instanceName: string): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  let instance: string;
+  try {
+    instance = resolveTargetInstance(instanceName);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Instância inválida" };
+  }
+  if (!isEvolutionConfigured()) {
+    return { ok: false, error: "Evolution API não configurada (EVOLUTION_API_URL / KEY)." };
+  }
+  const result = await evolutionFetch(`/instance/delete/${encodeURIComponent(instance)}`, {
+    method: "DELETE",
+  });
+  if (result.ok || result.status === 404) {
+    return { ok: true };
+  }
+  return { ok: false, error: result.error ?? `Falha ao excluir instância ${instance}` };
+}
+
 /** Extrai nome da instância no payload do webhook — ignora eventos de outras apps. */
 export function extractEvolutionInstanceName(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
@@ -728,9 +740,13 @@ export function extractEvolutionInstanceName(payload: unknown): string | null {
 }
 
 export function isWebhookForSomaInstance(payload: unknown): boolean {
-  const expected = evolutionEnv().instance.toLowerCase();
   const got = extractEvolutionInstanceName(payload)?.toLowerCase();
   // Sem nome no payload: rejeita (evita processar eventos globais de outras apps)
   if (!got) return false;
-  return got === expected;
+  try {
+    assertSomaOwnedInstance(got);
+    return true;
+  } catch {
+    return false;
+  }
 }

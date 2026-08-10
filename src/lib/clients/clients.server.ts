@@ -44,6 +44,7 @@ import {
   getClientByIdForUser,
   importClients,
   listClientsPageForUser,
+  updateClientCadastro,
   updateClientStatus,
 } from "@/lib/clients/clients.repository";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
@@ -368,6 +369,31 @@ export const getClientDetailFn = createServerFn({ method: "POST" })
     const user = await requireClientesAccess();
     const client = await getClientByIdForUser(data.clientId, user.userId, user.role === "master");
     if (!client) throw new Error("Cliente não encontrado.");
+    return client;
+  });
+
+export const updateClientCadastroFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    if (!data || typeof data !== "object") throw new Error("Dados inválidos.");
+    const payload = data as {
+      clientId?: string;
+      data?: Partial<Record<ClientFieldId, string>>;
+    };
+    const clientId = String(payload.clientId ?? "").trim();
+    if (!clientId) throw new Error("Cliente inválido.");
+    if (!payload.data || typeof payload.data !== "object") {
+      throw new Error("Informe os dados do cadastro.");
+    }
+    return { clientId, data: payload.data };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireClientesAccess();
+    const client = await updateClientCadastro(
+      data.clientId,
+      user.userId,
+      user.role === "master",
+      data.data,
+    );
     return client;
   });
 

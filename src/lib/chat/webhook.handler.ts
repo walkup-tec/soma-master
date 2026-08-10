@@ -6,6 +6,7 @@ import {
 import {
   evolutionGetMediaBase64,
   evolutionSendText,
+  extractEvolutionInstanceName,
   isWebhookForSomaInstance,
 } from "@/lib/chat/evolution.adapter";
 import { saveInboundChatMedia } from "@/lib/chat/chat-media.repository";
@@ -153,7 +154,11 @@ async function maybeReplyWithAi(conversationId: string, userText: string): Promi
       senderType: "ai",
       senderName: "Assistente Soma",
     });
-    await evolutionSendText({ phone: conversation.phone, text: reply });
+    await evolutionSendText({
+      phone: conversation.phone,
+      text: reply,
+      instanceName: conversation.instanceName ?? undefined,
+    });
   } catch (error) {
     console.error("[chat] AI reply failed", error);
     await appendMessage({
@@ -204,11 +209,14 @@ export async function handleEvolutionWebhook(request: Request): Promise<Response
     return Response.json({ ok: true, ignored: true, reason: "foreign-instance" });
   }
 
+  const inboundInstance = extractEvolutionInstanceName(payload);
+
   const inbound = extractInboundFromEvolution(payload).filter((m) => !m.fromMe);
   for (const msg of inbound) {
     const conversation = await getOrCreateConversationByPhone({
       phone: msg.phone,
       contactName: msg.pushName ?? null,
+      instanceName: inboundInstance,
     });
     // Dedupe por wa_message_id fica em appendMessage — evita listMessages completo (lento).
 

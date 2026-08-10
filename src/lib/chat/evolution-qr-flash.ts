@@ -8,26 +8,35 @@ type Flash = {
 };
 
 const TTL_MS = 90_000;
-const byUser = new Map<string, Flash>();
+const byKey = new Map<string, Flash>();
+
+function flashKey(userId: string, instanceName?: string | null): string {
+  const instance = String(instanceName || "").trim() || "_default";
+  return `${userId}::${instance}`;
+}
 
 export function putEvolutionQrFlash(
   userId: string,
   payload: Omit<Flash, "at">,
+  instanceName?: string | null,
 ): void {
-  byUser.set(userId, { ...payload, at: Date.now() });
+  byKey.set(flashKey(userId, instanceName), { ...payload, at: Date.now() });
 }
 
-export function takeEvolutionQrFlash(userId: string): Flash | null {
-  const item = byUser.get(userId);
+export function takeEvolutionQrFlash(
+  userId: string,
+  instanceName?: string | null,
+): Flash | null {
+  const key = flashKey(userId, instanceName);
+  const item = byKey.get(key);
   if (!item) return null;
   if (Date.now() - item.at > TTL_MS) {
-    byUser.delete(userId);
+    byKey.delete(key);
     return null;
   }
-  // keep until TTL so refresh status doesn't clear QR
   return item;
 }
 
-export function clearEvolutionQrFlash(userId: string): void {
-  byUser.delete(userId);
+export function clearEvolutionQrFlash(userId: string, instanceName?: string | null): void {
+  byKey.delete(flashKey(userId, instanceName));
 }

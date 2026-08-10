@@ -33,8 +33,16 @@ type Props = {
   products: ProductConfig[];
   banks: BankConfig[];
   onUpdated: (next: ChatConversation) => void;
-  /** Nome/WhatsApp digitados no formulário — o cabeçalho Contato espelha em tempo real. */
-  onDraftChange?: (draft: { name: string; phone: string }) => void;
+  /**
+   * Rascunho do formulário Vincular ao CRM — cabeçalho Contato e card da lista
+   * espelham nome/WhatsApp/status/produto em tempo real (antes de gravar).
+   */
+  onDraftChange?: (draft: {
+    name: string;
+    phone: string;
+    statusId: string | null;
+    productId: string | null;
+  }) => void;
 };
 
 function seedFieldsFromConversation(
@@ -182,14 +190,16 @@ export function ChatContactPanel({
     setFields(seedFieldsFromConversation(conversation, product.requiredFieldIds));
   }, [product, conversation.id, conversation.phone, conversation.contactName, conversation.clientName]);
 
-  // Espelha nome/WhatsApp digitados no cabeçalho Contato (tempo real)
+  // Espelha rascunho no cabeçalho Contato e no card da lista (tempo real)
   useEffect(() => {
     onDraftChange?.({
       name: String(fields.nome ?? "").trim(),
       phone: String(fields.whatsapp ?? fields.telefone ?? "").trim(),
+      statusId: statusId || null,
+      productId: productId || null,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields.nome, fields.whatsapp, fields.telefone]);
+  }, [fields.nome, fields.whatsapp, fields.telefone, statusId, productId]);
 
   async function handleLink() {
     if (!product) {

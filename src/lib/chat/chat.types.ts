@@ -11,6 +11,8 @@ export type ChatConversation = {
   phone: string;
   contactName: string | null;
   clientId: string | null;
+  /** Instância Evolution (canal) que originou/atende esta conversa. */
+  instanceName?: string | null;
   assignedUserId: string | null;
   assignedUserName: string | null;
   /** Nota interna da conversa, exibida somente na barra lateral do contato. */

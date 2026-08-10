@@ -9,17 +9,17 @@ import {
   saveChatAiSettings,
 } from "@/lib/chat/chat.repository";
 import {
-  clearEvolutionQrFlash,
-  putEvolutionQrFlash,
-  takeEvolutionQrFlash,
-} from "@/lib/chat/evolution-qr-flash";
-import {
   ensureSomaEvolutionInstance,
   evolutionConnectQr,
   evolutionConnectionState,
   evolutionSetInstanceWebhook,
   getEvolutionPublicConfig,
 } from "@/lib/chat/evolution.adapter";
+import {
+  ensureDefaultWhatsappInstance,
+  listWhatsappInstances,
+} from "@/lib/chat/whatsapp-instances.repository";
+import { clearEvolutionQrFlash, putEvolutionQrFlash, takeEvolutionQrFlash } from "@/lib/chat/evolution-qr-flash";
 
 function redirectChatbot(extra: Record<string, string> = {}): Response {
   const params = new URLSearchParams({ tab: "chatbot" });
@@ -61,12 +61,24 @@ export const Route = createFileRoute("/api/settings/chatbot/evolution")({
             const base = String(form.get("webhookPublicBaseUrl") ?? "").trim();
             await saveChatAiSettings({ webhookPublicBaseUrl: base });
             const settings = await getChatAiSettings();
-            const applied = await evolutionSetInstanceWebhook(null, settings.webhookPublicBaseUrl);
-            if (!applied.ok) {
+            await ensureDefaultWhatsappInstance();
+            const instances = await listWhatsappInstances();
+            let lastError: string | undefined;
+            let anyOk = false;
+            for (const item of instances) {
+              const applied = await evolutionSetInstanceWebhook(
+                null,
+                settings.webhookPublicBaseUrl,
+                item.instanceName,
+              );
+              if (applied.ok) anyOk = true;
+              else lastError = applied.error;
+            }
+            if (!anyOk) {
               putEvolutionQrFlash(user.userId, {
-                state: takeEvolutionQrFlash(user.userId)?.state ?? "unknown",
-                qr: takeEvolutionQrFlash(user.userId)?.qr ?? {},
-                error: applied.error,
+                state: "unknown",
+                qr: {},
+                error: lastError,
               });
               return redirectChatbot({ err: "webhook" });
             }

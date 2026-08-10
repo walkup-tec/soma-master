@@ -21,6 +21,8 @@ type Props = {
   statusLabel: (statusId: string) => string;
   statusColor?: (statusId: string) => string;
   onAction: (client: ClientListItem, action: ClientActionKind) => void;
+  /** Clique no nome do cliente (abre cadastro completo). */
+  onClientClick?: (client: ClientListItem) => void;
   dimmed?: boolean;
   /** Exibe coluna com a data de contato da agenda (Remarketing). */
   showContactDate?: boolean;
@@ -45,6 +47,7 @@ export function ClientsDataTable({
   statusLabel,
   statusColor,
   onAction,
+  onClientClick,
   dimmed,
   showContactDate = false,
   selectedIds,
@@ -97,7 +100,19 @@ export function ClientsDataTable({
                     />
                   </TableCell>
                 ) : null}
-                <TableCell className="font-medium">{primaryValue(client)}</TableCell>
+                <TableCell className="font-medium">
+                  {onClientClick ? (
+                    <button
+                      type="button"
+                      className="cursor-pointer text-left font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      onClick={() => onClientClick(client)}
+                    >
+                      {primaryValue(client)}
+                    </button>
+                  ) : (
+                    primaryValue(client)
+                  )}
+                </TableCell>
                 {showContactDate ? (
                   <TableCell className="text-muted-foreground">
                     {client.contactDate ? formatLocalDateLabel(client.contactDate) : "—"}

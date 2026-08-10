@@ -32,15 +32,24 @@ import { clearEvolutionQrFlash, putEvolutionQrFlash, takeEvolutionQrFlash } from
 import {
   evolutionConnectQr,
   evolutionConnectionState,
+  evolutionDeleteInstance,
   evolutionSendImage,
   evolutionSendText,
+  evolutionSetInstanceWebhook,
   ensureSomaEvolutionInstance,
+  getDefaultSomaEvolutionInstance,
   getEvolutionPublicConfig,
   getResolvedWebhookUrl,
   isEvolutionConfigured,
   type EvolutionConnectionState,
   type EvolutionQrPayload,
 } from "@/lib/chat/evolution.adapter";
+import {
+  createWhatsappInstance,
+  deleteWhatsappInstance,
+  ensureDefaultWhatsappInstance,
+  listWhatsappInstances,
+} from "@/lib/chat/whatsapp-instances.repository";
 import {
   appendChatImageChunk,
   finalizeChatImageUpload,
@@ -101,10 +110,15 @@ async function requireChatBotSettingsUser(): Promise<SessionData> {
 export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(async () => {
   const user = await requireChatUser();
   const [conversations, aiSettings] = await Promise.all([listConversations(), getChatAiSettings()]);
-  // Reaplica webhook (base64=true) em background — necessário para receber imagens
-  void ensureSomaEvolutionInstance({
-    webhookPublicBaseUrl: aiSettings.webhookPublicBaseUrl,
-  }).catch(() => undefined);
+  // Garante canais registrados + webhook na instância padrão (imagens inbound).
+  void ensureDefaultWhatsappInstance()
+    .then((primary) =>
+      ensureSomaEvolutionInstance({
+        webhookPublicBaseUrl: aiSettings.webhookPublicBaseUrl,
+        instanceName: primary.instanceName,
+      }),
+    )
+    .catch(() => undefined);
   return {
     conversations,
     aiSettings,
@@ -466,6 +480,7 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
       conversationId: data.conversationId,
       phone: conversation.phone,
       text: data.text,
+      instanceName: conversation.instanceName,
     });
 
     const updatedConversation = await getConversation(data.conversationId);
@@ -575,6 +590,7 @@ export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
       mimeType: meta.mimeType,
       fileName: meta.fileName,
       caption: data.caption,
+      instanceName: conversation.instanceName,
     });
     const updatedConversation = await getConversation(conversation.id);
     return {
@@ -588,9 +604,14 @@ async function sendChatTextViaEvolutionInBackground(input: {
   conversationId: string;
   phone: string;
   text: string;
+  instanceName?: string | null;
 }): Promise<void> {
   try {
-    const send = await evolutionSendText({ phone: input.phone, text: input.text });
+    const send = await evolutionSendText({
+      phone: input.phone,
+      text: input.text,
+      instanceName: input.instanceName ?? undefined,
+    });
     if (!send.ok) {
       await appendMessage({
         conversationId: input.conversationId,
@@ -622,6 +643,7 @@ async function sendChatImageViaEvolutionInBackground(input: {
   mimeType: string;
   fileName: string;
   caption: string;
+  instanceName?: string | null;
 }): Promise<void> {
   try {
     const { dataUrl } = await readChatImageAsDataUrl(input.mediaId);
@@ -631,6 +653,7 @@ async function sendChatImageViaEvolutionInBackground(input: {
       mimeType: input.mimeType,
       fileName: input.fileName,
       caption: input.caption,
+      instanceName: input.instanceName ?? undefined,
     });
     if (!send.ok) {
       await appendMessage({
@@ -858,12 +881,39 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
   ]);
 
   const config = getEvolutionPublicConfig();
-  const flash = takeEvolutionQrFlash(user.userId);
+  await ensureDefaultWhatsappInstance().catch(() => undefined);
+  const instances = await listWhatsappInstances();
   const webhookUrl = getResolvedWebhookUrl(aiSettings.webhookPublicBaseUrl);
+
+  const channels = await Promise.all(
+    instances.map(async (item) => {
+      const flash = takeEvolutionQrFlash(user.userId, item.instanceName);
+      let state: EvolutionConnectionState = flash?.state ?? "unknown";
+      let error = flash?.error ?? null;
+      if (config.configured && !flash) {
+        const status = await evolutionConnectionState(item.instanceName).catch(() => null);
+        if (status) {
+          state = status.state;
+          error = status.error ?? null;
+        }
+      }
+      return {
+        id: item.id,
+        instanceName: item.instanceName,
+        label: item.label,
+        phone: item.phone,
+        state,
+        qr: flash?.qr ?? {},
+        error,
+      };
+    }),
+  );
+
   const evo: {
     configured: boolean;
     apiUrlHost: string | null;
     instance: string | null;
+    channels: typeof channels;
     state: EvolutionConnectionState;
     qr: EvolutionQrPayload;
     error?: string | null;
@@ -874,10 +924,11 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
     configured: config.configured,
     apiUrlHost: config.apiUrlHost,
     instance: config.instance,
-    state: flash?.state ?? "unknown",
-    qr: flash?.qr ?? {},
+    channels,
+    state: channels[0]?.state ?? "unknown",
+    qr: channels[0]?.qr ?? {},
     error:
-      flash?.error ??
+      channels.find((c) => c.error)?.error ??
       (config.configured ? null : "Evolution API não configurada no servidor (.env.local)."),
     webhookUrl,
     webhookPublicBaseUrl: aiSettings.webhookPublicBaseUrl,
@@ -1021,88 +1072,204 @@ export const deleteChatAiExampleFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const getEvolutionConnectionStatusFn = createServerFn({ method: "GET" }).handler(async () => {
-  const user = await requireChatBotSettingsUser();
-  const config = getEvolutionPublicConfig();
-  if (!config.configured) {
+export const getEvolutionConnectionStatusFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data ?? {}) as { instanceName?: string };
     return {
-      config,
-      state: "unknown" as const,
-      ok: false,
-      error: "Evolution API não configurada no servidor (.env.local).",
+      instanceName:
+        String(body.instanceName ?? "").trim() || getDefaultSomaEvolutionInstance(),
     };
-  }
-  const settings = await getChatAiSettings();
-  await ensureSomaEvolutionInstance({
-    webhookPublicBaseUrl: settings.webhookPublicBaseUrl,
-  });
-  const status = await evolutionConnectionState();
-  putEvolutionQrFlash(user.userId, {
-    state: status.state,
-    qr: status.state === "open" ? {} : (takeEvolutionQrFlash(user.userId)?.qr ?? {}),
-    error: status.error,
-  });
-  return {
-    config,
-    state: status.state,
-    ok: status.ok,
-    error: status.error,
-  };
-});
-
-export const refreshEvolutionQrFn = createServerFn({ method: "POST" }).handler(async () => {
-  const user = await requireChatBotSettingsUser();
-  const config = getEvolutionPublicConfig();
-  if (!config.configured) {
-    clearEvolutionQrFlash(user.userId);
-    return {
-      config,
-      state: "unknown" as const,
-      qr: {},
-      ok: false,
-      error: "Evolution API não configurada no servidor (.env.local).",
-    };
-  }
-  const settings = await getChatAiSettings();
-  const ensured = await ensureSomaEvolutionInstance({
-    webhookPublicBaseUrl: settings.webhookPublicBaseUrl,
-  });
-  if (!ensured.ok) {
-    putEvolutionQrFlash(user.userId, {
-      state: "unknown",
-      qr: {},
-      error: ensured.error,
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatBotSettingsUser();
+    const config = getEvolutionPublicConfig();
+    if (!config.configured) {
+      return {
+        config,
+        instanceName: data.instanceName,
+        state: "unknown" as const,
+        ok: false,
+        error: "Evolution API não configurada no servidor (.env.local).",
+      };
+    }
+    const settings = await getChatAiSettings();
+    await ensureSomaEvolutionInstance({
+      webhookPublicBaseUrl: settings.webhookPublicBaseUrl,
+      instanceName: data.instanceName,
     });
+    const status = await evolutionConnectionState(data.instanceName);
+    putEvolutionQrFlash(
+      user.userId,
+      {
+        state: status.state,
+        qr:
+          status.state === "open"
+            ? {}
+            : (takeEvolutionQrFlash(user.userId, data.instanceName)?.qr ?? {}),
+        error: status.error,
+      },
+      data.instanceName,
+    );
     return {
       config,
-      state: "unknown" as const,
-      qr: {},
-      ok: false,
-      error: ensured.error,
+      instanceName: data.instanceName,
+      state: status.state,
+      ok: status.ok,
+      error: status.error,
     };
-  }
-  const connected = await evolutionConnectionState();
-  if (connected.ok && connected.state === "open") {
-    clearEvolutionQrFlash(user.userId);
-    return {
-      config,
-      state: "open" as const,
-      qr: {},
-      ok: true,
-      error: undefined,
-    };
-  }
-  const connect = await evolutionConnectQr();
-  putEvolutionQrFlash(user.userId, {
-    state: connect.state,
-    qr: connect.qr ?? {},
-    error: connect.error,
   });
-  return {
-    config,
-    state: connect.state,
-    qr: connect.qr,
-    ok: connect.ok,
-    error: connect.error,
-  };
-});
+
+export const refreshEvolutionQrFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data ?? {}) as { instanceName?: string };
+    return {
+      instanceName:
+        String(body.instanceName ?? "").trim() || getDefaultSomaEvolutionInstance(),
+    };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatBotSettingsUser();
+    const config = getEvolutionPublicConfig();
+    if (!config.configured) {
+      clearEvolutionQrFlash(user.userId, data.instanceName);
+      return {
+        config,
+        instanceName: data.instanceName,
+        state: "unknown" as const,
+        qr: {},
+        ok: false,
+        error: "Evolution API não configurada no servidor (.env.local).",
+      };
+    }
+    const settings = await getChatAiSettings();
+    const ensured = await ensureSomaEvolutionInstance({
+      webhookPublicBaseUrl: settings.webhookPublicBaseUrl,
+      instanceName: data.instanceName,
+    });
+    if (!ensured.ok) {
+      putEvolutionQrFlash(
+        user.userId,
+        {
+          state: "unknown",
+          qr: {},
+          error: ensured.error,
+        },
+        data.instanceName,
+      );
+      return {
+        config,
+        instanceName: data.instanceName,
+        state: "unknown" as const,
+        qr: {},
+        ok: false,
+        error: ensured.error,
+      };
+    }
+    const connected = await evolutionConnectionState(data.instanceName);
+    if (connected.ok && connected.state === "open") {
+      clearEvolutionQrFlash(user.userId, data.instanceName);
+      return {
+        config,
+        instanceName: data.instanceName,
+        state: "open" as const,
+        qr: {},
+        ok: true,
+        error: undefined,
+        connected: true,
+      };
+    }
+    const connect = await evolutionConnectQr(data.instanceName);
+    putEvolutionQrFlash(
+      user.userId,
+      {
+        state: connect.state,
+        qr: connect.qr ?? {},
+        error: connect.error,
+      },
+      data.instanceName,
+    );
+    return {
+      config,
+      instanceName: data.instanceName,
+      state: connect.state,
+      qr: connect.qr,
+      ok: connect.ok,
+      error: connect.error,
+      connected: false,
+    };
+  });
+
+export const createChatWhatsappInstanceFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data ?? {}) as { label?: string };
+    const label = String(body.label ?? "").trim();
+    if (!label) throw new Error("Informe um nome para o canal.");
+    return { label };
+  })
+  .handler(async ({ data }) => {
+    await requireChatBotSettingsUser();
+    if (!isEvolutionConfigured()) {
+      throw new Error("Evolution API não configurada no servidor (.env.local).");
+    }
+    const created = await createWhatsappInstance({ label: data.label });
+    const settings = await getChatAiSettings();
+    await ensureSomaEvolutionInstance({
+      webhookPublicBaseUrl: settings.webhookPublicBaseUrl,
+      instanceName: created.instanceName,
+    });
+    return { ok: true, instance: created };
+  });
+
+export const deleteChatWhatsappInstanceFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data ?? {}) as { instanceName?: string };
+    const instanceName = String(body.instanceName ?? "").trim();
+    if (!instanceName) throw new Error("Instância obrigatória.");
+    return { instanceName };
+  })
+  .handler(async ({ data }) => {
+    const user = await requireChatBotSettingsUser();
+    const all = await listWhatsappInstances();
+    if (all.length <= 1) {
+      throw new Error("Mantenha ao menos um canal WhatsApp.");
+    }
+    if (isEvolutionConfigured()) {
+      const removed = await evolutionDeleteInstance(data.instanceName);
+      if (!removed.ok) {
+        throw new Error(removed.error ?? "Falha ao excluir instância na Evolution.");
+      }
+    }
+    await deleteWhatsappInstance(data.instanceName);
+    clearEvolutionQrFlash(user.userId, data.instanceName);
+    return { ok: true };
+  });
+
+export const applyWebhookToAllWhatsappInstancesFn = createServerFn({ method: "POST" }).handler(
+  async () => {
+    await requireChatBotSettingsUser();
+    if (!isEvolutionConfigured()) {
+      throw new Error("Evolution API não configurada.");
+    }
+    const settings = await getChatAiSettings();
+    await ensureDefaultWhatsappInstance();
+    const instances = await listWhatsappInstances();
+    const results: Array<{ instanceName: string; ok: boolean; error?: string }> = [];
+    for (const item of instances) {
+      const applied = await evolutionSetInstanceWebhook(
+        null,
+        settings.webhookPublicBaseUrl,
+        item.instanceName,
+      );
+      results.push({
+        instanceName: item.instanceName,
+        ok: applied.ok,
+        error: applied.error,
+      });
+    }
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length === results.length) {
+      throw new Error(failed[0]?.error ?? "Falha ao aplicar webhook.");
+    }
+    return { ok: true, results };
+  },
+);

@@ -1509,6 +1509,44 @@ export async function updateClientStatus(
   return { ...client, status: trimmed };
 }
 
+/** Atualiza o cadastro (campos de data) do cliente — inclui limpar campos enviados vazios. */
+export async function updateClientCadastro(
+  clientId: string,
+  userId: string,
+  isMaster: boolean,
+  data: Partial<Record<string, string>>,
+): Promise<ClientRecord> {
+  const client = await getClientByIdForUser(clientId, userId, isMaster);
+  if (!client) throw new Error("Cliente não encontrado.");
+
+  const nextData: Partial<Record<ClientFieldId, string>> = { ...client.data };
+  for (const [key, raw] of Object.entries(data)) {
+    const fieldId = String(key || "").trim() as ClientFieldId;
+    if (!fieldId) continue;
+    const value = String(raw ?? "").trim();
+    if (value) nextData[fieldId] = value;
+    else delete nextData[fieldId];
+  }
+
+  if (isDatabaseEnabled()) {
+    const sql = await getSql();
+    await sql`
+      update crm.clients
+      set
+        data = ${sql.json(nextData)},
+        updated_at = now()
+      where id = ${clientId}
+    `;
+    return { ...client, data: nextData };
+  }
+
+  const clients = await readClientsFromDisk();
+  await writeClientsToDisk(
+    clients.map((item) => (item.id === clientId ? { ...item, data: nextData } : item)),
+  );
+  return { ...client, data: nextData };
+}
+
 /** Vincula um produto extra sem duplicar o cadastro do cliente. */
 export async function addProductToClient(
   clientId: string,
