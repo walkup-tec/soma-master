@@ -33,6 +33,7 @@ import {
   evolutionConnectQr,
   evolutionConnectionState,
   evolutionDeleteInstance,
+  evolutionFetchInstancePhone,
   evolutionSendImage,
   evolutionSendText,
   evolutionSetInstanceWebhook,
@@ -48,7 +49,9 @@ import {
   createWhatsappInstance,
   deleteWhatsappInstance,
   ensureDefaultWhatsappInstance,
+  getWhatsappInstanceByName,
   listWhatsappInstances,
+  updateWhatsappInstancePhone,
 } from "@/lib/chat/whatsapp-instances.repository";
 import {
   appendChatImageChunk,
@@ -890,6 +893,7 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
       const flash = takeEvolutionQrFlash(user.userId, item.instanceName);
       let state: EvolutionConnectionState = flash?.state ?? "unknown";
       let error = flash?.error ?? null;
+      let phone = item.phone;
       if (config.configured && !flash) {
         const status = await evolutionConnectionState(item.instanceName).catch(() => null);
         if (status) {
@@ -897,11 +901,14 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
           error = status.error ?? null;
         }
       }
+      if (config.configured && state === "open" && !phone) {
+        phone = await syncConnectedInstancePhone(item.instanceName, "open");
+      }
       return {
         id: item.id,
         instanceName: item.instanceName,
         label: item.label,
-        phone: item.phone,
+        phone,
         state,
         qr: flash?.qr ?? {},
         error,
@@ -1072,6 +1079,25 @@ export const deleteChatAiExampleFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** Quando conectado, busca o número na Evolution e grava no registro do canal. */
+async function syncConnectedInstancePhone(
+  instanceName: string,
+  state: EvolutionConnectionState,
+): Promise<string | null> {
+  if (state !== "open") return null;
+  try {
+    const fetched = await evolutionFetchInstancePhone(instanceName);
+    if (fetched.phone) {
+      await updateWhatsappInstancePhone(instanceName, fetched.phone);
+      return fetched.phone;
+    }
+  } catch {
+    /* mantém o que já estiver no banco */
+  }
+  const existing = await getWhatsappInstanceByName(instanceName);
+  return existing?.phone ?? null;
+}
+
 export const getEvolutionConnectionStatusFn = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const body = (data ?? {}) as { instanceName?: string };
@@ -1088,6 +1114,7 @@ export const getEvolutionConnectionStatusFn = createServerFn({ method: "POST" })
         config,
         instanceName: data.instanceName,
         state: "unknown" as const,
+        phone: null as string | null,
         ok: false,
         error: "Evolution API não configurada no servidor (.env.local).",
       };
@@ -1098,6 +1125,7 @@ export const getEvolutionConnectionStatusFn = createServerFn({ method: "POST" })
       instanceName: data.instanceName,
     });
     const status = await evolutionConnectionState(data.instanceName);
+    const phone = await syncConnectedInstancePhone(data.instanceName, status.state);
     putEvolutionQrFlash(
       user.userId,
       {
@@ -1114,6 +1142,7 @@ export const getEvolutionConnectionStatusFn = createServerFn({ method: "POST" })
       config,
       instanceName: data.instanceName,
       state: status.state,
+      phone,
       ok: status.ok,
       error: status.error,
     };
@@ -1167,18 +1196,24 @@ export const refreshEvolutionQrFn = createServerFn({ method: "POST" })
     }
     const connected = await evolutionConnectionState(data.instanceName);
     if (connected.ok && connected.state === "open") {
+      const phone = await syncConnectedInstancePhone(data.instanceName, "open");
       clearEvolutionQrFlash(user.userId, data.instanceName);
       return {
         config,
         instanceName: data.instanceName,
         state: "open" as const,
         qr: {},
+        phone,
         ok: true,
         error: undefined,
         connected: true,
       };
     }
     const connect = await evolutionConnectQr(data.instanceName);
+    const phone =
+      connect.state === "open"
+        ? await syncConnectedInstancePhone(data.instanceName, "open")
+        : null;
     putEvolutionQrFlash(
       user.userId,
       {
@@ -1193,6 +1228,7 @@ export const refreshEvolutionQrFn = createServerFn({ method: "POST" })
       instanceName: data.instanceName,
       state: connect.state,
       qr: connect.qr,
+      phone,
       ok: connect.ok,
       error: connect.error,
       connected: false,

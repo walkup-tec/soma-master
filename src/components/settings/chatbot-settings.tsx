@@ -166,6 +166,7 @@ function ChannelCard({
   const [busy, setBusy] = useState<"status" | "qr" | "delete" | null>(null);
   const [state, setState] = useState(channel.state);
   const [qr, setQr] = useState(channel.qr);
+  const [phone, setPhone] = useState(channel.phone);
   const [localMsg, setLocalMsg] = useState<string | null>(null);
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [integratedAlert, setIntegratedAlert] = useState(false);
@@ -173,7 +174,27 @@ function ChannelCard({
   useEffect(() => {
     setState(channel.state);
     setQr(channel.qr);
-  }, [channel.state, channel.qr, channel.instanceName]);
+    setPhone(channel.phone);
+  }, [channel.state, channel.qr, channel.phone, channel.instanceName]);
+
+  // Canal já conectado sem número no banco → busca uma vez na Evolution.
+  useEffect(() => {
+    if (state !== "open" || phone) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await refreshStatus({ data: { instanceName: channel.instanceName } });
+        if (cancelled) return;
+        if (result.phone) setPhone(result.phone);
+        if (result.state) setState(result.state);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state, phone, channel.instanceName, refreshStatus]);
 
   // Poll enquanto o QR estiver visível — fecha e alerta ao conectar.
   useEffect(() => {
@@ -187,6 +208,7 @@ function ChannelCard({
           if (result.state === "open") {
             setState("open");
             setQr({});
+            if (result.phone) setPhone(result.phone);
             setIntegratedAlert(true);
             setLocalMsg(null);
             window.setTimeout(() => setIntegratedAlert(false), 4500);
@@ -215,6 +237,7 @@ function ChannelCard({
         setLocalMsg("Status atualizado.");
         if (result.state === "open") {
           setQr({});
+          if (result.phone) setPhone(result.phone);
         }
       }
       await onChanged();
@@ -236,6 +259,7 @@ function ChannelCard({
       else if (result.state === "open" || result.connected) {
         setState("open");
         setQr({});
+        if (result.phone) setPhone(result.phone);
         setIntegratedAlert(true);
         window.setTimeout(() => setIntegratedAlert(false), 4500);
       } else {
@@ -293,7 +317,7 @@ function ChannelCard({
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Número</p>
-          <p className="font-medium">{channel.phone || "—"}</p>
+          <p className="font-medium">{phone || "—"}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Canal</p>

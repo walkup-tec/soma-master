@@ -177,6 +177,74 @@ function normalizeState(raw: unknown): EvolutionConnectionState {
   return "unknown";
 }
 
+/** Extrai dígitos do número conectado (ownerJid / number / owner). */
+export function extractConnectedWhatsAppPhone(raw: unknown): string | null {
+  const candidates: unknown[] = [];
+
+  const pushFrom = (value: unknown) => {
+    if (!value) return;
+    if (typeof value === "string" || typeof value === "number") {
+      candidates.push(value);
+      return;
+    }
+    if (typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    candidates.push(
+      record.number,
+      record.ownerJid,
+      record.owner,
+      record.wuid,
+      record.wid,
+    );
+    if (record.instance && typeof record.instance === "object") {
+      pushFrom(record.instance);
+    }
+  };
+
+  if (Array.isArray(raw)) {
+    for (const item of raw) pushFrom(item);
+  } else {
+    pushFrom(raw);
+  }
+
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    const text = String(candidate).trim();
+    if (!text) continue;
+    const withoutJid = text.split("@")[0] ?? text;
+    const digits = withoutJid.replace(/\D+/g, "");
+    if (digits.length >= 10 && digits.length <= 15) return digits;
+  }
+  return null;
+}
+
+/**
+ * Busca o número WhatsApp vinculado à instância (fetchInstances).
+ * connectionState sozinho não devolve o telefone.
+ */
+export async function evolutionFetchInstancePhone(instanceName?: string | null): Promise<{
+  ok: boolean;
+  phone: string | null;
+  raw?: unknown;
+  error?: string;
+}> {
+  const instance = resolveTargetInstance(instanceName);
+  if (!isEvolutionConfigured()) {
+    return { ok: false, phone: null, error: "Evolution API não configurada." };
+  }
+  const result = await evolutionFetch(
+    `/instance/fetchInstances?instanceName=${encodeURIComponent(instance)}`,
+  );
+  if (!result.ok) {
+    return { ok: false, phone: null, raw: result.raw, error: result.error };
+  }
+  return {
+    ok: true,
+    phone: extractConnectedWhatsAppPhone(result.raw),
+    raw: result.raw,
+  };
+}
+
 function extractQr(raw: unknown): EvolutionQrPayload {
   const record = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const source =
