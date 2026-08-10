@@ -162,17 +162,27 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
                           <SidebarMenu>
                             {items.map((item) => {
                               const Icon = MENU_ICONS[item.id];
-                              const chatIncoming =
+                              const chatUnread =
                                 item.id === "chat" && chatbotAlert.unreadMessageActive;
+                              const chatAwaiting =
+                                item.id === "chat" && chatbotAlert.awaitingAssignedActive;
+                              const chatIncoming = chatUnread || chatAwaiting;
                               return (
                                 <SidebarMenuItem key={item.id}>
                                   <SidebarMenuButton
                                     asChild
                                     isActive={isActive(item.path)}
-                                    tooltip={item.label}
+                                    tooltip={
+                                      chatAwaiting
+                                        ? `${item.label} — ${chatbotAlert.awaitingAssignedCount} aguardando atendimento`
+                                        : item.label
+                                    }
                                     className={cn(
                                       "data-[active=true]:bg-sidebar-primary/15 data-[active=true]:text-sidebar-primary data-[active=true]:font-semibold",
-                                      chatIncoming &&
+                                      chatAwaiting &&
+                                        "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+                                      !chatAwaiting &&
+                                        chatUnread &&
                                         "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
                                     )}
                                   >
@@ -185,19 +195,31 @@ export function AppSidebar({ auth }: { auth: SessionData }) {
                                         <Icon
                                           className={cn(
                                             "size-4",
-                                            chatIncoming && "text-emerald-500",
+                                            chatAwaiting && "text-amber-500",
+                                            !chatAwaiting && chatUnread && "text-emerald-500",
                                           )}
                                         />
                                         {chatIncoming ? (
                                           <span
-                                            className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_2px] shadow-sidebar"
+                                            className={cn(
+                                              "absolute -right-0.5 -top-0.5 size-1.5 rounded-full shadow-[0_0_0_2px] shadow-sidebar",
+                                              chatAwaiting
+                                                ? "animate-ping bg-amber-500"
+                                                : "bg-emerald-500",
+                                            )}
                                             aria-hidden
                                           />
                                         ) : null}
                                       </span>
                                       <span className="flex min-w-0 flex-1 items-center gap-2">
                                         <span className="truncate">{item.label}</span>
-                                        {chatIncoming ? (
+                                        {chatAwaiting ? (
+                                          <span className="inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white">
+                                            {chatbotAlert.awaitingAssignedCount > 99
+                                              ? "99+"
+                                              : chatbotAlert.awaitingAssignedCount}
+                                          </span>
+                                        ) : chatUnread ? (
                                           <span
                                             className="size-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500"
                                             aria-hidden

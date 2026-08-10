@@ -84,6 +84,16 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
     create unique index if not exists uq_chat_conversations_phone_instance
     on crm.chat_conversations (phone, instance_name)
   `;
+  /** Momento da atribuição atual — base para “aguardando 1ª interação do atendente”. */
+  await sql`
+    alter table crm.chat_conversations
+    add column if not exists assigned_at timestamptz null
+  `;
+  await sql`
+    update crm.chat_conversations
+    set assigned_at = coalesce(assigned_at, updated_at, created_at, now())
+    where assigned_user_id is not null and assigned_at is null
+  `;
 }
 
 /** Tabelas do Chat WhatsApp + educação da IA. */

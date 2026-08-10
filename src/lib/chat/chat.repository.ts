@@ -52,6 +52,8 @@ type ConvRow = {
   instance_name?: string | null;
   assigned_user_id: string | null;
   assigned_user_name: string | null;
+  assigned_at?: Date | null;
+  awaiting_agent_reply?: boolean | null;
   contact_note: string | null;
   ai_enabled: boolean;
   bot_enabled?: boolean | null;
@@ -66,12 +68,29 @@ type ConvRow = {
   client_product_ids?: string[] | null;
 };
 
+function computeAwaitingAgentReply(input: {
+  assignedUserId: string | null;
+  assignedAt: string | null | undefined;
+  messages: Array<{ senderType: string; senderUserId: string | null; createdAt: string }>;
+}): boolean {
+  const assignedUserId = String(input.assignedUserId || "").trim();
+  if (!assignedUserId) return false;
+  const assignedAt = input.assignedAt ? Date.parse(input.assignedAt) : NaN;
+  return !input.messages.some((message) => {
+    if (message.senderType !== "agent") return false;
+    if (message.senderUserId !== assignedUserId) return false;
+    if (!Number.isFinite(assignedAt)) return true;
+    return Date.parse(message.createdAt) >= assignedAt;
+  });
+}
+
 function mapBotRun(raw: unknown): BotRunState | null {
   if (!raw || typeof raw !== "object") return null;
   return raw as BotRunState;
 }
 
 function mapConv(row: ConvRow): ChatConversation {
+  const assignedAt = row.assigned_at ? row.assigned_at.toISOString() : null;
   return {
     id: row.id,
     phone: row.phone,
@@ -80,6 +99,11 @@ function mapConv(row: ConvRow): ChatConversation {
     instanceName: row.instance_name ?? null,
     assignedUserId: row.assigned_user_id,
     assignedUserName: row.assigned_user_name,
+    assignedAt,
+    awaitingAgentReply:
+      typeof row.awaiting_agent_reply === "boolean"
+        ? row.awaiting_agent_reply
+        : false,
     contactNote: row.contact_note ?? null,
     aiEnabled: row.ai_enabled,
     botEnabled: row.bot_enabled !== false,
@@ -113,9 +137,21 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
     const rows = await withChatDb((sql) => sql<ConvRow[]>`
       select
         c.id, c.phone, c.contact_name, c.client_id, c.instance_name, c.assigned_user_id, c.assigned_user_name,
-        c.contact_note,
+        c.assigned_at, c.contact_note,
         c.ai_enabled, c.bot_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
+        (
+          c.assigned_user_id is not null
+          and not exists (
+            select 1
+            from crm.chat_messages m
+            where m.conversation_id = c.id
+              and m.sender_type = 'agent'
+              and m.sender_user_id is not null
+              and m.sender_user_id = c.assigned_user_id
+              and (c.assigned_at is null or m.created_at >= c.assigned_at)
+          )
+        ) as awaiting_agent_reply,
         cl.data->>'nome' as client_name,
         cl.status as client_status,
         case when cl.id is null then array[]::text[] else (
@@ -135,19 +171,28 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
   }
 
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
-  return enrichConversations(
-    [...items]
-      .map((item) => ({
-        ...item,
-        contactNote: item.contactNote ?? null,
-        botEnabled: item.botEnabled !== false,
-        botRun: item.botRun ?? null,
-      }))
-      .sort((a, b) =>
-        (b.lastMessageAt ?? b.updatedAt).localeCompare(a.lastMessageAt ?? a.updatedAt),
-      )
-      .slice(0, limit),
-  );
+  const messages = await readJsonFile<ChatMessage[]>(MSG_FILE, []);
+  const sliced = [...items]
+    .map((item) => ({
+      ...item,
+      contactNote: item.contactNote ?? null,
+      botEnabled: item.botEnabled !== false,
+      botRun: item.botRun ?? null,
+      assignedAt: item.assignedAt ?? null,
+    }))
+    .sort((a, b) =>
+      (b.lastMessageAt ?? b.updatedAt).localeCompare(a.lastMessageAt ?? a.updatedAt),
+    )
+    .slice(0, limit)
+    .map((item) => ({
+      ...item,
+      awaitingAgentReply: computeAwaitingAgentReply({
+        assignedUserId: item.assignedUserId,
+        assignedAt: item.assignedAt,
+        messages: messages.filter((message) => message.conversationId === item.id),
+      }),
+    }));
+  return enrichConversations(sliced);
 }
 
 async function fetchConversationById(conversationId: string): Promise<ChatConversation | null> {
@@ -155,9 +200,21 @@ async function fetchConversationById(conversationId: string): Promise<ChatConver
     const rows = await withChatDb((sql) => sql<ConvRow[]>`
       select
         c.id, c.phone, c.contact_name, c.client_id, c.instance_name, c.assigned_user_id, c.assigned_user_name,
-        c.contact_note,
+        c.assigned_at, c.contact_note,
         c.ai_enabled, c.bot_enabled, c.bot_run, c.last_message_at, c.last_message_preview, c.unread_count,
         c.created_at, c.updated_at,
+        (
+          c.assigned_user_id is not null
+          and not exists (
+            select 1
+            from crm.chat_messages m
+            where m.conversation_id = c.id
+              and m.sender_type = 'agent'
+              and m.sender_user_id is not null
+              and m.sender_user_id = c.assigned_user_id
+              and (c.assigned_at is null or m.created_at >= c.assigned_at)
+          )
+        ) as awaiting_agent_reply,
         cl.data->>'nome' as client_name,
         cl.status as client_status,
         case when cl.id is null then array[]::text[] else (
@@ -182,15 +239,21 @@ async function fetchConversationById(conversationId: string): Promise<ChatConver
   const items = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
   const item = items.find((c) => c.id === conversationId);
   if (!item) return null;
-  const [enriched] = await enrichConversations([
-    {
-      ...item,
-      contactNote: item.contactNote ?? null,
-      botEnabled: item.botEnabled !== false,
-      botRun: item.botRun ?? null,
-    },
-  ]);
-  return enriched ?? null;
+  const messages = await readJsonFile<ChatMessage[]>(MSG_FILE, []);
+  const withAwaiting: ChatConversation = {
+    ...item,
+    contactNote: item.contactNote ?? null,
+    botEnabled: item.botEnabled !== false,
+    botRun: item.botRun ?? null,
+    assignedAt: item.assignedAt ?? null,
+    awaitingAgentReply: computeAwaitingAgentReply({
+      assignedUserId: item.assignedUserId,
+      assignedAt: item.assignedAt,
+      messages: messages.filter((message) => message.conversationId === item.id),
+    }),
+  };
+  const [enriched] = await enrichConversations([withAwaiting]);
+  return enriched ?? withAwaiting;
 }
 
 export async function getConversation(id: string): Promise<ChatConversation | null> {
@@ -449,6 +512,8 @@ export async function getOrCreateConversationByPhone(input: {
     instanceName,
     assignedUserId: null,
     assignedUserName: null,
+    assignedAt: null,
+    awaitingAgentReply: false,
     contactNote: null,
     aiEnabled: initialAiEnabled,
     botEnabled: initialBotEnabled,
@@ -696,19 +761,23 @@ export async function joinConversationAsAgent(input: {
         set
           assigned_user_id = ${input.userId},
           assigned_user_name = ${input.userName},
+          assigned_at = now(),
           updated_at = now()
         where id = ${input.conversationId}
       `,
     );
   } else {
     const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+    const now = new Date().toISOString();
     const next = convs.map((c) =>
       c.id === input.conversationId
         ? {
             ...c,
             assignedUserId: input.userId,
             assignedUserName: input.userName,
-            updatedAt: new Date().toISOString(),
+            assignedAt: now,
+            awaitingAgentReply: true,
+            updatedAt: now,
           }
         : c,
     );
@@ -740,6 +809,7 @@ export async function unassignConversation(conversationId: string): Promise<Chat
         set
           assigned_user_id = null,
           assigned_user_name = null,
+          assigned_at = null,
           updated_at = now()
         where id = ${conversationId}
       `,
@@ -752,6 +822,8 @@ export async function unassignConversation(conversationId: string): Promise<Chat
             ...c,
             assignedUserId: null,
             assignedUserName: null,
+            assignedAt: null,
+            awaitingAgentReply: false,
             updatedAt: new Date().toISOString(),
           }
         : c,
@@ -800,6 +872,7 @@ export async function transferConversation(input: {
         set
           assigned_user_id = ${input.toUserId},
           assigned_user_name = ${input.toUserName},
+          assigned_at = now(),
           unread_count = unread_count + 1,
           updated_at = now()
         where id = ${input.conversationId}
@@ -807,14 +880,17 @@ export async function transferConversation(input: {
     );
   } else {
     const convs = await readJsonFile<ChatConversation[]>(CONV_FILE, []);
+    const now = new Date().toISOString();
     const next = convs.map((c) =>
       c.id === input.conversationId
         ? {
             ...c,
             assignedUserId: input.toUserId,
             assignedUserName: input.toUserName,
+            assignedAt: now,
+            awaitingAgentReply: true,
             unreadCount: (c.unreadCount ?? 0) + 1,
-            updatedAt: new Date().toISOString(),
+            updatedAt: now,
           }
         : c,
     );

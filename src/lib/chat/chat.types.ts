@@ -15,6 +15,13 @@ export type ChatConversation = {
   instanceName?: string | null;
   assignedUserId: string | null;
   assignedUserName: string | null;
+  /** Instantâneo da atribuição atual (join/transfer). Null se não atribuída. */
+  assignedAt?: string | null;
+  /**
+   * Atribuída e o atendente atual ainda não enviou mensagem (sender_type=agent)
+   * desde assignedAt — lead aguardando interação.
+   */
+  awaitingAgentReply?: boolean;
   /** Nota interna da conversa, exibida somente na barra lateral do contato. */
   contactNote: string | null;
   /** IA local da conversa — false quando atendente entra. */

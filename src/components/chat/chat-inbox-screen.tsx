@@ -227,6 +227,14 @@ export function ChatInboxScreen({
       });
   }, [conversations, filter, query, userId, isMaster]);
 
+  const mineAwaitingCount = useMemo(
+    () =>
+      conversations.filter(
+        (conv) => conv.assignedUserId === userId && conv.awaitingAgentReply === true,
+      ).length,
+    [conversations, userId],
+  );
+
   function clearSelectedImage() {
     if (selectedImageUrl) URL.revokeObjectURL(selectedImageUrl);
     setSelectedImage(null);
@@ -611,6 +619,7 @@ export function ChatInboxScreen({
             lastMessagePreview: `📷 ${caption || "Imagem"}`,
             aiEnabled: false,
             botEnabled: false,
+            awaitingAgentReply: false,
           }
         : prev,
     );
@@ -623,6 +632,7 @@ export function ChatInboxScreen({
               lastMessagePreview: `📷 ${caption || "Imagem"}`,
               aiEnabled: false,
               botEnabled: false,
+              awaitingAgentReply: false,
             }
           : conversation,
       ),
@@ -712,6 +722,7 @@ export function ChatInboxScreen({
               lastMessagePreview: body.slice(0, 120),
               aiEnabled: false,
               botEnabled: false,
+              awaitingAgentReply: false,
             }
           : c,
       ),
@@ -723,6 +734,7 @@ export function ChatInboxScreen({
         lastMessagePreview: body.slice(0, 120),
         aiEnabled: false,
         botEnabled: false,
+        awaitingAgentReply: false,
       });
     }
 
@@ -932,16 +944,53 @@ export function ChatInboxScreen({
                 aria-selected={filter === tab.id}
                 onClick={() => setFilter(tab.id)}
                 className={cn(
-                  "flex-1 cursor-pointer rounded-md px-2 py-1.5 text-[11px] font-medium transition-all",
+                  "relative flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-all",
                   filter === tab.id
                     ? "bg-background text-foreground shadow"
                     : "hover:bg-background/60 hover:text-foreground",
+                  tab.id === "mine" &&
+                    mineAwaitingCount > 0 &&
+                    filter !== "mine" &&
+                    "text-amber-700 dark:text-amber-400",
                 )}
               >
-                {tab.label}
+                {tab.id === "mine" && mineAwaitingCount > 0 ? (
+                  <span
+                    className="absolute inset-0 animate-pulse rounded-md bg-amber-500/15"
+                    aria-hidden
+                  />
+                ) : null}
+                <span className="relative">{tab.label}</span>
+                {tab.id === "mine" && mineAwaitingCount > 0 ? (
+                  <span
+                    className="relative inline-flex min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white"
+                    title={`${mineAwaitingCount} lead(s) aguardando sua interação`}
+                  >
+                    {mineAwaitingCount > 99 ? "99+" : mineAwaitingCount}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
+          {mineAwaitingCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setFilter("mine")}
+              className="relative flex w-full cursor-pointer items-center gap-2 overflow-hidden rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-left text-[11px] font-medium text-amber-900 transition-colors hover:bg-amber-500/15 dark:text-amber-100"
+            >
+              <span
+                className="pointer-events-none absolute inset-0 animate-pulse bg-amber-400/10"
+                aria-hidden
+              />
+              <span
+                className="relative size-2 shrink-0 animate-ping rounded-full bg-amber-500"
+                aria-hidden
+              />
+              <span className="relative min-w-0 flex-1">
+                {mineAwaitingCount} Aguardando
+              </span>
+            </button>
+          ) : null}
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -972,6 +1021,8 @@ export function ChatInboxScreen({
               </div>
             ) : (
               filtered.map((conv) => {
+                const awaitingMine =
+                  conv.assignedUserId === userId && conv.awaitingAgentReply === true;
                 const isDraftTarget = selectedId === conv.id && !conv.clientId;
                 const draftStatus = isDraftTarget && contactDraft.statusId
                   ? attendanceStatuses.find((status) => status.id === contactDraft.statusId) ?? null
@@ -996,7 +1047,9 @@ export function ChatInboxScreen({
                     role="button"
                     tabIndex={0}
                     aria-current={selectedId === conv.id ? "true" : undefined}
-                    aria-label={`Abrir conversa com ${conv.clientName || conv.contactName || conv.phone}`}
+                    aria-label={`Abrir conversa com ${conv.clientName || conv.contactName || conv.phone}${
+                      awaitingMine ? " — aguardando sua interação" : ""
+                    }`}
                     onClick={() => void openConversation(conv.id)}
                     onKeyDown={(event) => {
                       if (event.target !== event.currentTarget) return;
@@ -1006,15 +1059,32 @@ export function ChatInboxScreen({
                       }
                     }}
                     className={cn(
-                      "w-full cursor-pointer space-y-2.5 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      "relative w-full cursor-pointer space-y-2.5 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       selectedId === conv.id &&
                         "border-primary bg-transparent hover:bg-transparent dark:border-primary dark:bg-transparent",
+                      awaitingMine &&
+                        selectedId !== conv.id &&
+                        "border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/15",
+                      awaitingMine &&
+                        selectedId === conv.id &&
+                        "border-amber-500 ring-1 ring-amber-500/40",
                     )}
                   >
-                    <div className="flex items-center gap-2">
+                    {awaitingMine ? (
+                      <span
+                        className="pointer-events-none absolute inset-0 animate-pulse rounded-xl bg-amber-400/10"
+                        aria-hidden
+                      />
+                    ) : null}
+                    <div className="relative flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                         {conv.clientName || conv.contactName || conv.phone}
                       </span>
+                      {awaitingMine ? (
+                        <span className="shrink-0 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          Aguardando
+                        </span>
+                      ) : null}
                       {conv.unreadCount > 0 ? (
                         <span className="shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
                           {conv.unreadCount}

@@ -138,10 +138,10 @@ export const listChatConversationsFn = createServerFn({ method: "GET" }).handler
 });
 
 /**
- * Snapshot de alertas do Chatbot (topo = contato novo; menu = unread).
+ * Snapshot de alertas do Chatbot (topo = contato novo; menu = unread / aguardando interação).
  */
 export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handler(async () => {
-  await requireChatUser();
+  const user = await requireChatUser();
   const conversations = await listConversations(80);
   const unreadByConversationId: Record<string, number> = {};
   for (const conversation of conversations) {
@@ -150,11 +150,19 @@ export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handl
     }
   }
   const unreadIds = Object.keys(unreadByConversationId);
+  const awaitingAssignedIds = conversations
+    .filter(
+      (conversation) =>
+        conversation.assignedUserId === user.userId && conversation.awaitingAgentReply === true,
+    )
+    .map((conversation) => conversation.id);
   return {
     pendingCount: unreadIds.length,
     conversationIds: unreadIds,
     unreadByConversationId,
     allConversationIds: conversations.map((conversation) => conversation.id),
+    awaitingAssignedCount: awaitingAssignedIds.length,
+    awaitingAssignedIds,
     newestCreatedAt:
       conversations
         .map((conversation) => conversation.createdAt)

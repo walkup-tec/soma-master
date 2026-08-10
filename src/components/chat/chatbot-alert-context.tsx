@@ -16,8 +16,11 @@ export type ChatbotAlertState = {
   newContactActive: boolean;
   /** Menu lateral: mensagem recebida (unread). */
   unreadMessageActive: boolean;
+  /** Menu / inbox: atribuídos a mim ainda sem resposta do atendente. */
+  awaitingAssignedActive: boolean;
   newContactCount: number;
   unreadConversationCount: number;
+  awaitingAssignedCount: number;
   /** Compat: espelha newContactActive (ícone topbar). */
   active: boolean;
   pendingCount: number;
@@ -30,8 +33,10 @@ const noopSetViewing = (_id: string | null) => undefined;
 const EMPTY: ChatbotAlertState = {
   newContactActive: false,
   unreadMessageActive: false,
+  awaitingAssignedActive: false,
   newContactCount: 0,
   unreadConversationCount: 0,
+  awaitingAssignedCount: 0,
   active: false,
   pendingCount: 0,
   conversationIds: [],
@@ -89,8 +94,10 @@ export function ChatbotAlertProvider({
   const fetchAlert = useServerFn(getChatbotIncomingAlertFn);
   const [newContactActive, setNewContactActive] = useState(false);
   const [unreadMessageActive, setUnreadMessageActive] = useState(false);
+  const [awaitingAssignedActive, setAwaitingAssignedActive] = useState(false);
   const [newContactCount, setNewContactCount] = useState(0);
   const [unreadConversationCount, setUnreadConversationCount] = useState(0);
+  const [awaitingAssignedCount, setAwaitingAssignedCount] = useState(0);
   const [conversationIds, setConversationIds] = useState<string[]>([]);
 
   const viewingIdRef = useRef<string | null>(null);
@@ -108,8 +115,10 @@ export function ChatbotAlertProvider({
     if (!enabled) {
       setNewContactActive(false);
       setUnreadMessageActive(false);
+      setAwaitingAssignedActive(false);
       setNewContactCount(0);
       setUnreadConversationCount(0);
+      setAwaitingAssignedCount(0);
       setConversationIds([]);
       return;
     }
@@ -121,6 +130,7 @@ export function ChatbotAlertProvider({
       if (viewingId) delete unreadMap[viewingId];
 
       const unreadIds = Object.keys(unreadMap).filter((id) => (unreadMap[id] ?? 0) > 0);
+      const awaitingCount = Number(next.awaitingAssignedCount ?? 0) || 0;
 
       const prevAll = knownAllIdsRef.current;
       const prevUnread = knownUnreadMapRef.current;
@@ -163,6 +173,8 @@ export function ChatbotAlertProvider({
       setNewContactActive(holdNewContact);
       setUnreadConversationCount(unreadIds.length);
       setUnreadMessageActive(unreadIds.length > 0);
+      setAwaitingAssignedCount(awaitingCount);
+      setAwaitingAssignedActive(awaitingCount > 0);
       setConversationIds(unreadIds);
     } catch {
       /* silencioso */
@@ -177,6 +189,8 @@ export function ChatbotAlertProvider({
       newContactUntilRef.current = 0;
       setNewContactActive(false);
       setUnreadMessageActive(false);
+      setAwaitingAssignedActive(false);
+      setAwaitingAssignedCount(0);
       return;
     }
 
@@ -207,18 +221,22 @@ export function ChatbotAlertProvider({
     () => ({
       newContactActive,
       unreadMessageActive,
+      awaitingAssignedActive,
       newContactCount,
       unreadConversationCount,
+      awaitingAssignedCount,
       active: newContactActive,
-      pendingCount: newContactCount || unreadConversationCount,
+      pendingCount: newContactCount || unreadConversationCount || awaitingAssignedCount,
       conversationIds,
       setViewingConversationId,
     }),
     [
       newContactActive,
       unreadMessageActive,
+      awaitingAssignedActive,
       newContactCount,
       unreadConversationCount,
+      awaitingAssignedCount,
       conversationIds,
       setViewingConversationId,
     ],
