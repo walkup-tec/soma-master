@@ -66,6 +66,43 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
     )
   `;
   await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists provider text not null default 'evolution'
+  `;
+  await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists phone_number_id text null
+  `;
+  await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists waba_id text null
+  `;
+  await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists business_id text null
+  `;
+  await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists access_token_encrypted text null
+  `;
+  await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists verified_name text null
+  `;
+  await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists quality_rating text null
+  `;
+  await sql`
+    alter table crm.chat_whatsapp_instances
+    add column if not exists token_expires_at timestamptz null
+  `;
+  await sql`
+    create unique index if not exists uq_chat_wa_phone_number_id
+    on crm.chat_whatsapp_instances (phone_number_id)
+    where phone_number_id is not null
+  `;
+  await sql`
     alter table crm.chat_conversations
     add column if not exists instance_name text null
   `;

@@ -34,8 +34,6 @@ import {
   evolutionConnectionState,
   evolutionDeleteInstance,
   evolutionFetchInstancePhone,
-  evolutionSendImage,
-  evolutionSendText,
   evolutionSetInstanceWebhook,
   ensureSomaEvolutionInstance,
   getDefaultSomaEvolutionInstance,
@@ -45,6 +43,12 @@ import {
   type EvolutionConnectionState,
   type EvolutionQrPayload,
 } from "@/lib/chat/evolution.adapter";
+import { sendChannelImage, sendChannelText } from "@/lib/chat/channel-outbound";
+import { completeMetaEmbeddedSignup } from "@/lib/chat/meta-cloud/meta-cloud-complete";
+import { instanceIsMetaCloud } from "@/lib/chat/meta-cloud/meta-cloud.adapter";
+import { isMetaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constants";
+import { isMetaCloudConfigured, toPublicMetaEsConfig } from "@/lib/chat/meta-cloud/meta-config";
+import { unregisterSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-cloud-relay.client";
 import {
   createWhatsappInstance,
   deleteWhatsappInstance,
@@ -487,7 +491,7 @@ export const sendChatMessageFn = createServerFn({ method: "POST" })
     });
 
     // Evolution em background: UI já mostra otimista; falha vira aviso no thread no próximo poll.
-    void sendChatTextViaEvolutionInBackground({
+    void sendChatTextInBackground({
       conversationId: data.conversationId,
       phone: conversation.phone,
       text: data.text,
@@ -594,7 +598,7 @@ export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
     });
     // Envio Evolution em background: a UI recebe a mensagem persistida na hora
     // e uma eventual falha vira mensagem de sistema no thread (aparece no poll).
-    void sendChatImageViaEvolutionInBackground({
+    void sendChatImageInBackground({
       mediaId: meta.mediaId,
       conversationId: conversation.id,
       phone: conversation.phone,
@@ -611,17 +615,18 @@ export const finalizeAndSendChatImageFn = createServerFn({ method: "POST" })
     };
   });
 
-async function sendChatTextViaEvolutionInBackground(input: {
+async function sendChatTextInBackground(input: {
   conversationId: string;
   phone: string;
   text: string;
   instanceName?: string | null;
 }): Promise<void> {
   try {
-    const send = await evolutionSendText({
+    const send = await sendChannelText({
       phone: input.phone,
       text: input.text,
       instanceName: input.instanceName ?? undefined,
+      conversationId: input.conversationId,
     });
     if (!send.ok) {
       await appendMessage({
@@ -634,7 +639,7 @@ async function sendChatTextViaEvolutionInBackground(input: {
     }
   } catch (error) {
     console.error(
-      `[chat] Falha no envio de texto via Evolution (conversa ${input.conversationId}):`,
+      `[chat] Falha no envio de texto (conversa ${input.conversationId}):`,
       error instanceof Error ? error.message : error,
     );
     await appendMessage({
@@ -647,7 +652,7 @@ async function sendChatTextViaEvolutionInBackground(input: {
   }
 }
 
-async function sendChatImageViaEvolutionInBackground(input: {
+async function sendChatImageInBackground(input: {
   mediaId: string;
   conversationId: string;
   phone: string;
@@ -658,13 +663,14 @@ async function sendChatImageViaEvolutionInBackground(input: {
 }): Promise<void> {
   try {
     const { dataUrl } = await readChatImageAsDataUrl(input.mediaId);
-    const send = await evolutionSendImage({
+    const send = await sendChannelImage({
       phone: input.phone,
       dataUrl,
       mimeType: input.mimeType,
       fileName: input.fileName,
       caption: input.caption,
       instanceName: input.instanceName ?? undefined,
+      conversationId: input.conversationId,
     });
     if (!send.ok) {
       await appendMessage({
@@ -677,7 +683,7 @@ async function sendChatImageViaEvolutionInBackground(input: {
     }
   } catch (error) {
     console.error(
-      `[chat] Falha no envio da imagem ${input.mediaId} via Evolution:`,
+      `[chat] Falha no envio da imagem ${input.mediaId}:`,
       error instanceof Error ? error.message : error,
     );
     await appendMessage({
@@ -898,18 +904,23 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
 
   const channels = await Promise.all(
     instances.map(async (item) => {
-      const flash = takeEvolutionQrFlash(user.userId, item.instanceName);
-      let state: EvolutionConnectionState = flash?.state ?? "unknown";
+      const isCloud = instanceIsMetaCloud(item);
+      const flash = isCloud ? null : takeEvolutionQrFlash(user.userId, item.instanceName);
+      let state: EvolutionConnectionState = isCloud
+        ? item.accessTokenEncrypted && item.phoneNumberId
+          ? "open"
+          : "close"
+        : (flash?.state ?? "unknown");
       let error = flash?.error ?? null;
       let phone = item.phone;
-      if (config.configured && !flash) {
+      if (!isCloud && config.configured && !flash) {
         const status = await evolutionConnectionState(item.instanceName).catch(() => null);
         if (status) {
           state = status.state;
           error = status.error ?? null;
         }
       }
-      if (config.configured && state === "open" && !phone) {
+      if (!isCloud && config.configured && state === "open" && !phone) {
         phone = await syncConnectedInstancePhone(item.instanceName, "open");
       }
       return {
@@ -917,6 +928,10 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
         instanceName: item.instanceName,
         label: item.label,
         phone,
+        provider: item.provider,
+        verifiedName: item.verifiedName,
+        phoneNumberId: item.phoneNumberId,
+        wabaId: item.wabaId,
         state,
         qr: flash?.qr ?? {},
         error,
@@ -935,6 +950,8 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
     webhookUrl: string | null;
     webhookPublicBaseUrl: string;
     webhookReady: boolean;
+    metaCloudConfigured: boolean;
+    metaCloud: ReturnType<typeof toPublicMetaEsConfig>;
   } = {
     configured: config.configured,
     apiUrlHost: config.apiUrlHost,
@@ -944,10 +961,14 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
     qr: channels[0]?.qr ?? {},
     error:
       channels.find((c) => c.error)?.error ??
-      (config.configured ? null : "Evolution API não configurada no servidor (.env.local)."),
+      (config.configured || isMetaCloudConfigured()
+        ? null
+        : "Evolution API não configurada no servidor (.env.local)."),
     webhookUrl,
     webhookPublicBaseUrl: aiSettings.webhookPublicBaseUrl,
     webhookReady: Boolean(webhookUrl),
+    metaCloudConfigured: isMetaCloudConfigured(),
+    metaCloud: toPublicMetaEsConfig(),
   };
 
   return {
@@ -1116,6 +1137,17 @@ export const getEvolutionConnectionStatusFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const user = await requireChatBotSettingsUser();
+    if (isMetaCloudInstanceName(data.instanceName)) {
+      const registered = await getWhatsappInstanceByName(data.instanceName);
+      return {
+        config: getEvolutionPublicConfig(),
+        instanceName: data.instanceName,
+        state: registered?.accessTokenEncrypted ? ("open" as const) : ("close" as const),
+        phone: registered?.phone ?? null,
+        ok: true,
+        error: undefined as string | undefined,
+      };
+    }
     const config = getEvolutionPublicConfig();
     if (!config.configured) {
       return {
@@ -1166,6 +1198,16 @@ export const refreshEvolutionQrFn = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const user = await requireChatBotSettingsUser();
+    if (isMetaCloudInstanceName(data.instanceName)) {
+      return {
+        config: getEvolutionPublicConfig(),
+        instanceName: data.instanceName,
+        state: "open" as const,
+        qr: {},
+        ok: false,
+        error: "Este canal usa a API oficial da Meta — não há QR Code.",
+      };
+    }
     const config = getEvolutionPublicConfig();
     if (!config.configured) {
       clearEvolutionQrFlash(user.userId, data.instanceName);
@@ -1309,11 +1351,15 @@ export const deleteChatWhatsappInstanceFn = createServerFn({ method: "POST" })
     if (all.length <= 1) {
       throw new Error("Mantenha ao menos um canal WhatsApp.");
     }
-    if (isEvolutionConfigured()) {
+    if (isEvolutionConfigured() && !isMetaCloudInstanceName(data.instanceName)) {
       const removed = await evolutionDeleteInstance(data.instanceName);
       if (!removed.ok) {
         throw new Error(removed.error ?? "Falha ao excluir instância na Evolution.");
       }
+    }
+    const existing = await getWhatsappInstanceByName(data.instanceName);
+    if (existing?.phoneNumberId) {
+      await unregisterSomaCloudNumberOnWaba(existing.phoneNumberId);
     }
     await deleteWhatsappInstance(data.instanceName);
     clearEvolutionQrFlash(user.userId, data.instanceName);
@@ -1331,6 +1377,10 @@ export const applyWebhookToAllWhatsappInstancesFn = createServerFn({ method: "PO
     const instances = await listWhatsappInstances();
     const results: Array<{ instanceName: string; ok: boolean; error?: string }> = [];
     for (const item of instances) {
+      if (instanceIsMetaCloud(item)) {
+        results.push({ instanceName: item.instanceName, ok: true });
+        continue;
+      }
       const applied = await evolutionSetInstanceWebhook(
         null,
         settings.webhookPublicBaseUrl,
@@ -1349,3 +1399,34 @@ export const applyWebhookToAllWhatsappInstancesFn = createServerFn({ method: "PO
     return { ok: true, results };
   },
 );
+
+export const getMetaEmbeddedSignupConfigFn = createServerFn({ method: "GET" }).handler(async () => {
+  await requireChatBotSettingsUser();
+  return toPublicMetaEsConfig();
+});
+
+export const completeMetaEmbeddedSignupFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = (data ?? {}) as {
+      code?: string;
+      wabaId?: string;
+      phoneNumberId?: string;
+      businessId?: string;
+      verifiedName?: string;
+      label?: string;
+    };
+    const code = String(body.code ?? "").trim();
+    if (!code) throw new Error("Código da Meta ausente.");
+    return {
+      code,
+      wabaId: String(body.wabaId ?? "").trim(),
+      phoneNumberId: String(body.phoneNumberId ?? "").trim(),
+      businessId: String(body.businessId ?? "").trim(),
+      verifiedName: String(body.verifiedName ?? "").trim(),
+      label: String(body.label ?? "").trim(),
+    };
+  })
+  .handler(async ({ data }) => {
+    await requireChatBotSettingsUser();
+    return completeMetaEmbeddedSignup(data);
+  });

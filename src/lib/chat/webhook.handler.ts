@@ -5,10 +5,10 @@ import {
 } from "@/lib/chat/chat.repository";
 import {
   evolutionGetMediaBase64,
-  evolutionSendText,
   extractEvolutionInstanceName,
   isWebhookForSomaInstance,
 } from "@/lib/chat/evolution.adapter";
+import { sendChannelText } from "@/lib/chat/channel-outbound";
 import { saveInboundChatMedia } from "@/lib/chat/chat-media.repository";
 import { generateAiReply, isOpenAiConfigured } from "@/lib/chat/openai.adapter";
 import { normalizeWhatsAppPhone } from "@/lib/chat/phone";
@@ -154,10 +154,11 @@ async function maybeReplyWithAi(conversationId: string, userText: string): Promi
       senderType: "ai",
       senderName: "Assistente Soma",
     });
-    const send = await evolutionSendText({
+    const send = await sendChannelText({
       phone: conversation.phone,
       text: reply,
       instanceName: conversation.instanceName ?? undefined,
+      conversationId,
     });
     if (!send.ok) {
       await appendMessage({

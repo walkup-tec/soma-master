@@ -18,11 +18,14 @@ import { toast } from "sonner";
 import { ChatAiEducationScreen } from "@/components/chat/chat-ai-education-screen";
 import { ChatbotTagsSettings } from "@/components/settings/chatbot-tags-settings";
 import { ChatbotRuntimeSettings } from "@/components/settings/chatbot-runtime-settings";
+import { MetaCloudSignupPanel } from "@/components/settings/meta-cloud-signup-panel";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChatAiExample, ChatAiKnowledgeItem, ChatAiSettings } from "@/lib/chat/chat.types";
 import type { EvolutionConnectionState, EvolutionQrPayload } from "@/lib/chat/evolution.adapter";
+import type { ChatWhatsappProvider } from "@/lib/chat/whatsapp-instances.repository";
 import {
   createChatWhatsappInstanceFn,
   deleteChatWhatsappInstanceFn,
@@ -58,6 +61,10 @@ export type ChatbotChannelPayload = {
   instanceName: string;
   label: string;
   phone: string | null;
+  provider?: ChatWhatsappProvider;
+  verifiedName?: string | null;
+  phoneNumberId?: string | null;
+  wabaId?: string | null;
   state: EvolutionConnectionState;
   qr: EvolutionQrPayload;
   error?: string | null;
@@ -74,6 +81,7 @@ export type ChatbotEvoPayload = {
   webhookUrl?: string | null;
   webhookPublicBaseUrl?: string;
   webhookReady?: boolean;
+  metaCloudConfigured?: boolean;
 };
 
 export type ChatbotEducationPayload = {
@@ -171,6 +179,8 @@ function ChannelCard({
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [integratedAlert, setIntegratedAlert] = useState(false);
 
+  const isCloud = channel.provider === "meta_cloud";
+
   useEffect(() => {
     setState(channel.state);
     setQr(channel.qr);
@@ -179,6 +189,7 @@ function ChannelCard({
 
   // Canal já conectado sem número no banco → busca uma vez na Evolution.
   useEffect(() => {
+    if (isCloud) return;
     if (state !== "open" || phone) return;
     let cancelled = false;
     void (async () => {
@@ -199,6 +210,7 @@ function ChannelCard({
   // Poll enquanto o QR/código estiver visível — após o scan a Evolution pode ir
   // connecting → close (515) → open; não desistir no close temporário.
   useEffect(() => {
+    if (isCloud) return;
     if ((!qr.base64 && !qr.pairingCode) || state === "open") return;
     let cancelled = false;
     let ticks = 0;
@@ -314,10 +326,21 @@ function ChannelCard({
         <div>
           <p className="font-display text-sm font-semibold">{channel.label}</p>
           <p className="text-xs text-muted-foreground">
-            Instância <code className="text-[11px]">{channel.instanceName}</code>
+            {isCloud ? (
+              <>
+                API oficial · <code className="text-[11px]">{channel.instanceName}</code>
+              </>
+            ) : (
+              <>
+                Instância <code className="text-[11px]">{channel.instanceName}</code>
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {isCloud ? (
+            <Badge variant="secondary">Cloud API</Badge>
+          ) : null}
           {state === "open" ? (
             <Wifi className="size-4 text-success" />
           ) : (
@@ -329,18 +352,25 @@ function ChannelCard({
 
       <div className="grid gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm sm:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">API</p>
-          <p className="font-medium">{apiUrlHost ?? "—"}</p>
+          <p className="text-xs text-muted-foreground">{isCloud ? "Provedor" : "API"}</p>
+          <p className="font-medium">{isCloud ? "WhatsApp Cloud API" : (apiUrlHost ?? "—")}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Número</p>
           <p className="font-medium">{phone || "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Canal</p>
-          <p className="font-medium">{channel.label}</p>
+          <p className="text-xs text-muted-foreground">{isCloud ? "Nome verificado" : "Canal"}</p>
+          <p className="font-medium">{isCloud ? channel.verifiedName || channel.label : channel.label}</p>
         </div>
       </div>
+
+      {isCloud ? (
+        <p className="text-xs text-muted-foreground">
+          Mensagens de sessão só na janela de 24h após o lead falar. Fora da janela é preciso template
+          aprovado. Inbound chega pelo webhook Meta do WABA.
+        </p>
+      ) : null}
 
       {integratedAlert ? (
         <p
@@ -362,27 +392,31 @@ function ChannelCard({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy !== null}
-          className="cursor-pointer"
-          onClick={() => void runStatus()}
-        >
-          <RefreshCw className={`size-4 ${busy === "status" ? "animate-spin" : ""}`} />
-          {busy === "status" ? "Atualizando…" : "Atualizar status"}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={!configured || state === "open" || busy !== null}
-          className="cursor-pointer"
-          onClick={() => void runQr()}
-        >
-          <QrCode className="size-4" />
-          {busy === "qr" ? "Gerando…" : "Gerar / renovar QR Code"}
-        </Button>
+        {isCloud ? null : (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy !== null}
+              className="cursor-pointer"
+              onClick={() => void runStatus()}
+            >
+              <RefreshCw className={`size-4 ${busy === "status" ? "animate-spin" : ""}`} />
+              {busy === "status" ? "Atualizando…" : "Atualizar status"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!configured || state === "open" || busy !== null}
+              className="cursor-pointer"
+              onClick={() => void runQr()}
+            >
+              <QrCode className="size-4" />
+              {busy === "qr" ? "Gerando…" : "Gerar / renovar QR Code"}
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           variant="outline"
@@ -396,7 +430,7 @@ function ChannelCard({
         </Button>
       </div>
 
-      {qr.base64 || qr.pairingCode ? (
+      {isCloud ? null : qr.base64 || qr.pairingCode ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-6">
           {qr.base64 ? (
             <img
@@ -478,11 +512,12 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
           Conexão WhatsApp
         </h4>
         <p className="text-sm text-muted-foreground">
-          Vários canais (instâncias <code className="text-xs">soma-*</code>) no mesmo Evolution — o Chat
-          atende entradas de todos eles.
+          Canais Evolution (<code className="text-xs">soma-*</code> + QR) e números oficiais (Cloud API
+          via Embedded Signup do Drax). O Chat atende os dois.
         </p>
       </div>
       <div className="space-y-4 p-6 pt-0">
+        <MetaCloudSignupPanel configured={Boolean(evo.metaCloudConfigured)} onConnected={refresh} />
         {!evo.configured ? (
           <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
             Evolution não configurada. Defina <code className="text-xs">EVOLUTION_API_URL</code> e{" "}
@@ -606,8 +641,10 @@ export function ChatbotSettings({
                     Webhook
                   </h4>
                   <p className="text-sm text-muted-foreground">
-                    Informe o domínio público do CRM; o backend cadastra o webhook em todas as
-                    instâncias soma-*.
+                    Informe o domínio público do CRM para as instâncias Evolution. Números oficiais
+                    recebem inbound pelo webhook Meta já autorizado no WABA (
+                    <code className="text-[11px]">/api/chat/whatsapp-cloud-webhook</code>
+                    ).
                   </p>
                 </div>
                 <div className="space-y-4 p-6 pt-0">

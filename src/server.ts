@@ -5,6 +5,7 @@ loadLocalEnvFile();
 
 import { handleClientAttachmentDownload } from "./lib/clients/client-attachment-download.handler";
 import { handleEvolutionWebhook } from "./lib/chat/webhook.handler";
+import { handleMetaCloudWebhook } from "./lib/chat/meta-cloud/cloud-webhook.handler";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { warmDatabaseConnection } from "./lib/db/postgres";
@@ -83,6 +84,12 @@ export default {
       const url = new URL(request.url);
       if (url.pathname === "/api/chat/whatsapp-webhook" || url.pathname === "/api/webhooks/evolution") {
         return handleEvolutionWebhook(request);
+      }
+      if (
+        url.pathname === "/api/chat/whatsapp-cloud-webhook" ||
+        url.pathname === "/api/webhooks/meta-whatsapp"
+      ) {
+        return handleMetaCloudWebhook(request);
       }
 
       const handler = await getServerEntry();

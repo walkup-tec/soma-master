@@ -631,6 +631,29 @@ export async function listMessages(conversationId: string, limit = 20): Promise<
   return page.messages;
 }
 
+/** Última mensagem inbound da conversa — base da janela de 24h da Cloud API. */
+export async function getLastInboundMessageAt(conversationId: string): Promise<Date | null> {
+  const id = String(conversationId || "").trim();
+  if (!id) return null;
+  if (isDatabaseEnabled()) {
+    return withChatDb(async (sql) => {
+      const rows = await sql<{ created_at: Date }[]>`
+        select created_at
+        from crm.chat_messages
+        where conversation_id = ${id} and direction = 'inbound'
+        order by created_at desc
+        limit 1
+      `;
+      return rows[0]?.created_at ?? null;
+    });
+  }
+  const messages = await readJsonFile<ChatMessage[]>(MSG_FILE, []);
+  const inbound = messages
+    .filter((item) => item.conversationId === id && item.direction === "inbound")
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return inbound[0] ? new Date(inbound[0].createdAt) : null;
+}
+
 export async function appendMessage(input: {
   conversationId: string;
   direction: ChatMessage["direction"];

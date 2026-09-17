@@ -14,9 +14,9 @@ import {
   setConversationBotRun,
 } from "@/lib/chat/chat.repository";
 import {
-  evolutionSendButtons,
-  evolutionSendText,
-} from "@/lib/chat/evolution.adapter";
+  sendChannelButtons,
+  sendChannelText,
+} from "@/lib/chat/channel-outbound";
 import { resolveChatbotRuntimeSelection } from "@/lib/config/chatbot-runtime-schedule";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
 
@@ -71,10 +71,11 @@ async function dispatchBotOutbound(input: {
         senderType: "ai",
         senderName: input.botName,
       });
-      const send = await evolutionSendText({
+      const send = await sendChannelText({
         phone: input.phone,
         text: body,
         instanceName: input.instanceName ?? undefined,
+        conversationId: input.conversationId,
       });
       if (!send.ok) {
         console.error("[chatbot-runtime] sendText falhou", {
@@ -116,7 +117,7 @@ async function dispatchBotOutbound(input: {
     // Botões reply via Evolution. Em 2.4.0+ o payload válido usa interactive/nativeFlow
     // (sem viewOnce). Se falhar ou vier fantasma, cai para texto numerado.
     if (interactive.kind === "buttons" && optionLabels.length > 0) {
-      const buttonsSend = await evolutionSendButtons({
+      const buttonsSend = await sendChannelButtons({
         phone: input.phone,
         title: body.slice(0, 60),
         description: body.length > 60 ? body : undefined,
@@ -125,6 +126,7 @@ async function dispatchBotOutbound(input: {
           displayText: opt.label.slice(0, 20),
         })),
         instanceName: input.instanceName ?? undefined,
+        conversationId: input.conversationId,
       });
       if (buttonsSend.ok && !isGhostButtonsPayload(buttonsSend.raw)) {
         continue;
@@ -135,10 +137,11 @@ async function dispatchBotOutbound(input: {
       });
     }
 
-    const textSend = await evolutionSendText({
+    const textSend = await sendChannelText({
       phone: input.phone,
       text: numbered,
       instanceName: input.instanceName ?? undefined,
+      conversationId: input.conversationId,
     });
     if (!textSend.ok) {
       console.error("[chatbot-runtime] sendText (opções) falhou", {
