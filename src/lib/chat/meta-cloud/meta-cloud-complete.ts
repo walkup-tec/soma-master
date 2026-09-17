@@ -1,9 +1,9 @@
-import { callMetaGraphJson } from "@/lib/chat/meta-cloud/meta-graph.client";
+import { callMetaGraphJson } from "@/lib/chat/meta-cloud/meta-graph-api";
 import { isMetaCloudConfigured } from "@/lib/chat/meta-cloud/meta-config";
 import { metaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constants";
 import { exchangeEmbeddedSignupCode } from "@/lib/chat/meta-cloud/meta-oauth";
 import { encryptMetaToken } from "@/lib/chat/meta-cloud/meta-token-crypto";
-import { registerSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-cloud-relay.client";
+import { registerSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-cloud-relay";
 import { upsertMetaCloudWhatsappInstance } from "@/lib/chat/whatsapp-instances.repository";
 
 export type MetaEmbeddedSignupCompleteInput = {

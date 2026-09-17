@@ -48,7 +48,7 @@ import { completeMetaEmbeddedSignup } from "@/lib/chat/meta-cloud/meta-cloud-com
 import { instanceIsMetaCloud } from "@/lib/chat/meta-cloud/meta-cloud.adapter";
 import { isMetaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constants";
 import { isMetaCloudConfigured, toPublicMetaEsConfig } from "@/lib/chat/meta-cloud/meta-config";
-import { unregisterSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-cloud-relay.client";
+import { unregisterSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-cloud-relay";
 import {
   createWhatsappInstance,
   deleteWhatsappInstance,

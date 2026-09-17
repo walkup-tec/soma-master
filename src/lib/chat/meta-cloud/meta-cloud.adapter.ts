@@ -12,7 +12,7 @@ import {
   callMetaGraphJson,
   postMetaCloudMessage,
   publicGraphError,
-} from "@/lib/chat/meta-cloud/meta-graph.client";
+} from "@/lib/chat/meta-cloud/meta-graph-api";
 import { decryptMetaToken } from "@/lib/chat/meta-cloud/meta-token-crypto";
 import { normalizeWhatsAppPhone } from "@/lib/chat/phone";
 import {
