@@ -2,6 +2,24 @@ import type { Sql } from "@/lib/db/postgres";
 
 let ensured = false;
 
+/** Índice antigo (só telefone) quebra o boot quando o mesmo número existe em Evolution e Cloud. */
+async function dropLegacyPhoneOnlyUnique(sql: Sql): Promise<void> {
+  await sql`drop index if exists crm.uq_chat_conversations_phone`;
+  await sql`drop index if exists public.uq_chat_conversations_phone`;
+}
+
+async function ensurePhoneInstanceUnique(sql: Sql): Promise<void> {
+  await dropLegacyPhoneOnlyUnique(sql);
+  try {
+    await sql`
+      create unique index if not exists uq_chat_conversations_phone_instance
+      on crm.chat_conversations (phone, instance_name)
+    `;
+  } catch (error) {
+    console.error("[chat] falha ao criar uq_chat_conversations_phone_instance", error);
+  }
+}
+
 /** Migrations leves — sempre rodam (IF NOT EXISTS), mesmo após o bootstrap completo. */
 async function ensureChatMigrations(sql: Sql): Promise<void> {
   await sql`
@@ -125,12 +143,8 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
     alter table crm.chat_conversations
     alter column instance_name set default 'soma-crm'
   `;
-  // Troca unicidade só por telefone → telefone + canal (multi-instância).
-  await sql`drop index if exists crm.uq_chat_conversations_phone`;
-  await sql`
-    create unique index if not exists uq_chat_conversations_phone_instance
-    on crm.chat_conversations (phone, instance_name)
-  `;
+  // Unicidade por telefone + canal (API oficial e Evolution no mesmo número).
+  await ensurePhoneInstanceUnique(sql);
   /** Momento da atribuição atual — base para “aguardando 1ª interação do atendente”. */
   await sql`
     alter table crm.chat_conversations
@@ -173,10 +187,7 @@ export async function ensureChatSchema(sql: Sql): Promise<void> {
       updated_at timestamptz not null default now()
     )
   `;
-  await sql`
-    create unique index if not exists uq_chat_conversations_phone
-    on crm.chat_conversations (phone)
-  `;
+  await dropLegacyPhoneOnlyUnique(sql);
   await sql`
     create index if not exists idx_chat_conversations_last_message
     on crm.chat_conversations (last_message_at desc nulls last)

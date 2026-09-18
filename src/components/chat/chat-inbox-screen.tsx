@@ -63,6 +63,7 @@ import {
   CHAT_IMAGE_MAX_BYTES,
 } from "@/lib/chat/chat-media.constants";
 import { readFileInChunksParallel } from "@/lib/clients/upload-file-chunks";
+import { isMetaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constants";
 import type { AttendanceStatusConfig, BankConfig, ProductConfig } from "@/lib/config/settings-types";
 
 const EMPTY_CONTACT_DRAFT = {
@@ -1080,6 +1081,13 @@ export function ChatInboxScreen({
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                         {conv.clientName || conv.contactName || conv.phone}
                       </span>
+                      {conv.instanceName ? (
+                        <span className="max-w-[7.5rem] shrink-0 truncate rounded-full border border-border/70 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                          {isMetaCloudInstanceName(conv.instanceName)
+                            ? "API oficial"
+                            : "QR Code"}
+                        </span>
+                      ) : null}
                       {awaitingMine ? (
                         <span className="shrink-0 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
                           Aguardando

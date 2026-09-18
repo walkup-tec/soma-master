@@ -68,7 +68,11 @@ export async function ensureClientListIndexes(sql: Sql): Promise<void> {
     await ensureClientProductsTable(sql);
     await ensureAttendanceStatusColorColumn(sql);
     await ensureClientAttachmentSourceColumn(sql);
-    await ensureChatSchema(sql);
+    try {
+      await ensureChatSchema(sql);
+    } catch (error) {
+      console.error("[db] ensureChatSchema failed", error);
+    }
     ensured = true;
     return;
   }
@@ -159,5 +163,9 @@ export async function ensureClientListIndexes(sql: Sql): Promise<void> {
     `;
   }
 
-  await ensureChatSchema(sql);
+  try {
+    await ensureChatSchema(sql);
+  } catch (error) {
+    console.error("[db] ensureChatSchema failed", error);
+  }
 }
