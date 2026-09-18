@@ -530,11 +530,6 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
                 </Badge>
               ) : null}
             </CardTitle>
-            <CardDescription>
-              API oficial (Cloud API) pelo App Meta do Drax. Cada número deixa o WhatsApp pessoal/QR
-              e passa a atender o ChatBot na janela de 24h. Conecte quantos números oficiais
-              precisar — o bot responde em todos ao mesmo tempo.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <MetaCloudSignupPanel
