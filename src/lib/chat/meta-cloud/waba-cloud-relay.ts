@@ -88,3 +88,44 @@ export async function unregisterSomaCloudNumberOnWaba(phoneNumberId: string): Pr
     phoneNumberId: id,
   });
 }
+
+export type SomaCloudWabaRelayResult = { ok: boolean; error?: string };
+
+/**
+ * Reenvia o cadastro dos números oficiais já salvos no CRM.
+ * Necessário quando o Embedded Signup rodou antes do relay do WABA existir.
+ */
+export async function syncRegisteredCloudNumbersToWaba(
+  instances: Array<{
+    provider?: string | null;
+    phoneNumberId?: string | null;
+    wabaId?: string | null;
+    phone?: string | null;
+    label?: string | null;
+  }>,
+): Promise<Map<string, SomaCloudWabaRelayResult>> {
+  const results = new Map<string, SomaCloudWabaRelayResult>();
+  const cloud = instances.filter(
+    (item) =>
+      item.provider === "meta_cloud" && Boolean(String(item.phoneNumberId || "").trim()),
+  );
+  await Promise.all(
+    cloud.map(async (item) => {
+      const phoneNumberId = String(item.phoneNumberId).trim();
+      const result = await registerSomaCloudNumberOnWaba({
+        phoneNumberId,
+        wabaId: item.wabaId,
+        displayPhone: item.phone,
+        label: item.label,
+      });
+      results.set(phoneNumberId, result);
+      if (!result.ok) {
+        console.warn("[chat] falha ao registrar número Cloud no WABA", {
+          phoneNumberId,
+          error: result.error,
+        });
+      }
+    }),
+  );
+  return results;
+}

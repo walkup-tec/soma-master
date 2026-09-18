@@ -77,6 +77,8 @@ export type ChatbotChannelPayload = {
   verifiedName?: string | null;
   phoneNumberId?: string | null;
   wabaId?: string | null;
+  wabaRelayOk?: boolean | null;
+  wabaRelayError?: string | null;
   state: EvolutionConnectionState;
   qr: EvolutionQrPayload;
   error?: string | null;
@@ -380,6 +382,19 @@ function ChannelCard({
         <p className="text-xs text-muted-foreground">
           Mensagens de sessão só na janela de 24h após o lead falar. Fora da janela é preciso template
           aprovado. Inbound chega pelo webhook Meta do WABA.
+        </p>
+      ) : null}
+
+      {isCloud && channel.wabaRelayOk === true ? (
+        <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+          Encaminhamento WABA registrado. O ChatBot recebe as mensagens deste número.
+        </p>
+      ) : null}
+      {isCloud && channel.wabaRelayOk === false ? (
+        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          O WABA ainda não encaminha este número
+          {channel.wabaRelayError ? `: ${channel.wabaRelayError}` : "."} Abra esta tela de novo
+          depois do Redeploy, ou reconecte pelo Embedded Signup.
         </p>
       ) : null}
 

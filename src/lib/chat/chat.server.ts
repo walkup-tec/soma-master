@@ -48,7 +48,10 @@ import { completeMetaEmbeddedSignup } from "@/lib/chat/meta-cloud/meta-cloud-com
 import { instanceIsMetaCloud } from "@/lib/chat/meta-cloud/meta-cloud.adapter";
 import { isMetaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constants";
 import { isMetaCloudConfigured, toPublicMetaEsConfig } from "@/lib/chat/meta-cloud/meta-config";
-import { unregisterSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-cloud-relay";
+import {
+  syncRegisteredCloudNumbersToWaba,
+  unregisterSomaCloudNumberOnWaba,
+} from "@/lib/chat/meta-cloud/waba-cloud-relay";
 import {
   createWhatsappInstance,
   deleteWhatsappInstance,
@@ -117,8 +120,10 @@ export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(asyn
   const user = await requireChatUser();
   const [conversations, aiSettings] = await Promise.all([listConversations(), getChatAiSettings()]);
   // Webhook só nas instâncias Evolution já cadastradas — não recria canal excluído.
+  // Números Cloud já conectados (antes do relay) precisam ser reenviados ao WABA.
   void listWhatsappInstances()
     .then(async (instances) => {
+      void syncRegisteredCloudNumbersToWaba(instances).catch(() => undefined);
       for (const item of instances) {
         if (instanceIsMetaCloud(item)) continue;
         await evolutionSetInstanceWebhook(
@@ -903,10 +908,14 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
   const config = getEvolutionPublicConfig();
   const instances = await listWhatsappInstances();
   const webhookUrl = getResolvedWebhookUrl(aiSettings.webhookPublicBaseUrl);
+  const cloudRelay = await syncRegisteredCloudNumbersToWaba(instances).catch(
+    () => new Map<string, { ok: boolean; error?: string }>(),
+  );
 
   const channels = await Promise.all(
     instances.map(async (item) => {
       const isCloud = instanceIsMetaCloud(item);
+      const relay = item.phoneNumberId ? cloudRelay.get(item.phoneNumberId) : undefined;
       const flash = isCloud ? null : takeEvolutionQrFlash(user.userId, item.instanceName);
       let state: EvolutionConnectionState = isCloud
         ? item.accessTokenEncrypted && item.phoneNumberId
@@ -934,6 +943,8 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
         verifiedName: item.verifiedName,
         phoneNumberId: item.phoneNumberId,
         wabaId: item.wabaId,
+        wabaRelayOk: isCloud ? (relay?.ok ?? false) : null,
+        wabaRelayError: isCloud ? (relay?.error ?? null) : null,
         state,
         qr: flash?.qr ?? {},
         error,
