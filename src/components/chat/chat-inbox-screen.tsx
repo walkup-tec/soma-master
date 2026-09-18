@@ -527,7 +527,7 @@ export function ChatInboxScreen({
   // Poll rápido do thread aberto + lista em paralelo (antes era 5s em série = atraso perceptível).
   useEffect(() => {
     const THREAD_POLL_MS = 2_000;
-    const LIST_POLL_MS = 4_000;
+    const LIST_POLL_MS = 6_000;
 
     const refreshThread = () => {
       if (!selectedId || document.visibilityState !== "visible") return;

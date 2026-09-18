@@ -16,11 +16,12 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
-    // Intent preload no sidebar: dados ficam frescos e NÃO são refetchados no clique.
     defaultPreload: "intent",
     defaultPreloadStaleTime: 30_000,
-    defaultPendingMs: 120,
-    defaultPendingMinMs: 200,
+    defaultStaleTime: 30_000,
+    // Não troca menu/topo por spinner em navegações de <0,5s.
+    defaultPendingMs: 500,
+    defaultPendingMinMs: 0,
   });
 
   return router;

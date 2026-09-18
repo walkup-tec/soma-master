@@ -795,28 +795,22 @@ async function saveSystemSettingsToPostgres(
 }
 
 export async function loadSystemSettingsFromDisk(): Promise<SystemSettings> {
+  if (cachedSettings) return cachedSettings;
+
   if (isDatabaseEnabled()) {
-    if (!cachedSettings) {
-      cachedSettings = await loadSystemSettingsFromPostgres();
-    }
-    // Reaplica normalize para migrações de menu (ex.: kanban após clientes).
-    cachedSettings = normalizeSettings(cachedSettings);
+    cachedSettings = await loadSystemSettingsFromPostgres();
     return cachedSettings;
   }
 
-  if (!cachedSettings) {
-    try {
-      const raw = await readFile(SETTINGS_FILE, "utf8");
-      cachedSettings = normalizeSettings({
-        ...DEFAULT_SYSTEM_SETTINGS,
-        ...JSON.parse(raw),
-      } as SystemSettings);
-    } catch {
-      cachedSettings = normalizeSettings(DEFAULT_SYSTEM_SETTINGS);
-    }
+  try {
+    const raw = await readFile(SETTINGS_FILE, "utf8");
+    cachedSettings = normalizeSettings({
+      ...DEFAULT_SYSTEM_SETTINGS,
+      ...JSON.parse(raw),
+    } as SystemSettings);
+  } catch {
+    cachedSettings = normalizeSettings(DEFAULT_SYSTEM_SETTINGS);
   }
-
-  cachedSettings = normalizeSettings(cachedSettings);
   return cachedSettings;
 }
 

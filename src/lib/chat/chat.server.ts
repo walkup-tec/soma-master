@@ -13,6 +13,7 @@ import {
   listAiExamples,
   listAiKnowledge,
   listConversations,
+  listConversationAlertSnapshot,
   getOrCreateConversationByPhone,
   listMessages,
   listMessagesPage,
@@ -154,7 +155,7 @@ export const listChatConversationsFn = createServerFn({ method: "GET" }).handler
  */
 export const getChatbotIncomingAlertFn = createServerFn({ method: "GET" }).handler(async () => {
   const user = await requireChatUser();
-  const conversations = await listConversations(80);
+  const conversations = await listConversationAlertSnapshot(80);
   const unreadByConversationId: Record<string, number> = {};
   for (const conversation of conversations) {
     if (conversation.unreadCount > 0) {
@@ -762,8 +763,7 @@ export const setChatClientStatusFn = createServerFn({ method: "POST" })
       data.statusId,
     );
 
-    const settingsAfter = await loadSystemSettingsFromDisk();
-    const label = settingsAfter.attendanceStatuses.find((s) => s.id === data.statusId)?.label ?? data.statusId;
+    const label = settings.attendanceStatuses.find((s) => s.id === data.statusId)?.label ?? data.statusId;
     await createClientAttendance({
       clientId: conversation.clientId,
       userId: user.userId,

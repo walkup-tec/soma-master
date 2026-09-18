@@ -46,6 +46,7 @@ import {
   listClientsPageForUser,
   updateClientCadastro,
   updateClientStatus,
+  applyClientStatusUpdate,
 } from "@/lib/clients/clients.repository";
 import { loadSystemSettingsFromDisk } from "@/lib/config/settings.repository";
 import { findUserById } from "@/lib/users/user.repository";
@@ -419,17 +420,12 @@ export const updateClientStatusFn = createServerFn({ method: "POST" })
     );
     if (!previous) throw new Error("Cliente não encontrado.");
 
-    const client = await updateClientStatus(
-      data.clientId,
-      user.userId,
-      user.role === "master",
-      data.status,
-    );
+    await applyClientStatusUpdate(data.clientId, data.status);
+    const client = { ...previous, status: data.status };
 
     const statusLabel = resolveAttendanceStatusLabel(data.status, settings);
     const previousLabel = resolveAttendanceStatusLabel(previous.status, settings);
-    const author = await findUserById(user.userId);
-    const userName = author?.name ?? author?.email ?? "Usuário";
+    const userName = user.name || user.email || "Usuário";
 
     const statusConfig = attendanceStatuses(settings).find((item) => item.id === data.status);
     const autoReturnDays = statusConfig?.autoReturnDays ?? null;

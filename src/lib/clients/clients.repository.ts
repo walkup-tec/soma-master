@@ -1479,6 +1479,26 @@ export async function getDashboardSummaryForUser(
   return getDashboardSummaryFromDisk(userId, isMaster);
 }
 
+export async function applyClientStatusUpdate(clientId: string, status: string): Promise<void> {
+  const trimmed = status.trim();
+  if (!trimmed) throw new Error("Status inválido.");
+
+  if (isDatabaseEnabled()) {
+    const sql = await getSql();
+    await sql`
+      update crm.clients
+      set status = ${trimmed}, updated_at = now()
+      where id = ${clientId}
+    `;
+    return;
+  }
+
+  const clients = await readClientsFromDisk();
+  await writeClientsToDisk(
+    clients.map((item) => (item.id === clientId ? { ...item, status: trimmed } : item)),
+  );
+}
+
 export async function updateClientStatus(
   clientId: string,
   userId: string,
@@ -1490,22 +1510,7 @@ export async function updateClientStatus(
 
   const client = await getClientByIdForUser(clientId, userId, isMaster);
   if (!client) throw new Error("Cliente não encontrado.");
-
-  if (isDatabaseEnabled()) {
-    const sql = await getSql();
-    await sql`
-      update crm.clients
-      set status = ${trimmed}
-      where id = ${clientId}
-    `;
-    return { ...client, status: trimmed };
-  }
-
-  const clients = await readClientsFromDisk();
-  const next = clients.map((item) =>
-    item.id === clientId ? { ...item, status: trimmed } : item,
-  );
-  await writeClientsToDisk(next);
+  await applyClientStatusUpdate(clientId, trimmed);
   return { ...client, status: trimmed };
 }
 

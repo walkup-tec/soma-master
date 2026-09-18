@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { getChatbotIncomingAlertFn } from "@/lib/chat/chat.server";
 
@@ -45,7 +46,8 @@ const EMPTY: ChatbotAlertState = {
 
 const ChatbotAlertContext = createContext<ChatbotAlertState>(EMPTY);
 
-const POLL_MS = 3_000;
+const CHAT_POLL_MS = 4_000;
+const GLOBAL_POLL_MS = 10_000;
 const NEW_CONTACT_HOLD_MS = 45_000;
 
 type UnreadMap = Record<string, number>;
@@ -92,6 +94,10 @@ export function ChatbotAlertProvider({
   children: ReactNode;
 }) {
   const fetchAlert = useServerFn(getChatbotIncomingAlertFn);
+  const onChatPage = useRouterState({
+    select: (state) => state.location.pathname.startsWith("/app/chat"),
+  });
+  const pollMs = onChatPage ? CHAT_POLL_MS : GLOBAL_POLL_MS;
   const [newContactActive, setNewContactActive] = useState(false);
   const [unreadMessageActive, setUnreadMessageActive] = useState(false);
   const [awaitingAssignedActive, setAwaitingAssignedActive] = useState(false);
@@ -197,7 +203,7 @@ export function ChatbotAlertProvider({
     void refresh();
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
-    }, POLL_MS);
+    }, pollMs);
     const holdTick = window.setInterval(() => {
       if (Date.now() < newContactUntilRef.current) {
         setTick((n) => n + 1);
@@ -215,7 +221,7 @@ export function ChatbotAlertProvider({
       window.clearInterval(holdTick);
       window.removeEventListener("focus", onFocus);
     };
-  }, [enabled, refresh]);
+  }, [enabled, refresh, pollMs]);
 
   const value = useMemo<ChatbotAlertState>(
     () => ({

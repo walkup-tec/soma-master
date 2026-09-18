@@ -155,18 +155,19 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
     set assigned_at = coalesce(assigned_at, updated_at, created_at, now())
     where assigned_user_id is not null and assigned_at is null
   `;
+  await sql`
+    create index if not exists idx_chat_messages_conversation_agent
+    on crm.chat_messages (conversation_id, sender_user_id)
+    where sender_type = 'agent' and sender_user_id is not null
+  `;
 }
 
 /** Tabelas do Chat WhatsApp + educação da IA. */
 export async function ensureChatSchema(sql: Sql): Promise<void> {
   const g = globalThis as { __somaChatSchemaEnsured?: boolean };
 
-  if (ensured || g.__somaChatSchemaEnsured) {
-    await ensureChatMigrations(sql);
-    ensured = true;
-    g.__somaChatSchemaEnsured = true;
-    return;
-  }
+  // Uma vez por processo: ALTER/INDEX em todo poll do Inbox travava páginas e o menu.
+  if (ensured || g.__somaChatSchemaEnsured) return;
 
   await sql`create schema if not exists crm`;
 

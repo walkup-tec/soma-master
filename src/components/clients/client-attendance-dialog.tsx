@@ -189,6 +189,8 @@ export function ClientAttendanceDialog({
   const handleStatusChange = async (nextStatus: string) => {
     if (!clientId || nextStatus === statusValue) return;
 
+    const previousStatus = statusValue;
+    setStatusValue(nextStatus);
     setSavingStatus(true);
     try {
       const result = await updateStatus({ data: { clientId, status: nextStatus } });
@@ -209,6 +211,7 @@ export function ClientAttendanceDialog({
         toast.success("Status atualizado e registrado no histórico.");
       }
     } catch (error) {
+      setStatusValue(previousStatus);
       toast.error(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
     } finally {
       setSavingStatus(false);

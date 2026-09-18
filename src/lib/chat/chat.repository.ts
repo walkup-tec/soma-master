@@ -120,6 +120,7 @@ function mapConv(row: ConvRow): ChatConversation {
 }
 
 async function enrichConversations(items: ChatConversation[]): Promise<ChatConversation[]> {
+  if (!items.some((item) => item.clientStatusId)) return items;
   const settings = await loadSystemSettingsFromDisk();
   return items.map((item) => {
     const statusId = item.clientStatusId;
@@ -193,6 +194,66 @@ export async function listConversations(limit = 80): Promise<ChatConversation[]>
       }),
     }));
   return enrichConversations(sliced);
+}
+
+export type ChatConversationAlertRow = {
+  id: string;
+  unreadCount: number;
+  assignedUserId: string | null;
+  awaitingAgentReply: boolean;
+  createdAt: string;
+};
+
+/** Lista leve para o sino/menu — sem join de cliente/produto. */
+export async function listConversationAlertSnapshot(
+  limit = 80,
+): Promise<ChatConversationAlertRow[]> {
+  if (isDatabaseEnabled()) {
+    const rows = await withChatDb((sql) => sql<{
+      id: string;
+      unread_count: number;
+      assigned_user_id: string | null;
+      awaiting_agent_reply: boolean;
+      created_at: Date;
+    }[]>`
+      select
+        c.id,
+        c.unread_count,
+        c.assigned_user_id,
+        c.created_at,
+        (
+          c.assigned_user_id is not null
+          and not exists (
+            select 1
+            from crm.chat_messages m
+            where m.conversation_id = c.id
+              and m.sender_type = 'agent'
+              and m.sender_user_id is not null
+              and m.sender_user_id = c.assigned_user_id
+              and (c.assigned_at is null or m.created_at >= c.assigned_at)
+          )
+        ) as awaiting_agent_reply
+      from crm.chat_conversations c
+      order by c.last_message_at desc nulls last, c.updated_at desc
+      limit ${limit}
+    `);
+    return rows.map((row) => ({
+      id: row.id,
+      unreadCount: row.unread_count,
+      assignedUserId: row.assigned_user_id,
+      awaitingAgentReply: row.awaiting_agent_reply === true,
+      createdAt: row.created_at.toISOString(),
+    }));
+  }
+
+  const conversations = await listConversations(limit);
+  return conversations.map((item) => ({
+    id: item.id,
+    unreadCount: item.unreadCount,
+    assignedUserId: item.assignedUserId,
+    awaitingAgentReply: item.awaitingAgentReply === true,
+    createdAt: item.createdAt,
+  }));
 }
 
 async function fetchConversationById(conversationId: string): Promise<ChatConversation | null> {
