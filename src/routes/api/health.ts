@@ -5,6 +5,18 @@ import { createFileRoute } from "@tanstack/react-router";
  * subiu (drift de boot id) e recarregar a tela com segurança.
  */
 const SERVER_BOOT_ID = crypto.randomUUID();
+const SOMA_SERVICE_ID = "soma-gestao-interno";
+
+let shuttingDown = false;
+
+function markSomaShuttingDown() {
+  shuttingDown = true;
+}
+
+if (typeof process !== "undefined" && typeof process.once === "function") {
+  process.once("SIGTERM", markSomaShuttingDown);
+  process.once("SIGINT", markSomaShuttingDown);
+}
 
 /** Liveness para healthcheck Easypanel/Traefik — sem auth e sem DB. */
 export const Route = createFileRoute("/api/health")({
@@ -13,11 +25,16 @@ export const Route = createFileRoute("/api/health")({
       GET: async () =>
         Response.json(
           {
-            ok: true,
-            service: "soma-gestao-interno",
+            ok: !shuttingDown,
+            shuttingDown,
+            service: SOMA_SERVICE_ID,
+            projectId: SOMA_SERVICE_ID,
             serverBootId: SERVER_BOOT_ID,
           },
-          { status: 200, headers: { "Cache-Control": "no-store" } },
+          {
+            status: shuttingDown ? 503 : 200,
+            headers: { "Cache-Control": "no-store" },
+          },
         ),
     },
   },

@@ -4,30 +4,30 @@
  * REGRA (obrigatória):
  * - Só no host de produção Easypanel: app.somaconecta.com.br
  * - Nunca em localhost, IP, preview ou outros domínios
- * - Só após já ter visto health OK (evita modal em cold start)
- * - Overlay imediato só para 502–504 / JSON Traefik bad-gateway
- * - Drift de serverBootId exige 2 sondas consecutivas (anti multi-réplica)
+ * - Só após já ter visto health OK do serviço soma-gestao-interno
+ * - Modal SOMENTE no deploy/redeploy da própria Soma
+ * - 502–504 / Traefik / falha de rede (ex.: Redeploy do WABA) NÃO abrem o modal
+ * - Gatilhos válidos: shuttingDown do /api/health desta Soma, ou drift de serverBootId
+ *   com service === "soma-gestao-interno"
  * - Em host não-produção: desregistra qualquer SW legado
  */
 export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   var POLL_MS = 2000;
   var WATCH_MS = 4000;
   var STABLE_PROBES_REQUIRED = 3;
-  var FAILURE_PROBES_REQUIRED = 2;
   var BOOT_ID_DRIFT_REQUIRED = 2;
   var COMPLETE_RELOAD_DELAY_MS = 600;
   var LONG_WAIT_MS = 120000;
   var OVERLAY_ID = "soma-deploy-overlay";
-  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=6";
+  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=7";
   var PRODUCTION_HOST = "app.somaconecta.com.br";
+  var EXPECTED_SERVICE = "soma-gestao-interno";
 
   var pollTimer = null;
   var watchTimer = null;
-  var confirmFailureTimer = null;
   var recoveryActive = false;
   var pollStartedAt = 0;
   var stableStreak = 0;
-  var failureStreak = 0;
   var bootDriftStreak = 0;
   var baselineBootId = "";
   var hasSeenHealthy = false;
@@ -37,18 +37,16 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     return host === PRODUCTION_HOST;
   }
 
-  /** Só Traefik/Easypanel bad-gateway — NÃO genérico "Not Found". */
-  function looksLikeGatewayPayload(data, status) {
-    if (status >= 502 && status <= 504) return true;
-    if (status !== 404 && status !== 503) return false;
-    if (!data || typeof data !== "object") return false;
-    var message = "";
-    try {
-      message = JSON.stringify(data);
-    } catch (_) {
-      return false;
-    }
-    return /bad-gateway|Cannot GET \\/api\\/errors\\/bad-gateway/i.test(message);
+  function isOwnSomaService(data) {
+    return Boolean(data && String(data.service || "") === EXPECTED_SERVICE);
+  }
+
+  function isDeployShutdownSignal(data) {
+    return Boolean(data && isOwnSomaService(data) && data.shuttingDown === true);
+  }
+
+  function isGatewayStatus(status) {
+    return status >= 502 && status <= 504;
   }
 
   function ensureStyles() {
@@ -147,16 +145,26 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
       } catch (_) {
         data = null;
       }
-      if (looksLikeGatewayPayload(data, response.status) || (response.status >= 502 && response.status <= 504)) {
-        return { stable: false, gateway: true };
+      if (isDeployShutdownSignal(data)) {
+        return { stable: false, deploySignal: true, reason: "shutdown" };
+      }
+      if (isGatewayStatus(response.status)) {
+        return { stable: false, deploySignal: false, reason: "gateway" };
       }
       if (!response.ok || !data || data.ok !== true) {
-        return { stable: false, gateway: false };
+        return { stable: false, deploySignal: false, reason: "unhealthy" };
       }
-      return { stable: true, gateway: false, bootId: String(data.serverBootId || "") };
+      if (!isOwnSomaService(data)) {
+        return { stable: false, deploySignal: false, reason: "foreign_service" };
+      }
+      return {
+        stable: true,
+        deploySignal: false,
+        reason: "ok",
+        bootId: String(data.serverBootId || ""),
+      };
     } catch (_) {
-      // Rede/abort local ≠ Traefik bad-gateway; exige streak, não overlay imediato.
-      return { stable: false, gateway: false };
+      return { stable: false, deploySignal: false, reason: "network" };
     }
   }
 
@@ -190,44 +198,25 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
 
   function startRecovery() {
     if (!isProductionHost()) return;
-    // Sem baseline saudável: não é redeploy — evita modal em first paint / cold start.
     if (!hasSeenHealthy) return;
     if (recoveryActive) return;
-    if (confirmFailureTimer) {
-      window.clearTimeout(confirmFailureTimer);
-      confirmFailureTimer = null;
-    }
     recoveryActive = true;
     pollStartedAt = Date.now();
     stableStreak = 0;
     void pollUntilReady();
   }
 
-  function confirmProductionDeployFailure(_isGateway) {
-    if (!isProductionHost() || recoveryActive) return;
-    if (!hasSeenHealthy) return;
-    failureStreak += 1;
-    if (failureStreak >= FAILURE_PROBES_REQUIRED) {
-      startRecovery();
-      return;
-    }
-    if (!confirmFailureTimer) {
-      confirmFailureTimer = window.setTimeout(function () {
-        confirmFailureTimer = null;
-        void watchInBackground();
-      }, POLL_MS);
-    }
-  }
-
   async function watchInBackground() {
     if (!isProductionHost() || recoveryActive) return;
     var probe = await probeHealth();
-    if (!probe.stable) {
-      bootDriftStreak = 0;
-      confirmProductionDeployFailure(Boolean(probe.gateway));
+    if (probe.deploySignal) {
+      startRecovery();
       return;
     }
-    failureStreak = 0;
+    if (!probe.stable) {
+      bootDriftStreak = 0;
+      return;
+    }
     hasSeenHealthy = true;
     if (!baselineBootId && probe.bootId) {
       baselineBootId = probe.bootId;
@@ -236,12 +225,8 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     }
     if (baselineBootId && probe.bootId && probe.bootId !== baselineBootId) {
       bootDriftStreak += 1;
-      // Multi-réplica pode devolver bootIds diferentes; exige confirmação.
       if (bootDriftStreak >= BOOT_ID_DRIFT_REQUIRED && hasSeenHealthy) {
-        showOverlay();
-        setPhase("stabilizing");
-        recoveryActive = true;
-        window.setTimeout(completeRecovery, 900);
+        startRecovery();
       }
       return;
     }
@@ -257,7 +242,6 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     }).catch(function () {});
   }
 
-  // Fora de produção: limpa SW antigo e NÃO liga watch/modal.
   if (!isProductionHost()) {
     unregisterLegacyServiceWorkers();
     return;
@@ -282,7 +266,6 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
         if (probe.bootId) baselineBootId = probe.bootId;
         return;
       }
-      // Primeira carga sem health OK: não abre modal (não é redeploy).
     });
     watchTimer = window.setInterval(function () {
       void watchInBackground();
