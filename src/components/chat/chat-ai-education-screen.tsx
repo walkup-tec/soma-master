@@ -1,5 +1,7 @@
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, ChevronDown, Plus, Save, Trash2 } from "lucide-react";
 import type { ChatAiExample, ChatAiKnowledgeItem, ChatAiSettings } from "@/lib/chat/chat.types";
+import { cn } from "@/lib/utils";
 
 type EducationPayload = {
   settings: ChatAiSettings;
@@ -18,6 +20,62 @@ const inputClass =
   "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 const textareaClass =
   "flex min-h-[90px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
+function isLongText(value: string): boolean {
+  const text = String(value || "");
+  return text.length > 220 || text.split("\n").length > 4;
+}
+
+function KnowledgeItem({
+  item,
+  returnPath,
+}: {
+  item: ChatAiKnowledgeItem;
+  returnPath: string;
+}) {
+  const long = isLongText(item.content);
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <li className="rounded-lg border border-border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">{item.title}</p>
+          <div
+            className={cn(
+              "mt-1 text-xs text-muted-foreground",
+              expanded
+                ? "max-h-40 overflow-y-auto whitespace-pre-wrap pr-1"
+                : long
+                  ? "line-clamp-3 whitespace-pre-wrap"
+                  : "whitespace-pre-wrap",
+            )}
+          >
+            {item.content}
+          </div>
+          {long ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-primary hover:underline"
+              onClick={() => setExpanded((open) => !open)}
+            >
+              <ChevronDown className={cn("size-3.5 transition-transform", expanded && "rotate-180")} />
+              {expanded ? "Ver menos" : "Ver mais"}
+            </button>
+          ) : null}
+        </div>
+        <form method="post" action="/api/settings/chatbot/education">
+          <input type="hidden" name="kind" value="delete-knowledge" />
+          {returnPath ? <input type="hidden" name="returnPath" value={returnPath} /> : null}
+          <input type="hidden" name="id" value={item.id} />
+          <button type="submit" className={btnGhostDanger} title="Remover">
+            <Trash2 className="size-4" aria-hidden />
+          </button>
+        </form>
+      </div>
+    </li>
+  );
+}
 
 export function ChatAiEducationScreen({
   initial,
@@ -155,24 +213,7 @@ export function ChatAiEducationScreen({
         </form>
         <ul className="space-y-2">
           {knowledge.map((item) => (
-            <li key={item.id} className="rounded-lg border border-border p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold">{item.title}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
-                    {item.content}
-                  </p>
-                </div>
-                <form method="post" action="/api/settings/chatbot/education">
-                  <input type="hidden" name="kind" value="delete-knowledge" />
-                  {returnPath ? <input type="hidden" name="returnPath" value={returnPath} /> : null}
-                  <input type="hidden" name="id" value={item.id} />
-                  <button type="submit" className={btnGhostDanger} title="Remover">
-                    <Trash2 className="size-4" aria-hidden />
-                  </button>
-                </form>
-              </div>
-            </li>
+            <KnowledgeItem key={item.id} item={item} returnPath={returnPath} />
           ))}
         </ul>
       </div>
