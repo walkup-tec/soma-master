@@ -33,7 +33,7 @@ const TITLES: Record<string, string> = {
   "/app/remarketing": "Remarketing",
   "/app/agenda": "Agenda & Follow-up",
   "/app/chat": "Chat WhatsApp",
-  "/app/marketing": "Funil e WhatsApp",
+  "/app/marketing": "Funil",
   "/app/bots": "Bots",
   "/app/usuarios": "Usuários",
   "/app/push": "Push",

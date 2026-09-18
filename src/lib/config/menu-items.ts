@@ -122,7 +122,7 @@ export const MENU_ITEMS: MenuItemDefinition[] = [
   },
   {
     id: "marketing",
-    label: "Funil e WhatsApp",
+    label: "Funil",
     section: "producao-propria",
     group: "Funil e WhatsApp",
     path: "/app/marketing",

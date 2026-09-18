@@ -31,14 +31,6 @@ function resolveIntegrationKey(): string {
   return String(process.env.SOMA_WABA_INTEGRATION_KEY || "").trim();
 }
 
-/** URL pública do proxy de avatar do WABA (não exige sessão). */
-export function wabaAvatarProxyUrl(profilePicUrl: string): string | null {
-  const base = resolveWabaBaseUrl();
-  const pic = String(profilePicUrl || "").trim();
-  if (!base || !pic) return null;
-  return `${base}/instancias/avatar?url=${encodeURIComponent(pic)}`;
-}
-
 function isConnectedInstance(item: WabaAquecedorInstance): boolean {
   const status = String(item.connectionStatus || "").trim().toLowerCase();
   return status === "open" || status.includes("open") || status === "connected";

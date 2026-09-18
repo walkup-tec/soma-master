@@ -9,7 +9,7 @@ async function requireMarketingAccess() {
   const user = session.data;
   if (!user?.userId) throw new Error("Não autenticado.");
   if (!sessionCanAccessMenu(user, "marketing")) {
-    throw new Error("Sem permissão para Funil e WhatsApp.");
+    throw new Error("Sem permissão para Funil.");
   }
   return user;
 }
