@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  BadgeCheck,
   Bot,
   Clock3,
   GraduationCap,
@@ -17,13 +16,24 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ChatAiEducationScreen } from "@/components/chat/chat-ai-education-screen";
+import { WhatsAppOutlineIcon } from "@/components/chat/whatsapp-outline-icon";
 import { ChatbotTagsSettings } from "@/components/settings/chatbot-tags-settings";
 import { ChatbotRuntimeSettings } from "@/components/settings/chatbot-runtime-settings";
 import { MetaCloudSignupPanel } from "@/components/settings/meta-cloud-signup-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChatAiExample, ChatAiKnowledgeItem, ChatAiSettings } from "@/lib/chat/chat.types";
 import type { EvolutionConnectionState, EvolutionQrPayload } from "@/lib/chat/evolution.adapter";
@@ -180,6 +190,7 @@ function ChannelCard({
   const [localMsg, setLocalMsg] = useState<string | null>(null);
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [integratedAlert, setIntegratedAlert] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isCloud = channel.provider === "meta_cloud";
 
@@ -308,7 +319,7 @@ function ChannelCard({
 
   async function runDelete() {
     if (!canDelete) return;
-    if (!window.confirm(`Excluir o canal "${channel.label}" (${channel.instanceName})?`)) return;
+    setConfirmDelete(false);
     setBusy("delete");
     setLocalErr(null);
     try {
@@ -323,6 +334,7 @@ function ChannelCard({
   }
 
   return (
+    <>
     <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -422,7 +434,7 @@ function ChannelCard({
           size="sm"
           disabled={!canDelete || busy !== null}
           className="cursor-pointer text-destructive hover:text-destructive"
-          onClick={() => void runDelete()}
+          onClick={() => setConfirmDelete(true)}
         >
           <Trash2 className="size-4" />
           {busy === "delete" ? "Excluindo…" : "Excluir"}
@@ -457,6 +469,31 @@ function ChannelCard({
         </div>
       ) : null}
     </div>
+
+    <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir canal?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Excluir o canal &quot;{channel.label}&quot; ({channel.instanceName})? Esta ação não pode
+            ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="cursor-pointer">Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="cursor-pointer bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={(event) => {
+              event.preventDefault();
+              void runDelete();
+            }}
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
@@ -506,8 +543,8 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center justify-between gap-2 font-display text-base">
               <span className="flex items-center gap-2">
-                <BadgeCheck className="size-4 text-primary" />
-                Embedded Signup
+                <WhatsAppOutlineIcon className="size-4 text-primary" />
+                API Oficial
               </span>
               {cloudChannels.length > 0 ? (
                 <Badge variant="secondary">
@@ -524,7 +561,7 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
             />
             {cloudChannels.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                Nenhum número oficial conectado. Use o Embedded Signup acima para adicionar o
+                Nenhum número oficial conectado. Use a API Oficial acima para adicionar o
                 primeiro — e os próximos.
               </p>
             ) : (
@@ -549,7 +586,7 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
             <CardTitle className="flex items-center justify-between gap-2 font-display text-base">
               <span className="flex items-center gap-2">
                 <QrCode className="size-4 text-primary" />
-                Evolution (QR Code)
+                WhatsApp Business (QR Code)
               </span>
               {evolutionChannels.length > 0 ? (
                 <Badge variant="secondary">
@@ -558,11 +595,6 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
                 </Badge>
               ) : null}
             </CardTitle>
-            <CardDescription>
-              Instâncias <code className="text-xs">soma-*</code> via leitura de QR no WhatsApp.
-              Adicione quantos canais precisar; o ChatBot atende todas as instâncias conectadas em
-              paralelo.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {!evo.configured ? (
