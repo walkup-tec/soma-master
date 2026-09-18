@@ -1,36 +1,43 @@
 /**
  * Resiliência de deploy — overlay "ATUALIZANDO O SISTEMA".
  *
- * REGRA (obrigatória):
+ * REGRA:
  * - Só no host de produção Easypanel: app.somaconecta.com.br
  * - Nunca em localhost, IP, preview ou outros domínios
  * - Só após já ter visto health OK do serviço soma-gestao-interno
- * - Modal SOMENTE no deploy/redeploy da própria Soma
- * - 502–504 / Traefik / falha de rede (ex.: Redeploy do WABA) NÃO abrem o modal
- * - Gatilhos válidos: shuttingDown do /api/health desta Soma, ou drift de serverBootId
- *   com service === "soma-gestao-interno"
+ * - Modal SOMENTE no deploy/redeploy da própria Soma (este host aponta
+ *   só para soma-promotora/gestao-interno)
+ * - Gatilhos:
+ *   1. shuttingDown no /api/health desta Soma (SIGTERM do Easypanel)
+ *   2. 502–504 consecutivos neste host (Traefik já tirou o container)
+ *   3. drift de serverBootId do serviço soma-gestao-interno
+ * - Falha de rede isolada / 502 de um único poll (blip) NÃO abre o modal
  * - Em host não-produção: desregistra qualquer SW legado
  */
 export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   var POLL_MS = 2000;
   var WATCH_MS = 4000;
   var STABLE_PROBES_REQUIRED = 3;
+  var FAILURE_PROBES_REQUIRED = 2;
   var BOOT_ID_DRIFT_REQUIRED = 2;
   var COMPLETE_RELOAD_DELAY_MS = 600;
   var LONG_WAIT_MS = 120000;
   var OVERLAY_ID = "soma-deploy-overlay";
-  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=7";
+  var SW_REGISTER_URL = "/sw-deploy-resilience.js?v=8";
   var PRODUCTION_HOST = "app.somaconecta.com.br";
   var EXPECTED_SERVICE = "soma-gestao-interno";
 
   var pollTimer = null;
   var watchTimer = null;
+  var confirmFailureTimer = null;
   var recoveryActive = false;
   var pollStartedAt = 0;
   var stableStreak = 0;
+  var failureStreak = 0;
   var bootDriftStreak = 0;
   var baselineBootId = "";
   var hasSeenHealthy = false;
+  var sawOwnOutage = false;
 
   function isProductionHost() {
     var host = String(window.location.hostname || "").toLowerCase();
@@ -38,7 +45,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
   }
 
   function isOwnSomaService(data) {
-    return Boolean(data && String(data.service || "") === EXPECTED_SERVICE);
+    return Boolean(data && String(data.service || data.projectId || "") === EXPECTED_SERVICE);
   }
 
   function isDeployShutdownSignal(data) {
@@ -58,8 +65,6 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     var style = document.createElement("style");
     style.id = STYLE_ID;
     style.setAttribute("data-version", STYLE_VERSION);
-    // Paleta fixa SOMA: magenta #be1c6a + lima #ecf759 só no texto de apoio.
-    // Sem troca de cor entre fases (deploying / stabilizing / complete).
     style.textContent =
       "#" + OVERLAY_ID + "{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(5,9,18,.94);backdrop-filter:blur(8px)}" +
       "#" + OVERLAY_ID + "[hidden]{display:none!important}" +
@@ -146,10 +151,13 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
         data = null;
       }
       if (isDeployShutdownSignal(data)) {
-        return { stable: false, deploySignal: true, reason: "shutdown" };
+        return { stable: false, deploySignal: true, reason: "shutdown", bootId: String(data.serverBootId || "") };
       }
       if (isGatewayStatus(response.status)) {
         return { stable: false, deploySignal: false, reason: "gateway" };
+      }
+      if (response.status === 503 && isOwnSomaService(data)) {
+        return { stable: false, deploySignal: true, reason: "unhealthy_own" };
       }
       if (!response.ok || !data || data.ok !== true) {
         return { stable: false, deploySignal: false, reason: "unhealthy" };
@@ -176,7 +184,11 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
       hasSeenHealthy = true;
       stableStreak += 1;
       setPhase("stabilizing");
-      if (stableStreak >= STABLE_PROBES_REQUIRED || (baselineBootId && probe.bootId && probe.bootId !== baselineBootId)) {
+      if (
+        stableStreak >= STABLE_PROBES_REQUIRED ||
+        sawOwnOutage ||
+        (baselineBootId && probe.bootId && probe.bootId !== baselineBootId)
+      ) {
         completeRecovery();
         return;
       }
@@ -200,24 +212,59 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     if (!isProductionHost()) return;
     if (!hasSeenHealthy) return;
     if (recoveryActive) return;
+    if (confirmFailureTimer) {
+      window.clearTimeout(confirmFailureTimer);
+      confirmFailureTimer = null;
+    }
     recoveryActive = true;
     pollStartedAt = Date.now();
     stableStreak = 0;
     void pollUntilReady();
   }
 
+  function noteOwnOutage() {
+    if (!hasSeenHealthy) return;
+    sawOwnOutage = true;
+    bootDriftStreak = 0;
+    failureStreak += 1;
+    if (failureStreak >= FAILURE_PROBES_REQUIRED) {
+      startRecovery();
+      return;
+    }
+    if (!confirmFailureTimer) {
+      confirmFailureTimer = window.setTimeout(function () {
+        confirmFailureTimer = null;
+        void watchInBackground();
+      }, POLL_MS);
+    }
+  }
+
   async function watchInBackground() {
     if (!isProductionHost() || recoveryActive) return;
     var probe = await probeHealth();
     if (probe.deploySignal) {
+      if (hasSeenHealthy) sawOwnOutage = true;
       startRecovery();
       return;
     }
     if (!probe.stable) {
+      if (probe.reason === "gateway" || probe.reason === "unhealthy") {
+        noteOwnOutage();
+        return;
+      }
       bootDriftStreak = 0;
       return;
     }
+    failureStreak = 0;
+    if (confirmFailureTimer) {
+      window.clearTimeout(confirmFailureTimer);
+      confirmFailureTimer = null;
+    }
     hasSeenHealthy = true;
+    if (sawOwnOutage) {
+      startRecovery();
+      return;
+    }
     if (!baselineBootId && probe.bootId) {
       baselineBootId = probe.bootId;
       bootDriftStreak = 0;
@@ -225,7 +272,7 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
     }
     if (baselineBootId && probe.bootId && probe.bootId !== baselineBootId) {
       bootDriftStreak += 1;
-      if (bootDriftStreak >= BOOT_ID_DRIFT_REQUIRED && hasSeenHealthy) {
+      if (bootDriftStreak >= BOOT_ID_DRIFT_REQUIRED) {
         startRecovery();
       }
       return;
@@ -264,7 +311,6 @@ export const SOMA_DEPLOY_RESILIENCE_BOOTSTRAP_SCRIPT = `(function () {
       if (probe.stable) {
         hasSeenHealthy = true;
         if (probe.bootId) baselineBootId = probe.bootId;
-        return;
       }
     });
     watchTimer = window.setInterval(function () {
