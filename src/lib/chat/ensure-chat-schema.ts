@@ -103,6 +103,16 @@ async function ensureChatMigrations(sql: Sql): Promise<void> {
     where phone_number_id is not null
   `;
   await sql`
+    update crm.chat_whatsapp_instances
+    set label = 'API Oficial 01', updated_at = now()
+    where (
+      phone_number_id = '1366741479851916'
+      or instance_name = 'meta-1366741479851916'
+      or phone = '5551926361688'
+    )
+    and label is distinct from 'API Oficial 01'
+  `;
+  await sql`
     alter table crm.chat_conversations
     add column if not exists instance_name text null
   `;
