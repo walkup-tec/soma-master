@@ -83,9 +83,11 @@ function loadFacebookSdk(config: MetaPublicConfig): Promise<void> {
 export function MetaCloudSignupPanel({
   configured,
   onConnected,
+  hasExisting = false,
 }: {
   configured: boolean;
   onConnected: () => Promise<void>;
+  hasExisting?: boolean;
 }) {
   const loadConfig = useServerFn(getMetaEmbeddedSignupConfigFn);
   const complete = useServerFn(completeMetaEmbeddedSignupFn);
@@ -244,18 +246,7 @@ export function MetaCloudSignupPanel({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-      <div className="flex items-start gap-2">
-        <BadgeCheck className="mt-0.5 size-4 text-primary" />
-        <div>
-          <p className="font-display text-sm font-semibold">Número oficial (Cloud API)</p>
-          <p className="text-xs text-muted-foreground">
-            Embedded Signup do App Meta do Drax. O número sai do WhatsApp pessoal/QR e passa a
-            atender o ChatBot pela API oficial (janela de 24h). Respostas dos leads chegam pelo
-            webhook já autorizado no WABA.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="min-w-0 flex-1 space-y-1.5">
           <span className="text-sm font-medium">Nome do canal (opcional)</span>
@@ -268,7 +259,7 @@ export function MetaCloudSignupPanel({
         </label>
         <Button type="button" className="cursor-pointer" disabled={busy} onClick={() => void startSignup()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <BadgeCheck className="size-4" />}
-          {busy ? "Conectando…" : "Conectar número oficial"}
+          {busy ? "Conectando…" : hasExisting ? "Conectar outro número" : "Conectar número oficial"}
         </Button>
       </div>
       {localErr ? (

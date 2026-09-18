@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
+  BadgeCheck,
   Bot,
   Clock3,
   GraduationCap,
@@ -21,6 +22,7 @@ import { ChatbotRuntimeSettings } from "@/components/settings/chatbot-runtime-se
 import { MetaCloudSignupPanel } from "@/components/settings/meta-cloud-signup-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChatAiExample, ChatAiKnowledgeItem, ChatAiSettings } from "@/lib/chat/chat.types";
@@ -338,9 +340,6 @@ function ChannelCard({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isCloud ? (
-            <Badge variant="secondary">Cloud API</Badge>
-          ) : null}
           {state === "open" ? (
             <Wifi className="size-4 text-success" />
           ) : (
@@ -350,7 +349,7 @@ function ChannelCard({
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm sm:grid-cols-3">
+      <div className="grid gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">{isCloud ? "Provedor" : "API"}</p>
           <p className="font-medium">{isCloud ? "WhatsApp Cloud API" : (apiUrlHost ?? "—")}</p>
@@ -484,6 +483,9 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
           },
         ]
       : [];
+  const cloudChannels = channels.filter((channel) => channel.provider === "meta_cloud");
+  const evolutionChannels = channels.filter((channel) => channel.provider !== "meta_cloud");
+  const canDelete = channels.length > 1;
 
   async function handleCreate() {
     const name = label.trim();
@@ -495,7 +497,7 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
     try {
       await createInstance({ data: { label: name } });
       setLabel("");
-      toast.success("Canal adicionado");
+      toast.success("Canal Evolution adicionado — gere o QR Code para conectar o número.");
       await refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao adicionar canal");
@@ -505,66 +507,136 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
   }
 
   return (
-    <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-soft">
-      <div className="space-y-1.5 p-6">
-        <h4 className="flex items-center gap-2 font-display text-base font-semibold">
-          <QrCode className="size-4 text-primary" />
-          Conexão WhatsApp
-        </h4>
+    <div className="space-y-4">
+      <div>
+        <h4 className="font-display text-base font-semibold">Conexão WhatsApp</h4>
         <p className="text-sm text-muted-foreground">
-          Canais Evolution (<code className="text-xs">soma-*</code> + QR) e números oficiais (Cloud API
-          via Embedded Signup do Drax). O Chat atende os dois.
+          Dois jeitos de integrar números, lado a lado. O ChatBot atende simultaneamente todos os
+          canais oficiais e Evolution cadastrados — não há limite de um número só.
         </p>
       </div>
-      <div className="space-y-4 p-6 pt-0">
-        <MetaCloudSignupPanel configured={Boolean(evo.metaCloudConfigured)} onConnected={refresh} />
-        {!evo.configured ? (
-          <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-            Evolution não configurada. Defina <code className="text-xs">EVOLUTION_API_URL</code> e{" "}
-            <code className="text-xs">EVOLUTION_API_KEY</code> no <code className="text-xs">.env.local</code> e
-            reinicie o servidor.
-          </div>
-        ) : null}
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <label className="min-w-0 flex-1 space-y-1.5">
-            <span className="text-sm font-medium">Novo canal</span>
-            <Input
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
-              placeholder="Ex.: Comercial SP"
-              disabled={!evo.configured || creating}
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Card className="border-border/60 shadow-soft">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between gap-2 font-display text-base">
+              <span className="flex items-center gap-2">
+                <BadgeCheck className="size-4 text-primary" />
+                Embedded Signup
+              </span>
+              {cloudChannels.length > 0 ? (
+                <Badge variant="secondary">
+                  {cloudChannels.length} {cloudChannels.length === 1 ? "número" : "números"}
+                </Badge>
+              ) : null}
+            </CardTitle>
+            <CardDescription>
+              API oficial (Cloud API) pelo App Meta do Drax. Cada número deixa o WhatsApp pessoal/QR
+              e passa a atender o ChatBot na janela de 24h. Conecte quantos números oficiais
+              precisar — o bot responde em todos ao mesmo tempo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <MetaCloudSignupPanel
+              configured={Boolean(evo.metaCloudConfigured)}
+              onConnected={refresh}
+              hasExisting={cloudChannels.length > 0}
             />
-          </label>
-          <Button
-            type="button"
-            className="cursor-pointer"
-            disabled={!evo.configured || creating || !label.trim()}
-            onClick={() => void handleCreate()}
-          >
-            <Plus className="size-4" />
-            {creating ? "Adicionando…" : "Adicionar instância"}
-          </Button>
-        </div>
+            {cloudChannels.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                Nenhum número oficial conectado. Use o Embedded Signup acima para adicionar o
+                primeiro — e os próximos.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {cloudChannels.map((channel) => (
+                  <ChannelCard
+                    key={channel.id}
+                    channel={channel}
+                    configured={evo.configured}
+                    apiUrlHost={evo.apiUrlHost}
+                    canDelete={canDelete}
+                    onChanged={refresh}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-        {channels.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum canal cadastrado ainda.</p>
-        ) : (
-          <div className="space-y-4">
-            {channels.map((channel) => (
-              <ChannelCard
-                key={channel.id}
-                channel={channel}
-                configured={evo.configured}
-                apiUrlHost={evo.apiUrlHost}
-                canDelete={channels.length > 1}
-                onChanged={refresh}
-              />
-            ))}
-          </div>
-        )}
+        <Card className="border-border/60 shadow-soft">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center justify-between gap-2 font-display text-base">
+              <span className="flex items-center gap-2">
+                <QrCode className="size-4 text-primary" />
+                Evolution (QR Code)
+              </span>
+              {evolutionChannels.length > 0 ? (
+                <Badge variant="secondary">
+                  {evolutionChannels.length}{" "}
+                  {evolutionChannels.length === 1 ? "instância" : "instâncias"}
+                </Badge>
+              ) : null}
+            </CardTitle>
+            <CardDescription>
+              Instâncias <code className="text-xs">soma-*</code> via leitura de QR no WhatsApp.
+              Adicione quantos canais precisar; o ChatBot atende todas as instâncias conectadas em
+              paralelo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!evo.configured ? (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+                Evolution não configurada. Defina <code className="text-xs">EVOLUTION_API_URL</code> e{" "}
+                <code className="text-xs">EVOLUTION_API_KEY</code> no{" "}
+                <code className="text-xs">.env.local</code> e reinicie o servidor.
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="min-w-0 flex-1 space-y-1.5">
+                <span className="text-sm font-medium">Novo canal</span>
+                <Input
+                  value={label}
+                  onChange={(event) => setLabel(event.target.value)}
+                  placeholder="Ex.: Comercial SP"
+                  disabled={!evo.configured || creating}
+                />
+              </label>
+              <Button
+                type="button"
+                className="cursor-pointer"
+                disabled={!evo.configured || creating || !label.trim()}
+                onClick={() => void handleCreate()}
+              >
+                <Plus className="size-4" />
+                {creating ? "Adicionando…" : "Adicionar instância"}
+              </Button>
+            </div>
+
+            {evolutionChannels.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                Nenhuma instância Evolution. Informe um nome e clique em Adicionar instância para
+                gerar o QR Code.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {evolutionChannels.map((channel) => (
+                  <ChannelCard
+                    key={channel.id}
+                    channel={channel}
+                    configured={evo.configured}
+                    apiUrlHost={evo.apiUrlHost}
+                    canDelete={canDelete}
+                    onChanged={refresh}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
-    </section>
+    </div>
   );
 }
 
