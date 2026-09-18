@@ -915,6 +915,9 @@ export async function evolutionDeleteInstance(instanceName: string): Promise<{
   if (result.ok || result.status === 404) {
     return { ok: true };
   }
+  if (/does not exist|not found|não exist/i.test(result.error || "")) {
+    return { ok: true };
+  }
   return { ok: false, error: result.error ?? `Falha ao excluir instância ${instance}` };
 }
 

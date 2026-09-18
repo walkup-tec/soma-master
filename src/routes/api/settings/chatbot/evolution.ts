@@ -16,9 +16,9 @@ import {
   getEvolutionPublicConfig,
 } from "@/lib/chat/evolution.adapter";
 import {
-  ensureDefaultWhatsappInstance,
   listWhatsappInstances,
 } from "@/lib/chat/whatsapp-instances.repository";
+import { instanceIsMetaCloud } from "@/lib/chat/meta-cloud/meta-cloud.adapter";
 import { clearEvolutionQrFlash, putEvolutionQrFlash, takeEvolutionQrFlash } from "@/lib/chat/evolution-qr-flash";
 
 function redirectChatbot(extra: Record<string, string> = {}): Response {
@@ -61,11 +61,13 @@ export const Route = createFileRoute("/api/settings/chatbot/evolution")({
             const base = String(form.get("webhookPublicBaseUrl") ?? "").trim();
             await saveChatAiSettings({ webhookPublicBaseUrl: base });
             const settings = await getChatAiSettings();
-            await ensureDefaultWhatsappInstance();
             const instances = await listWhatsappInstances();
             let lastError: string | undefined;
             let anyOk = false;
+            let attempted = 0;
             for (const item of instances) {
+              if (instanceIsMetaCloud(item)) continue;
+              attempted += 1;
               const applied = await evolutionSetInstanceWebhook(
                 null,
                 settings.webhookPublicBaseUrl,
@@ -74,7 +76,7 @@ export const Route = createFileRoute("/api/settings/chatbot/evolution")({
               if (applied.ok) anyOk = true;
               else lastError = applied.error;
             }
-            if (!anyOk) {
+            if (attempted > 0 && !anyOk) {
               putEvolutionQrFlash(user.userId, {
                 state: "unknown",
                 qr: {},

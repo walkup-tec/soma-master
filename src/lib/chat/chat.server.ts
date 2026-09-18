@@ -52,7 +52,6 @@ import { unregisterSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-clou
 import {
   createWhatsappInstance,
   deleteWhatsappInstance,
-  ensureDefaultWhatsappInstance,
   getWhatsappInstanceByName,
   listWhatsappInstances,
   updateWhatsappInstancePhone,
@@ -117,14 +116,18 @@ async function requireChatBotSettingsUser(): Promise<SessionData> {
 export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(async () => {
   const user = await requireChatUser();
   const [conversations, aiSettings] = await Promise.all([listConversations(), getChatAiSettings()]);
-  // Garante canais registrados + webhook na instância padrão (imagens inbound).
-  void ensureDefaultWhatsappInstance()
-    .then((primary) =>
-      ensureSomaEvolutionInstance({
-        webhookPublicBaseUrl: aiSettings.webhookPublicBaseUrl,
-        instanceName: primary.instanceName,
-      }),
-    )
+  // Webhook só nas instâncias Evolution já cadastradas — não recria canal excluído.
+  void listWhatsappInstances()
+    .then(async (instances) => {
+      for (const item of instances) {
+        if (instanceIsMetaCloud(item)) continue;
+        await evolutionSetInstanceWebhook(
+          null,
+          aiSettings.webhookPublicBaseUrl,
+          item.instanceName,
+        ).catch(() => undefined);
+      }
+    })
     .catch(() => undefined);
   return {
     conversations,
@@ -898,7 +901,6 @@ export const getChatbotSettingsLoaderFn = createServerFn({ method: "POST" }).han
   ]);
 
   const config = getEvolutionPublicConfig();
-  await ensureDefaultWhatsappInstance().catch(() => undefined);
   const instances = await listWhatsappInstances();
   const webhookUrl = getResolvedWebhookUrl(aiSettings.webhookPublicBaseUrl);
 
@@ -1348,17 +1350,19 @@ export const deleteChatWhatsappInstanceFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const user = await requireChatBotSettingsUser();
     const all = await listWhatsappInstances();
-    if (all.length <= 1) {
-      throw new Error("Mantenha ao menos um canal WhatsApp.");
+    const existing = all.find((item) => item.instanceName === data.instanceName);
+    if (!existing) {
+      clearEvolutionQrFlash(user.userId, data.instanceName);
+      return { ok: true };
     }
     if (isEvolutionConfigured() && !isMetaCloudInstanceName(data.instanceName)) {
       const removed = await evolutionDeleteInstance(data.instanceName);
-      if (!removed.ok) {
+      const alreadyGone = /404|does not exist|not found|não exist/i.test(removed.error || "");
+      if (!removed.ok && !alreadyGone) {
         throw new Error(removed.error ?? "Falha ao excluir instância na Evolution.");
       }
     }
-    const existing = await getWhatsappInstanceByName(data.instanceName);
-    if (existing?.phoneNumberId) {
+    if (existing.phoneNumberId) {
       await unregisterSomaCloudNumberOnWaba(existing.phoneNumberId);
     }
     await deleteWhatsappInstance(data.instanceName);
@@ -1373,7 +1377,6 @@ export const applyWebhookToAllWhatsappInstancesFn = createServerFn({ method: "PO
       throw new Error("Evolution API não configurada.");
     }
     const settings = await getChatAiSettings();
-    await ensureDefaultWhatsappInstance();
     const instances = await listWhatsappInstances();
     const results: Array<{ instanceName: string; ok: boolean; error?: string }> = [];
     for (const item of instances) {

@@ -468,24 +468,9 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
   const refresh = useCallback(async () => {
     await router.invalidate();
   }, [router]);
-  const channels = evo.channels?.length
-    ? evo.channels
-    : evo.instance
-      ? [
-          {
-            id: "legacy",
-            instanceName: evo.instance,
-            label: "Principal",
-            phone: null,
-            state: evo.state,
-            qr: evo.qr,
-            error: evo.error,
-          },
-        ]
-      : [];
+  const channels = evo.channels ?? [];
   const cloudChannels = channels.filter((channel) => channel.provider === "meta_cloud");
   const evolutionChannels = channels.filter((channel) => channel.provider !== "meta_cloud");
-  const canDelete = channels.length > 1;
 
   async function handleCreate() {
     const name = label.trim();
@@ -550,7 +535,7 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
                     channel={channel}
                     configured={evo.configured}
                     apiUrlHost={evo.apiUrlHost}
-                    canDelete={canDelete}
+                    canDelete
                     onChanged={refresh}
                   />
                 ))}
@@ -622,7 +607,7 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
                     channel={channel}
                     configured={evo.configured}
                     apiUrlHost={evo.apiUrlHost}
-                    canDelete={canDelete}
+                    canDelete
                     onChanged={refresh}
                   />
                 ))}

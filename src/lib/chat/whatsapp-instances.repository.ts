@@ -121,18 +121,6 @@ function withInstanceDefaults(
   };
 }
 
-/** Garante ao menos a instância padrão (env) no registro. */
-export async function ensureDefaultWhatsappInstance(): Promise<ChatWhatsappInstance> {
-  const instanceName = defaultInstanceName();
-  const existing = await listWhatsappInstances();
-  const found = existing.find((item) => item.instanceName === instanceName);
-  if (found) return found;
-  return createWhatsappInstance({
-    label: "Principal",
-    instanceName,
-  });
-}
-
 export async function listWhatsappInstances(): Promise<ChatWhatsappInstance[]> {
   if (isDatabaseEnabled()) {
     const sql = await getSql();
