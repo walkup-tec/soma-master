@@ -112,7 +112,7 @@ export function ContactNameEditor({
           value={name}
           maxLength={CHAT_CONTACT_NAME_MAX_LENGTH}
           placeholder="Nome do contato"
-          className="h-8 font-display text-sm font-semibold"
+          className="h-8 min-w-0 flex-1 font-display text-sm font-semibold"
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -121,21 +121,23 @@ export function ContactNameEditor({
             }
           }}
         />
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-8 shrink-0 cursor-pointer px-2.5 text-xs"
-          disabled={!changed || saving}
-          onClick={() => void handleSave()}
-        >
-          {saving ? (
-            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Save className="size-3.5" aria-hidden="true" />
-          )}
-          Salvar
-        </Button>
+        {changed || saving ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 cursor-pointer px-2.5 text-xs"
+            disabled={!changed || saving}
+            onClick={() => void handleSave()}
+          >
+            {saving ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Save className="size-3.5" aria-hidden="true" />
+            )}
+            Salvar
+          </Button>
+        ) : null}
       </div>
     </div>
   );
