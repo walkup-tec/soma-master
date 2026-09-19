@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { ChatContactPanel } from "@/components/chat/chat-contact-panel";
 import { ChatTransferDialog } from "@/components/chat/chat-transfer-dialog";
 import { useChatbotAlert } from "@/components/chat/chatbot-alert-context";
-import { StatusBadge } from "@/components/clients/status-badge";
+import { LeadIdentityMeta } from "@/components/chat/lead-identity-meta";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -1060,7 +1060,7 @@ export function ChatInboxScreen({
                       }
                     }}
                     className={cn(
-                      "relative w-full cursor-pointer space-y-2.5 rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      "relative w-full cursor-pointer rounded-xl border border-transparent px-3 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       selectedId === conv.id &&
                         "border-primary bg-transparent hover:bg-transparent dark:border-primary dark:bg-transparent",
                       awaitingMine &&
@@ -1077,10 +1077,29 @@ export function ChatInboxScreen({
                         aria-hidden
                       />
                     ) : null}
-                    <div className="relative flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-                        {conv.clientName || conv.contactName || conv.phone}
-                      </span>
+                    <div className="relative flex items-start gap-2">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <span className="block truncate text-sm font-semibold text-foreground">
+                          {conv.clientName || conv.contactName || conv.phone}
+                        </span>
+                        <LeadIdentityMeta
+                          products={displayProducts.map((product) => ({
+                            id: product.id,
+                            label: product.name,
+                            color: product.color,
+                          }))}
+                          status={
+                            statusLabel
+                              ? {
+                                  id: conv.clientStatusId ?? draftStatus?.id ?? "status",
+                                  label: statusLabel,
+                                  color: statusColor,
+                                }
+                              : null
+                          }
+                        />
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
                       {conv.instanceName ? (
                         <span className="max-w-[7.5rem] shrink-0 truncate rounded-full border border-border/70 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
                           {isMetaCloudInstanceName(conv.instanceName)
@@ -1166,41 +1185,7 @@ export function ChatInboxScreen({
                           <Sparkles className="size-3.5" aria-hidden="true" />
                         )}
                       </button>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Produto
-                      </p>
-                      {displayProducts.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {displayProducts.map((product) => (
-                            <StatusBadge
-                              key={product.id}
-                              label={product.name}
-                              color={product.color}
-                              className="max-w-full text-[10px]"
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">Não definido</p>
-                      )}
-                    </div>
-
-                    <div className="border-t border-border/60 pt-2.5">
-                      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Status
-                      </p>
-                      {statusLabel ? (
-                        <StatusBadge
-                          label={statusLabel}
-                          color={statusColor}
-                          className="max-w-full text-[10px]"
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Sem status</span>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1719,15 +1704,6 @@ export function ChatInboxScreen({
       {/* Cartão do contato — Chatwoot region 4 / BotConversa */}
       {selectedId && active ? (
         <aside className="hidden w-[300px] flex-col overflow-y-auto border-l border-border xl:flex">
-          <div className="border-b border-border px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Contato
-            </p>
-            <h3 className="mt-1 truncate font-display text-sm font-semibold">
-              {contactDraft.name || active.clientName || active.contactName || "Sem nome"}
-            </h3>
-            <p className="text-xs text-muted-foreground">{contactDraft.phone || active.phone}</p>
-          </div>
           <div className="p-4">
             <ChatContactPanel
               conversation={active}

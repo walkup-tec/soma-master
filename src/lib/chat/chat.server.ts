@@ -15,6 +15,7 @@ import {
   listConversations,
   listConversationAlertSnapshot,
   getOrCreateConversationByPhone,
+  updateConversationContactName,
   listMessages,
   listMessagesPage,
   markConversationRead,
@@ -76,13 +77,14 @@ import { isOpenAiConfigured } from "@/lib/chat/openai.adapter";
 import {
   saveChatContactNote,
 } from "@/lib/chat/chat-contact-note.service";
-import { CHAT_CONTACT_NOTE_MAX_LENGTH } from "@/lib/chat/chat-contact-note.constants";
+import { CHAT_CONTACT_NAME_MAX_LENGTH, CHAT_CONTACT_NOTE_MAX_LENGTH } from "@/lib/chat/chat-contact-note.constants";
 import { createClientAttendance } from "@/lib/clients/client-attendance.repository";
 import { createClientAttachmentFromChatMedia } from "@/lib/clients/client-attachment.repository";
 import {
   addProductToClient,
   createManualClient,
   getClientByIdForUser,
+  patchClientDataFields,
   updateClientStatus,
 } from "@/lib/clients/clients.repository";
 import { isValidAttendanceStatus } from "@/lib/clients/client-status";
@@ -270,6 +272,41 @@ export const saveChatContactNoteFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireChatUser();
     return saveChatContactNote(data);
+  });
+
+export const saveChatContactNameFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    const body = data as { conversationId?: string; name?: string };
+    const conversationId = String(body.conversationId ?? "").trim();
+    const name = String(body.name ?? "").trim();
+    if (!conversationId) throw new Error("Conversa obrigatória.");
+    if (!name) throw new Error("Informe o nome do contato.");
+    if (name.length > CHAT_CONTACT_NAME_MAX_LENGTH) {
+      throw new Error(`O nome deve ter no máximo ${CHAT_CONTACT_NAME_MAX_LENGTH} caracteres.`);
+    }
+    return { conversationId, name };
+  })
+  .handler(async ({ data }) => {
+    await requireChatUser();
+    const conversation = await getConversation(data.conversationId);
+    if (!conversation) throw new Error("Conversa não encontrada.");
+
+    await updateConversationContactName({
+      conversationId: conversation.id,
+      contactName: data.name,
+    });
+
+    if (conversation.clientId) {
+      const patched = await patchClientDataFields({
+        clientId: conversation.clientId,
+        fields: { nome: data.name },
+      });
+      if (!patched) throw new Error("Não foi possível atualizar o nome no cadastro do lead.");
+    }
+
+    const next = await getConversation(conversation.id);
+    if (!next) throw new Error("Conversa não encontrada.");
+    return next;
   });
 
 export const attachChatMediaToClientFn = createServerFn({ method: "POST" })
