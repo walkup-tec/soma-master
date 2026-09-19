@@ -53,6 +53,10 @@ function isGhostButtonsPayload(raw: unknown): boolean {
   return text.includes("viewOnceMessage");
 }
 
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function dispatchBotOutbound(input: {
   conversationId: string;
   phone: string;
@@ -60,7 +64,8 @@ async function dispatchBotOutbound(input: {
   payloads: BotOutboundPayload[];
   instanceName?: string | null;
 }): Promise<void> {
-  for (const payload of input.payloads) {
+  for (const [index, payload] of input.payloads.entries()) {
+    if (index > 0) await sleepMs(400);
     if (payload.type === "text") {
       const body = String(payload.text || "").trim();
       if (!body) continue;

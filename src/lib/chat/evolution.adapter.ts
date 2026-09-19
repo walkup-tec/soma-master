@@ -156,6 +156,46 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const TRANSIENT_EVOLUTION_HTTP = new Set([502, 503, 504]);
+
+function isRetryableEvolutionFailure(result: {
+  ok: boolean;
+  status: number;
+  raw: unknown;
+}): boolean {
+  if (result.ok) return false;
+  // Se a Evolution já devolveu id da mensagem, o POST pode ter sido aplicado — não reenvia.
+  if (extractEvolutionSendKeyId(result.raw)) return false;
+  if (TRANSIENT_EVOLUTION_HTTP.has(result.status)) return true;
+  return result.status === 0;
+}
+
+/**
+ * POST de envio: 502/503/504 (Traefik/Easypanel) e queda de rede são transitórios.
+ * Cada tentativa usa um timeout novo — o AbortSignal da anterior não pode ser reutilizado.
+ */
+async function evolutionFetchSend(
+  path: string,
+  init: RequestInit | undefined,
+  timeoutMs: number,
+): Promise<{ ok: boolean; status: number; raw: unknown; error?: string }> {
+  const rest = { ...(init ?? {}) };
+  delete rest.signal;
+  const attempts = 4;
+  let last = await evolutionFetch(path, {
+    ...rest,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  for (let attempt = 1; attempt < attempts && isRetryableEvolutionFailure(last); attempt++) {
+    await sleepMs(500 * 3 ** (attempt - 1));
+    last = await evolutionFetch(path, {
+      ...rest,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  }
+  return last;
+}
+
 /**
  * HTTP 201 da Evolution não garante entrega: muitas vezes volta PENDING e depois ERROR.
  * Confirma o status real antes de o CRM assumir sucesso.
@@ -625,11 +665,14 @@ export async function evolutionSendText(input: {
   let lastError = "Falha ao enviar texto na Evolution.";
   let lastRaw: unknown = null;
   for (const body of bodies) {
-    const result = await evolutionFetch(`/message/sendText/${encodeURIComponent(instance)}`, {
-      method: "POST",
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(12_000),
-    });
+    const result = await evolutionFetchSend(
+      `/message/sendText/${encodeURIComponent(instance)}`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+      20_000,
+    );
     if (result.ok) {
       return confirmEvolutionOutboundDelivery({ instance, raw: result.raw });
     }
@@ -687,11 +730,14 @@ export async function evolutionSendButtons(input: {
     buttons,
   };
 
-  const result = await evolutionFetch(`/message/sendButtons/${encodeURIComponent(instance)}`, {
-    method: "POST",
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(12_000),
-  });
+  const result = await evolutionFetchSend(
+    `/message/sendButtons/${encodeURIComponent(instance)}`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+    20_000,
+  );
   if (!result.ok) {
     return { ok: false, raw: result.raw, error: result.error || "Falha ao enviar botões na Evolution." };
   }
@@ -747,11 +793,14 @@ export async function evolutionSendList(input: {
     sections,
   };
 
-  const result = await evolutionFetch(`/message/sendList/${encodeURIComponent(instance)}`, {
-    method: "POST",
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(12_000),
-  });
+  const result = await evolutionFetchSend(
+    `/message/sendList/${encodeURIComponent(instance)}`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+    20_000,
+  );
   if (result.ok) return confirmEvolutionOutboundDelivery({ instance, raw: result.raw });
   return { ok: false, raw: result.raw, error: result.error || "Falha ao enviar lista na Evolution." };
 }
@@ -830,18 +879,21 @@ export async function evolutionSendImage(input: {
   let lastRaw: unknown = null;
 
   for (const media of candidates) {
-    const result = await evolutionFetch(`/message/sendMedia/${encodeURIComponent(instance)}`, {
-      method: "POST",
-      body: JSON.stringify({
-        number,
-        mediatype: "image",
-        mimetype: input.mimeType,
-        caption,
-        media,
-        fileName,
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
+    const result = await evolutionFetchSend(
+      `/message/sendMedia/${encodeURIComponent(instance)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          number,
+          mediatype: "image",
+          mimetype: input.mimeType,
+          caption,
+          media,
+          fileName,
+        }),
+      },
+      60_000,
+    );
     if (result.ok) {
       return confirmEvolutionOutboundDelivery({ instance, raw: result.raw });
     }
