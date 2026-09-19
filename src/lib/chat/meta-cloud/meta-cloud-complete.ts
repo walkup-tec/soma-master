@@ -4,6 +4,7 @@ import { metaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constant
 import { exchangeEmbeddedSignupCode } from "@/lib/chat/meta-cloud/meta-oauth";
 import { encryptMetaToken } from "@/lib/chat/meta-cloud/meta-token-crypto";
 import { registerSomaCloudNumberOnWaba } from "@/lib/chat/meta-cloud/waba-cloud-relay";
+import { assertWhatsappFamilyAvailable } from "@/lib/chat/whatsapp-channel-lock";
 import { upsertMetaCloudWhatsappInstance } from "@/lib/chat/whatsapp-instances.repository";
 
 export type MetaEmbeddedSignupCompleteInput = {
@@ -100,6 +101,7 @@ export async function completeMetaEmbeddedSignup(
   if (!isMetaCloudConfigured()) {
     throw new Error("Embedded Signup indisponível: configure META_APP_ID, META_APP_SECRET e META_CONFIG_ID.");
   }
+  await assertWhatsappFamilyAvailable("meta_cloud");
   const code = String(input.code || "").trim();
   if (!code) throw new Error("Código da Meta ausente.");
 

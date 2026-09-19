@@ -523,11 +523,20 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
   const channels = evo.channels ?? [];
   const cloudChannels = channels.filter((channel) => channel.provider === "meta_cloud");
   const evolutionChannels = channels.filter((channel) => channel.provider !== "meta_cloud");
+  const qrBlocksOfficial = evolutionChannels.length > 0;
+  const officialBlocksQr = cloudChannels.length > 0;
+  const mixedFamilies = qrBlocksOfficial && officialBlocksQr;
 
   async function handleCreate() {
     const name = label.trim();
     if (!name) {
       toast.error("Informe um nome para o canal.");
+      return;
+    }
+    if (officialBlocksQr) {
+      toast.error(
+        "Desconecte a API Oficial antes de adicionar um canal QR Code. Os dois não podem ficar ativos juntos.",
+      );
       return;
     }
     setCreating(true);
@@ -548,10 +557,17 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
       <div>
         <h4 className="font-display text-base font-semibold">Conexão WhatsApp</h4>
         <p className="text-sm text-muted-foreground">
-          Dois jeitos de integrar números, lado a lado. O ChatBot atende simultaneamente todos os
-          canais oficiais e Evolution cadastrados — não há limite de um número só.
+          Escolha um jeito de integrar o WhatsApp: API Oficial ou QR Code Evolution. Os dois
+          nunca ficam conectados ao mesmo tempo — o envio e o recebimento usam só o canal ativo.
         </p>
       </div>
+
+      {mixedFamilies ? (
+        <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          API Oficial e QR Code estão cadastrados juntos. Exclua um dos lados para evitar conflito
+          de entrada e saída de mensagens.
+        </p>
+      ) : null}
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Card className="border-border/60 shadow-soft">
@@ -573,12 +589,16 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
               configured={Boolean(evo.metaCloudConfigured)}
               onConnected={refresh}
               hasExisting={cloudChannels.length > 0}
+              locked={qrBlocksOfficial}
+              lockedReason="Desconecte o QR Code Evolution antes de conectar a API Oficial."
             />
             {cloudChannels.length === 0 ? (
+              qrBlocksOfficial ? null : (
               <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
                 Nenhum número oficial conectado. Use a API Oficial acima para adicionar o
                 primeiro — e os próximos.
               </p>
+              )
             ) : (
               <div className="space-y-3">
                 {cloudChannels.map((channel) => (
@@ -627,19 +647,26 @@ function WhatsappChannelsPanel({ evo }: { evo: ChatbotEvoPayload }) {
                   value={label}
                   onChange={(event) => setLabel(event.target.value)}
                   placeholder="Ex.: Comercial SP"
-                  disabled={!evo.configured || creating}
+                  disabled={!evo.configured || creating || officialBlocksQr}
                 />
               </label>
               <Button
                 type="button"
                 className="cursor-pointer"
-                disabled={!evo.configured || creating || !label.trim()}
+                disabled={!evo.configured || creating || !label.trim() || officialBlocksQr}
                 onClick={() => void handleCreate()}
               >
                 <Plus className="size-4" />
                 {creating ? "Adicionando…" : "Adicionar instância"}
               </Button>
             </div>
+
+            {officialBlocksQr ? (
+              <p className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                QR Code bloqueado enquanto a API Oficial estiver conectada. Exclua o número
+                oficial para integrar o Evolution.
+              </p>
+            ) : null}
 
             {evolutionChannels.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">

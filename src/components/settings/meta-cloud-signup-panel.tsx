@@ -84,10 +84,14 @@ export function MetaCloudSignupPanel({
   configured,
   onConnected,
   hasExisting = false,
+  locked = false,
+  lockedReason,
 }: {
   configured: boolean;
   onConnected: () => Promise<void>;
   hasExisting?: boolean;
+  locked?: boolean;
+  lockedReason?: string;
 }) {
   const loadConfig = useServerFn(getMetaEmbeddedSignupConfigFn);
   const complete = useServerFn(completeMetaEmbeddedSignupFn);
@@ -199,6 +203,10 @@ export function MetaCloudSignupPanel({
 
   async function startSignup() {
     setLocalErr(null);
+    if (locked) {
+      setLocalErr(lockedReason || "Desconecte o QR Code Evolution antes de conectar a API Oficial.");
+      return;
+    }
     if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
       setLocalErr("A Meta exige HTTPS para o Embedded Signup. Use o domínio público do CRM.");
       return;
@@ -247,6 +255,11 @@ export function MetaCloudSignupPanel({
 
   return (
     <div className="space-y-3">
+      {locked ? (
+        <p className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+          {lockedReason || "Desconecte o QR Code Evolution antes de conectar a API Oficial."}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="min-w-0 flex-1 space-y-1.5">
           <span className="text-sm font-medium">Nome do canal (opcional)</span>
@@ -254,10 +267,15 @@ export function MetaCloudSignupPanel({
             value={label}
             onChange={(event) => setLabel(event.target.value)}
             placeholder="Ex.: Comercial oficial"
-            disabled={busy}
+            disabled={busy || locked}
           />
         </label>
-        <Button type="button" className="cursor-pointer" disabled={busy} onClick={() => void startSignup()}>
+        <Button
+          type="button"
+          className="cursor-pointer"
+          disabled={busy || locked}
+          onClick={() => void startSignup()}
+        >
           {busy ? <Loader2 className="size-4 animate-spin" /> : <BadgeCheck className="size-4" />}
           {busy ? "Conectando…" : hasExisting ? "Conectar outro número" : "Conectar número oficial"}
         </Button>

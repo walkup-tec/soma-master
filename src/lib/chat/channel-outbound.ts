@@ -1,28 +1,33 @@
 /**
- * Envio unificado Chat/IA/Bot: Evolution (QR) ou Cloud API (oficial), conforme o canal.
+ * Envio unificado Chat/IA/Bot: Evolution (QR) ou Cloud API (oficial), conforme o canal integrado agora.
  */
 
+import { resolveOutboundChannel } from "@/lib/chat/whatsapp-channel-lock";
 import {
-  instanceIsMetaCloud,
   metaCloudSendButtons,
   metaCloudSendImage,
   metaCloudSendText,
   type ChannelSendResult,
 } from "@/lib/chat/meta-cloud/meta-cloud.adapter";
-import { isMetaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constants";
 import {
   evolutionSendButtons,
   evolutionSendImage,
   evolutionSendText,
 } from "@/lib/chat/evolution.adapter";
-import { getWhatsappInstanceByName } from "@/lib/chat/whatsapp-instances.repository";
 
-async function resolveIsMetaCloud(instanceName?: string | null): Promise<boolean> {
-  const name = String(instanceName || "").trim();
-  if (isMetaCloudInstanceName(name)) return true;
-  if (!name) return false;
-  const instance = await getWhatsappInstanceByName(name);
-  return instanceIsMetaCloud(instance);
+async function withOutboundChannel<T extends ChannelSendResult>(
+  instanceName: string | null | undefined,
+  send: (target: { provider: "evolution" | "meta_cloud"; instanceName: string }) => Promise<T>,
+): Promise<T | ChannelSendResult> {
+  try {
+    const target = await resolveOutboundChannel(instanceName);
+    return await send(target);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Falha ao escolher o canal WhatsApp.",
+    };
+  }
 }
 
 export async function sendChannelText(input: {
@@ -31,13 +36,15 @@ export async function sendChannelText(input: {
   instanceName?: string | null;
   conversationId?: string | null;
 }): Promise<ChannelSendResult> {
-  if (await resolveIsMetaCloud(input.instanceName)) {
-    return metaCloudSendText(input);
-  }
-  return evolutionSendText({
-    phone: input.phone,
-    text: input.text,
-    instanceName: input.instanceName ?? undefined,
+  return withOutboundChannel(input.instanceName, (target) => {
+    if (target.provider === "meta_cloud") {
+      return metaCloudSendText({ ...input, instanceName: target.instanceName });
+    }
+    return evolutionSendText({
+      phone: input.phone,
+      text: input.text,
+      instanceName: target.instanceName,
+    });
   });
 }
 
@@ -49,15 +56,17 @@ export async function sendChannelButtons(input: {
   instanceName?: string | null;
   conversationId?: string | null;
 }): Promise<ChannelSendResult> {
-  if (await resolveIsMetaCloud(input.instanceName)) {
-    return metaCloudSendButtons(input);
-  }
-  return evolutionSendButtons({
-    phone: input.phone,
-    title: input.title,
-    description: input.description,
-    buttons: input.buttons,
-    instanceName: input.instanceName ?? undefined,
+  return withOutboundChannel(input.instanceName, (target) => {
+    if (target.provider === "meta_cloud") {
+      return metaCloudSendButtons({ ...input, instanceName: target.instanceName });
+    }
+    return evolutionSendButtons({
+      phone: input.phone,
+      title: input.title,
+      description: input.description,
+      buttons: input.buttons,
+      instanceName: target.instanceName,
+    });
   });
 }
 
@@ -70,15 +79,17 @@ export async function sendChannelImage(input: {
   instanceName?: string | null;
   conversationId?: string | null;
 }): Promise<ChannelSendResult> {
-  if (await resolveIsMetaCloud(input.instanceName)) {
-    return metaCloudSendImage(input);
-  }
-  return evolutionSendImage({
-    phone: input.phone,
-    dataUrl: input.dataUrl,
-    mimeType: input.mimeType,
-    fileName: input.fileName,
-    caption: input.caption,
-    instanceName: input.instanceName ?? undefined,
+  return withOutboundChannel(input.instanceName, (target) => {
+    if (target.provider === "meta_cloud") {
+      return metaCloudSendImage({ ...input, instanceName: target.instanceName });
+    }
+    return evolutionSendImage({
+      phone: input.phone,
+      dataUrl: input.dataUrl,
+      mimeType: input.mimeType,
+      fileName: input.fileName,
+      caption: input.caption,
+      instanceName: target.instanceName,
+    });
   });
 }

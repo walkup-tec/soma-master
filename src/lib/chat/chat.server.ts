@@ -61,6 +61,7 @@ import {
   listWhatsappInstances,
   updateWhatsappInstancePhone,
 } from "@/lib/chat/whatsapp-instances.repository";
+import { assertWhatsappFamilyAvailable, liveWhatsappProvider } from "@/lib/chat/whatsapp-channel-lock";
 import {
   appendChatImageChunk,
   finalizeChatImageUpload,
@@ -121,22 +122,24 @@ async function requireChatBotSettingsUser(): Promise<SessionData> {
 
 export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(async () => {
   const user = await requireChatUser();
-  const [conversations, aiSettings] = await Promise.all([listConversations(), getChatAiSettings()]);
+  const [conversations, aiSettings, instances] = await Promise.all([
+    listConversations(),
+    getChatAiSettings(),
+    listWhatsappInstances().catch(() => []),
+  ]);
   // Webhook só nas instâncias Evolution já cadastradas — não recria canal excluído.
   // Números Cloud já conectados (antes do relay) precisam ser reenviados ao WABA.
-  void listWhatsappInstances()
-    .then(async (instances) => {
-      void syncRegisteredCloudNumbersToWaba(instances).catch(() => undefined);
-      for (const item of instances) {
-        if (instanceIsMetaCloud(item)) continue;
-        await evolutionSetInstanceWebhook(
-          null,
-          aiSettings.webhookPublicBaseUrl,
-          item.instanceName,
-        ).catch(() => undefined);
-      }
-    })
-    .catch(() => undefined);
+  void (async () => {
+    void syncRegisteredCloudNumbersToWaba(instances).catch(() => undefined);
+    for (const item of instances) {
+      if (instanceIsMetaCloud(item)) continue;
+      await evolutionSetInstanceWebhook(
+        null,
+        aiSettings.webhookPublicBaseUrl,
+        item.instanceName,
+      ).catch(() => undefined);
+    }
+  })();
   return {
     conversations,
     aiSettings,
@@ -144,6 +147,7 @@ export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(asyn
     openAiConfigured: isOpenAiConfigured(),
     currentUserId: user.userId,
     currentUserRole: user.role,
+    whatsappLiveProvider: liveWhatsappProvider(instances),
   };
 });
 
@@ -1379,6 +1383,7 @@ export const createChatWhatsappInstanceFn = createServerFn({ method: "POST" })
     if (!isEvolutionConfigured()) {
       throw new Error("Evolution API não configurada no servidor (.env.local).");
     }
+    await assertWhatsappFamilyAvailable("evolution");
     const created = await createWhatsappInstance({ label: data.label });
     const settings = await getChatAiSettings();
     await ensureSomaEvolutionInstance({

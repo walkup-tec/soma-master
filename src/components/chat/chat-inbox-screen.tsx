@@ -80,6 +80,7 @@ type Bootstrap = {
   openAiConfigured: boolean;
   currentUserId: string;
   currentUserRole?: "master" | "user";
+  whatsappLiveProvider?: "evolution" | "meta_cloud" | null;
 };
 
 type FilterTab = "mine" | "unassigned" | "all";
@@ -1102,7 +1103,9 @@ export function ChatInboxScreen({
                       <div className="flex shrink-0 items-center gap-1.5">
                       {conv.instanceName ? (
                         <span className="max-w-[7.5rem] shrink-0 truncate rounded-full border border-border/70 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                          {isMetaCloudInstanceName(conv.instanceName)
+                          {bootstrap.whatsappLiveProvider === "meta_cloud" ||
+                          (bootstrap.whatsappLiveProvider == null &&
+                            isMetaCloudInstanceName(conv.instanceName))
                             ? "API oficial"
                             : "QR Code"}
                         </span>
