@@ -1078,48 +1078,49 @@ export function ChatInboxScreen({
                         aria-hidden
                       />
                     ) : null}
-                    <div className="relative flex items-start gap-2">
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <span className="block truncate text-sm font-semibold text-foreground">
+                    <div className="relative space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                           {conv.clientName || conv.contactName || conv.phone}
                         </span>
-                        <LeadIdentityMeta
-                          products={displayProducts.map((product) => ({
-                            id: product.id,
-                            label: product.name,
-                            color: product.color,
-                          }))}
-                          status={
-                            statusLabel
-                              ? {
-                                  id: conv.clientStatusId ?? draftStatus?.id ?? "status",
-                                  label: statusLabel,
-                                  color: statusColor,
-                                }
-                              : null
-                          }
-                        />
+                        {conv.unreadCount > 0 ? (
+                          <span className="shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                            {conv.unreadCount}
+                          </span>
+                        ) : null}
                       </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                      {conv.instanceName ? (
-                        <span className="max-w-[7.5rem] shrink-0 truncate rounded-full border border-border/70 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                          {bootstrap.whatsappLiveProvider === "meta_cloud" ||
-                          (bootstrap.whatsappLiveProvider == null &&
-                            isMetaCloudInstanceName(conv.instanceName))
-                            ? "API oficial"
-                            : "QR Code"}
-                        </span>
-                      ) : null}
-                      {awaitingMine ? (
-                        <span className="shrink-0 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                          Aguardando
-                        </span>
-                      ) : null}
-                      {conv.unreadCount > 0 ? (
-                        <span className="shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                          {conv.unreadCount}
-                        </span>
-                      ) : null}
+                      <LeadIdentityMeta
+                        products={displayProducts.map((product) => ({
+                          id: product.id,
+                          label: product.name,
+                          color: product.color,
+                        }))}
+                        status={
+                          statusLabel
+                            ? {
+                                id: conv.clientStatusId ?? draftStatus?.id ?? "status",
+                                label: statusLabel,
+                                color: statusColor,
+                              }
+                            : null
+                        }
+                      />
+                      <div className="flex items-center gap-1.5">
+                        {conv.instanceName ? (
+                          <span className="shrink-0 rounded-full border border-border/70 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                            {bootstrap.whatsappLiveProvider === "meta_cloud" ||
+                            (bootstrap.whatsappLiveProvider == null &&
+                              isMetaCloudInstanceName(conv.instanceName))
+                              ? "API oficial"
+                              : "QR Code"}
+                          </span>
+                        ) : null}
+                        {awaitingMine ? (
+                          <span className="shrink-0 rounded-full bg-amber-500 px-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Aguardando
+                          </span>
+                        ) : null}
+                        <span className="ml-auto flex shrink-0 items-center gap-1">
                       <button
                         type="button"
                         aria-pressed={conv.botEnabled !== false}
@@ -1188,6 +1189,7 @@ export function ChatInboxScreen({
                           <Sparkles className="size-3.5" aria-hidden="true" />
                         )}
                       </button>
+                        </span>
                       </div>
                     </div>
                   </div>

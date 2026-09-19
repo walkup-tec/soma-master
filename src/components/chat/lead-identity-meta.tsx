@@ -44,7 +44,7 @@ export function LeadIdentityMeta({ products, status, className }: Props) {
               key={product.id}
               label={product.label}
               color={product.color}
-              className="max-w-full text-[10px]"
+              className="max-w-full min-w-0 whitespace-nowrap text-[10px]"
             />
           ))
         : null}
@@ -57,7 +57,7 @@ export function LeadIdentityMeta({ products, status, className }: Props) {
         <StatusBadge
           label={status.label}
           color={status.color}
-          className="max-w-full text-[10px]"
+          className="shrink-0 whitespace-nowrap text-[10px]"
         />
       ) : null}
     </div>

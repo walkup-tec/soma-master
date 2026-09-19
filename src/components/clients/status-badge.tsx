@@ -12,7 +12,7 @@ export function StatusBadge({ label, color, className }: Props) {
   return (
     <Badge
       variant="secondary"
-      className={className}
+      className={cn("max-w-full min-w-0", className)}
       style={{
         backgroundColor: softStatusBackground(hex, 0.16),
         color: hex,
@@ -25,7 +25,7 @@ export function StatusBadge({ label, color, className }: Props) {
         style={{ backgroundColor: hex }}
         aria-hidden
       />
-      {label}
+      <span className="min-w-0 truncate">{label}</span>
     </Badge>
   );
 }
