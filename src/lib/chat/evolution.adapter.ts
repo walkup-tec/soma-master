@@ -39,18 +39,47 @@ export function getDefaultSomaEvolutionInstance(): string {
 
 function resolveTargetInstance(instanceName?: string | null): string {
   const target = String(instanceName || evolutionEnv().instance).trim() || SOMA_EVOLUTION_INSTANCE_DEFAULT;
-  assertSomaOwnedInstance(target);
+  assertOperableEvolutionInstance(target);
   return target;
+}
+
+/** Instâncias Evolution extras (já existentes no EVO) liberadas para o ChatBot. */
+const extraOperableInstances = new Set<string>();
+
+export function isSomaOwnedInstance(instance: string): boolean {
+  return instance.trim().toLowerCase().startsWith(SOMA_EVOLUTION_INSTANCE_PREFIX);
+}
+
+export function registerOperableEvolutionInstance(instanceName: string): void {
+  const name = String(instanceName || "").trim().toLowerCase();
+  if (name) extraOperableInstances.add(name);
+}
+
+export function isOperableEvolutionInstance(instanceName: string): boolean {
+  const name = String(instanceName || "").trim().toLowerCase();
+  if (!name) return false;
+  if (isSomaOwnedInstance(name)) return true;
+  if (extraOperableInstances.has(name)) return true;
+  const extras = String(process.env.SOMA_CHAT_EVOLUTION_INSTANCES || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  return extras.includes(name);
 }
 
 /** Bloqueia operação se o nome da instância não for exclusiva do Soma. */
 export function assertSomaOwnedInstance(instance: string): void {
-  const name = instance.trim().toLowerCase();
-  if (!name.startsWith(SOMA_EVOLUTION_INSTANCE_PREFIX)) {
-    throw new Error(
-      `Instância Evolution "${instance}" rejeitada: Soma só pode usar nomes com prefixo "${SOMA_EVOLUTION_INSTANCE_PREFIX}" (ex.: ${SOMA_EVOLUTION_INSTANCE_DEFAULT}).`,
-    );
-  }
+  if (isSomaOwnedInstance(instance)) return;
+  throw new Error(
+    `Instância Evolution "${instance}" rejeitada: Soma só pode usar nomes com prefixo "${SOMA_EVOLUTION_INSTANCE_PREFIX}" (ex.: ${SOMA_EVOLUTION_INSTANCE_DEFAULT}).`,
+  );
+}
+
+export function assertOperableEvolutionInstance(instance: string): void {
+  if (isOperableEvolutionInstance(instance)) return;
+  throw new Error(
+    `Instância Evolution "${instance}" rejeitada: não é um canal do ChatBot Soma.`,
+  );
 }
 
 export function isEvolutionConfigured(): boolean {
@@ -1008,24 +1037,23 @@ export function extractEvolutionInstanceName(payload: unknown): string | null {
 
 export function isWebhookForSomaInstance(payload: unknown): boolean {
   const got = extractEvolutionInstanceName(payload)?.toLowerCase();
-  // Webhook é por instância neste CRM. Sem nome no payload, não descarta —
-  // o Evolution às vezes omite `instance` e o inbound sumia inteiro.
+  // Webhook é por instância neste CRM. Sem nome no payload, não descarta.
   if (!got) return true;
-  try {
-    assertSomaOwnedInstance(got);
-    return true;
-  } catch {
-    return false;
-  }
+  return isOperableEvolutionInstance(got);
 }
 
-function collectChatRecords(payload: unknown): Record<string, unknown>[] {
+function collectChatRecords(payload: unknown, depth = 0): Record<string, unknown>[] {
+  if (depth > 4) return [];
   if (Array.isArray(payload)) return payload as Record<string, unknown>[];
   if (!payload || typeof payload !== "object") return [];
   const root = payload as Record<string, unknown>;
   for (const key of ["chats", "data", "response", "records", "messages"]) {
     const value = root[key];
     if (Array.isArray(value)) return value as Record<string, unknown>[];
+    if (value && typeof value === "object") {
+      const nested = collectChatRecords(value, depth + 1);
+      if (nested.length) return nested;
+    }
   }
   return [];
 }
@@ -1045,4 +1073,79 @@ export async function evolutionFindRecentChats(
     return { ok: false, chats: [], error: result.error };
   }
   return { ok: true, chats: collectChatRecords(result.raw) };
+}
+
+export type EvolutionInstanceSnapshot = {
+  instanceName: string;
+  phone: string | null;
+};
+
+function collectInstanceRecords(payload: unknown): Record<string, unknown>[] {
+  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  for (const key of ["instance", "instances", "data", "response"]) {
+    const value = root[key];
+    if (Array.isArray(value)) return value as Record<string, unknown>[];
+  }
+  return [root];
+}
+
+export function parseEvolutionInstanceList(raw: unknown): EvolutionInstanceSnapshot[] {
+  const out: EvolutionInstanceSnapshot[] = [];
+  const seen = new Set<string>();
+  for (const row of collectInstanceRecords(raw)) {
+    const nested =
+      row.instance && typeof row.instance === "object"
+        ? (row.instance as Record<string, unknown>)
+        : row;
+    const instanceName =
+      readInstanceNameCandidate(nested.instanceName) ||
+      readInstanceNameCandidate(nested.name) ||
+      readInstanceNameCandidate(row.instanceName) ||
+      readInstanceNameCandidate(row.name);
+    if (!instanceName || seen.has(instanceName.toLowerCase())) continue;
+    seen.add(instanceName.toLowerCase());
+    out.push({
+      instanceName,
+      phone: extractConnectedWhatsAppPhone(row) || extractConnectedWhatsAppPhone(nested),
+    });
+  }
+  return out;
+}
+
+export async function evolutionFetchAllInstances(): Promise<{
+  ok: boolean;
+  instances: EvolutionInstanceSnapshot[];
+  error?: string;
+}> {
+  const result = await evolutionFetch(`/instance/fetchInstances`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!result.ok) {
+    return { ok: false, instances: [], error: result.error };
+  }
+  return { ok: true, instances: parseEvolutionInstanceList(result.raw) };
+}
+
+export async function evolutionFindMessages(
+  instanceName: string,
+  remoteJid: string,
+  limit = 30,
+): Promise<{ ok: boolean; messages: Record<string, unknown>[]; error?: string }> {
+  const instance = resolveTargetInstance(instanceName);
+  const jid = String(remoteJid || "").trim();
+  if (!jid) return { ok: true, messages: [] };
+  const result = await evolutionFetch(`/chat/findMessages/${encodeURIComponent(instance)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      where: { key: { remoteJid: jid } },
+      limit,
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!result.ok) {
+    return { ok: false, messages: [], error: result.error };
+  }
+  return { ok: true, messages: collectChatRecords(result.raw) };
 }

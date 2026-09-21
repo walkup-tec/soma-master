@@ -42,6 +42,7 @@ import {
   getEvolutionPublicConfig,
   getResolvedWebhookUrl,
   isEvolutionConfigured,
+  isSomaOwnedInstance,
   type EvolutionConnectionState,
   type EvolutionQrPayload,
 } from "@/lib/chat/evolution.adapter";
@@ -137,6 +138,7 @@ export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(asyn
     void syncRegisteredCloudNumbersToWaba(instances).catch(() => undefined);
     for (const item of instances) {
       if (instanceIsMetaCloud(item)) continue;
+      if (!isSomaOwnedInstance(item.instanceName)) continue;
       await evolutionSetInstanceWebhook(
         null,
         aiSettings.webhookPublicBaseUrl,
@@ -1415,7 +1417,11 @@ export const deleteChatWhatsappInstanceFn = createServerFn({ method: "POST" })
       clearEvolutionQrFlash(user.userId, data.instanceName);
       return { ok: true };
     }
-    if (isEvolutionConfigured() && !isMetaCloudInstanceName(data.instanceName)) {
+    if (
+      isEvolutionConfigured() &&
+      !isMetaCloudInstanceName(data.instanceName) &&
+      isSomaOwnedInstance(data.instanceName)
+    ) {
       const removed = await evolutionDeleteInstance(data.instanceName);
       const alreadyGone = /404|does not exist|not found|não exist/i.test(removed.error || "");
       if (!removed.ok && !alreadyGone) {
@@ -1441,6 +1447,10 @@ export const applyWebhookToAllWhatsappInstancesFn = createServerFn({ method: "PO
     const results: Array<{ instanceName: string; ok: boolean; error?: string }> = [];
     for (const item of instances) {
       if (instanceIsMetaCloud(item)) {
+        results.push({ instanceName: item.instanceName, ok: true });
+        continue;
+      }
+      if (!isSomaOwnedInstance(item.instanceName)) {
         results.push({ instanceName: item.instanceName, ok: true });
         continue;
       }

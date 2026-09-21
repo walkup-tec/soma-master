@@ -348,11 +348,65 @@ export async function upsertMetaCloudWhatsappInstance(input: {
   return row;
 }
 
+export async function upsertEvolutionChannel(input: {
+  instanceName: string;
+  label: string;
+  phone: string | null;
+}): Promise<ChatWhatsappInstance> {
+  const instanceName = String(input.instanceName || "").trim();
+  if (!instanceName) throw new Error("Instância Evolution obrigatória.");
+  const existing = await getWhatsappInstanceByName(instanceName);
+  const now = new Date();
+  const row: ChatWhatsappInstance = {
+    id: existing?.id ?? `wa-${crypto.randomUUID().slice(0, 10)}`,
+    instanceName,
+    label: String(input.label || existing?.label || instanceName).trim(),
+    phone: input.phone ?? existing?.phone ?? null,
+    provider: "evolution",
+    phoneNumberId: existing?.phoneNumberId ?? null,
+    wabaId: existing?.wabaId ?? null,
+    businessId: existing?.businessId ?? null,
+    accessTokenEncrypted: existing?.accessTokenEncrypted ?? null,
+    verifiedName: existing?.verifiedName ?? null,
+    qualityRating: existing?.qualityRating ?? null,
+    tokenExpiresAt: existing?.tokenExpiresAt ?? null,
+    createdAt: existing?.createdAt ?? now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+
+  if (isDatabaseEnabled()) {
+    const sql = await getSql();
+    await ensureChatSchema(sql);
+    await sql`
+      insert into crm.chat_whatsapp_instances (
+        id, instance_name, label, phone, provider, created_at, updated_at
+      ) values (
+        ${row.id},
+        ${row.instanceName},
+        ${row.label},
+        ${row.phone},
+        'evolution',
+        ${row.createdAt === existing?.createdAt ? new Date(row.createdAt) : now},
+        ${now}
+      )
+      on conflict (instance_name) do update set
+        label = excluded.label,
+        phone = coalesce(excluded.phone, crm.chat_whatsapp_instances.phone),
+        updated_at = excluded.updated_at
+    `;
+    return row;
+  }
+
+  const items = await readJsonFile<ChatWhatsappInstance[]>(FILE, []);
+  const next = items.filter((item) => item.instanceName !== instanceName);
+  next.push(row);
+  await writeJsonFile(FILE, next);
+  return row;
+}
+
 export async function deleteWhatsappInstance(instanceName: string): Promise<void> {
   const name = String(instanceName || "").trim();
-  if (!isMetaCloudInstanceName(name)) {
-    assertSomaOwnedInstance(name);
-  }
+  if (!name) return;
 
   if (isDatabaseEnabled()) {
     const sql = await getSql();
