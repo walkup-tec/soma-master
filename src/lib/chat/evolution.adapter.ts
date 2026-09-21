@@ -973,28 +973,76 @@ export async function evolutionDeleteInstance(instanceName: string): Promise<{
   return { ok: false, error: result.error ?? `Falha ao excluir instância ${instance}` };
 }
 
+function readInstanceNameCandidate(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (value && typeof value === "object") {
+    const nested = value as Record<string, unknown>;
+    for (const key of ["instanceName", "name", "instance", "id"]) {
+      const raw = nested[key];
+      if (typeof raw === "string" && raw.trim()) return raw.trim();
+    }
+  }
+  return null;
+}
+
 /** Extrai nome da instância no payload do webhook — ignora eventos de outras apps. */
 export function extractEvolutionInstanceName(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const root = payload as Record<string, unknown>;
-  if (typeof root.instance === "string") return root.instance;
-  if (root.instance && typeof root.instance === "object") {
-    const nested = root.instance as Record<string, unknown>;
-    if (typeof nested.instanceName === "string") return nested.instanceName;
-    if (typeof nested.name === "string") return nested.name;
+  const data = root.data && typeof root.data === "object" ? (root.data as Record<string, unknown>) : null;
+  const candidates = [
+    root.instance,
+    root.instanceName,
+    root.sender,
+    root.destination,
+    root.instanceId,
+    data?.instance,
+    data?.instanceName,
+  ];
+  for (const candidate of candidates) {
+    const name = readInstanceNameCandidate(candidate);
+    if (name) return name;
   }
-  if (typeof root.instanceName === "string") return root.instanceName;
   return null;
 }
 
 export function isWebhookForSomaInstance(payload: unknown): boolean {
   const got = extractEvolutionInstanceName(payload)?.toLowerCase();
-  // Sem nome no payload: rejeita (evita processar eventos globais de outras apps)
-  if (!got) return false;
+  // Webhook é por instância neste CRM. Sem nome no payload, não descarta —
+  // o Evolution às vezes omite `instance` e o inbound sumia inteiro.
+  if (!got) return true;
   try {
     assertSomaOwnedInstance(got);
     return true;
   } catch {
     return false;
   }
+}
+
+function collectChatRecords(payload: unknown): Record<string, unknown>[] {
+  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  for (const key of ["chats", "data", "response", "records", "messages"]) {
+    const value = root[key];
+    if (Array.isArray(value)) return value as Record<string, unknown>[];
+  }
+  return [];
+}
+
+/** Últimas conversas da instância (findChats) — recupera inbound que o webhook perdeu. */
+export async function evolutionFindRecentChats(
+  instanceName?: string | null,
+  limit = 40,
+): Promise<{ ok: boolean; chats: Record<string, unknown>[]; error?: string }> {
+  const instance = resolveTargetInstance(instanceName);
+  const result = await evolutionFetch(`/chat/findChats/${encodeURIComponent(instance)}`, {
+    method: "POST",
+    body: JSON.stringify({ limit }),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!result.ok) {
+    return { ok: false, chats: [], error: result.error };
+  }
+  return { ok: true, chats: collectChatRecords(result.raw) };
 }

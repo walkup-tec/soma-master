@@ -6,118 +6,26 @@ import {
 import {
   evolutionGetMediaBase64,
   extractEvolutionInstanceName,
+  getDefaultSomaEvolutionInstance,
   isWebhookForSomaInstance,
 } from "@/lib/chat/evolution.adapter";
+import { extractInboundFromEvolution } from "@/lib/chat/evolution-inbound";
 import { sendChannelText } from "@/lib/chat/channel-outbound";
 import { saveInboundChatMedia } from "@/lib/chat/chat-media.repository";
 import { generateAiReply, isOpenAiConfigured } from "@/lib/chat/openai.adapter";
-import { normalizeWhatsAppPhone } from "@/lib/chat/phone";
 import { maybeRunChatbotRuntime } from "@/lib/bots/bot-inbound.service";
+import { timingSafeEqualString } from "@/lib/chat/meta-cloud/timing-safe";
 
-type EvolutionInboundMessage = {
-  phone: string;
-  text: string;
-  pushName?: string;
-  messageId?: string;
-  fromMe?: boolean;
-  mediaBase64?: string;
-  mediaMimeType?: string;
-  mediaFileName?: string;
-  mediaType?: "image" | "document";
-  messageKey: Record<string, unknown>;
-};
-
-function extractInboundFromEvolution(payload: unknown): EvolutionInboundMessage[] {
-  if (!payload || typeof payload !== "object") return [];
-  const root = payload as Record<string, unknown>;
-  const data = (root.data ?? root) as Record<string, unknown>;
-
-  // Formato comum Evolution: { event, data: { key, pushName, message } }
-  const items = Array.isArray(data) ? data : [data];
-  const out: EvolutionInboundMessage[] = [];
-
-  for (const item of items) {
-    if (!item || typeof item !== "object") continue;
-    const row = item as Record<string, unknown>;
-    const key = (row.key ?? {}) as Record<string, unknown>;
-    const message = (row.message ?? {}) as Record<string, unknown>;
-    const imageMessage =
-      message.imageMessage && typeof message.imageMessage === "object"
-        ? (message.imageMessage as Record<string, unknown>)
-        : null;
-    const documentMessage =
-      message.documentMessage && typeof message.documentMessage === "object"
-        ? (message.documentMessage as Record<string, unknown>)
-        : null;
-    const mediaMessage = imageMessage ?? documentMessage;
-    const mediaType = imageMessage ? "image" : documentMessage ? "document" : undefined;
-    const fromMe = Boolean(key.fromMe ?? row.fromMe);
-    const remoteJid = String(key.remoteJid ?? row.remoteJid ?? "");
-    const phone = normalizeWhatsAppPhone(remoteJid.split("@")[0] ?? "");
-
-    const buttonsResponse =
-      message.buttonsResponseMessage && typeof message.buttonsResponseMessage === "object"
-        ? (message.buttonsResponseMessage as Record<string, unknown>)
-        : null;
-    const templateButtonReply =
-      message.templateButtonReplyMessage && typeof message.templateButtonReplyMessage === "object"
-        ? (message.templateButtonReplyMessage as Record<string, unknown>)
-        : null;
-    const listResponse =
-      message.listResponseMessage && typeof message.listResponseMessage === "object"
-        ? (message.listResponseMessage as Record<string, unknown>)
-        : null;
-    const listSingle =
-      listResponse?.singleSelectReply && typeof listResponse.singleSelectReply === "object"
-        ? (listResponse.singleSelectReply as Record<string, unknown>)
-        : null;
-
-    const interactiveText =
-      (typeof buttonsResponse?.selectedDisplayText === "string" &&
-        buttonsResponse.selectedDisplayText) ||
-      (typeof buttonsResponse?.selectedButtonId === "string" && buttonsResponse.selectedButtonId) ||
-      (typeof templateButtonReply?.selectedDisplayText === "string" &&
-        templateButtonReply.selectedDisplayText) ||
-      (typeof templateButtonReply?.selectedId === "string" && templateButtonReply.selectedId) ||
-      (typeof listResponse?.title === "string" && listResponse.title) ||
-      (typeof listSingle?.selectedRowId === "string" && listSingle.selectedRowId) ||
-      "";
-
-    const text =
-      (typeof message.conversation === "string" && message.conversation) ||
-      (typeof (message.extendedTextMessage as { text?: string } | undefined)?.text === "string" &&
-        (message.extendedTextMessage as { text: string }).text) ||
-      (typeof row.text === "string" && row.text) ||
-      (typeof mediaMessage?.caption === "string" && mediaMessage.caption) ||
-      interactiveText ||
-      "";
-    const mediaBase64 =
-      (typeof row.base64 === "string" && row.base64) ||
-      (typeof mediaMessage?.base64 === "string" && mediaMessage.base64) ||
-      undefined;
-    const mediaMimeType =
-      (typeof mediaMessage?.mimetype === "string" && mediaMessage.mimetype) ||
-      (typeof row.mimetype === "string" && row.mimetype) ||
-      undefined;
-    if (!phone || (!text.trim() && !mediaMessage)) continue;
-    out.push({
-      phone,
-      text: text.trim(),
-      pushName: typeof row.pushName === "string" ? row.pushName : undefined,
-      messageId: typeof key.id === "string" ? key.id : undefined,
-      fromMe,
-      mediaBase64,
-      mediaMimeType,
-      mediaFileName:
-        (typeof mediaMessage?.fileName === "string" && mediaMessage.fileName) ||
-        (typeof row.fileName === "string" && row.fileName) ||
-        undefined,
-      mediaType,
-      messageKey: key,
-    });
-  }
-
-  return out;
+function evolutionWebhookAuthorized(request: Request): boolean {
+  const secret = process.env.CHAT_WEBHOOK_SECRET?.trim();
+  const evoKey = process.env.EVOLUTION_API_KEY?.trim();
+  if (!secret) return true;
+  const provided =
+    request.headers.get("x-soma-webhook-secret") ?? request.headers.get("apikey") ?? "";
+  if (timingSafeEqualString(provided, secret)) return true;
+  // Evolution costuma mandar só o apikey global e ignora headers customizados.
+  if (evoKey && timingSafeEqualString(provided, evoKey)) return true;
+  return false;
 }
 
 async function maybeReplyWithAi(conversationId: string, userText: string): Promise<void> {
@@ -183,12 +91,8 @@ async function maybeReplyWithAi(conversationId: string, userText: string): Promi
 
 /** Webhook público Evolution → inbox Soma. */
 export async function handleEvolutionWebhook(request: Request): Promise<Response> {
-  const secret = process.env.CHAT_WEBHOOK_SECRET?.trim();
-  if (secret) {
-    const header = request.headers.get("x-soma-webhook-secret") ?? request.headers.get("apikey") ?? "";
-    if (header !== secret) {
-      return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
+  if (!evolutionWebhookAuthorized(request)) {
+    return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   if (request.method === "GET") {
@@ -219,7 +123,8 @@ export async function handleEvolutionWebhook(request: Request): Promise<Response
     return Response.json({ ok: true, ignored: true, reason: "foreign-instance" });
   }
 
-  const inboundInstance = extractEvolutionInstanceName(payload);
+  const inboundInstance =
+    extractEvolutionInstanceName(payload) || getDefaultSomaEvolutionInstance();
 
   const inbound = extractInboundFromEvolution(payload).filter((m) => !m.fromMe);
   for (const msg of inbound) {

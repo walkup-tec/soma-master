@@ -108,7 +108,13 @@ export async function handleMetaCloudWebhook(request: Request): Promise<Response
 
   for (const msg of inbound) {
     const channel = await getWhatsappInstanceByPhoneNumberId(msg.phoneNumberId);
-    if (!channel) continue;
+    if (!channel) {
+      console.warn("[chat] cloud inbound ignorado: phone_number_id sem canal no CRM", {
+        phoneNumberId: msg.phoneNumberId,
+        from: msg.fromWaId,
+      });
+      continue;
+    }
 
     const phone = normalizeWhatsAppPhone(msg.fromWaId);
     if (!phone) continue;

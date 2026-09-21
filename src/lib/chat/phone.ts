@@ -13,6 +13,46 @@ export function normalizeWhatsAppPhone(value: string): string {
   return digits;
 }
 
+export function isLidJid(value: string): boolean {
+  return /@lid$/i.test(String(value || "").trim());
+}
+
+export function isGroupOrBroadcastJid(value: string): boolean {
+  const jid = String(value || "").trim().toLowerCase();
+  return jid.includes("@g.us") || jid.includes("@broadcast") || jid.includes("@newsletter");
+}
+
+/**
+ * Telefone real do contato. O Baileys/Evolution entrega `remoteJid` em `@lid`
+ * e o número fica em `remoteJidAlt` / `senderPn`.
+ */
+export function extractWhatsAppPhoneFromInbound(input: {
+  remoteJid?: unknown;
+  remoteJidAlt?: unknown;
+  senderPn?: unknown;
+  participant?: unknown;
+  participantAlt?: unknown;
+  senderLid?: unknown;
+}): string {
+  const candidates = [
+    input.remoteJidAlt,
+    input.senderPn,
+    input.participantAlt,
+    input.remoteJid,
+    input.participant,
+    input.senderLid,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (candidates.some(isGroupOrBroadcastJid)) return "";
+  const phoneJid = candidates.find((jid) => /@s\.whatsapp\.net$/i.test(jid) && !isLidJid(jid));
+  if (phoneJid) return normalizeWhatsAppPhone(phoneJid.split("@")[0] ?? "");
+  const nonLid = candidates.find((jid) => jid && !isLidJid(jid));
+  if (nonLid) return normalizeWhatsAppPhone(nonLid.split("@")[0] ?? "");
+  const any = candidates[0];
+  return any ? normalizeWhatsAppPhone(any.split("@")[0] ?? "") : "";
+}
+
 export function phonesMatch(a: string, b: string): boolean {
   const left = normalizeWhatsAppPhone(a);
   const right = normalizeWhatsAppPhone(b);

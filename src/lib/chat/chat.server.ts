@@ -50,6 +50,7 @@ import { completeMetaEmbeddedSignup } from "@/lib/chat/meta-cloud/meta-cloud-com
 import { instanceIsMetaCloud } from "@/lib/chat/meta-cloud/meta-cloud.adapter";
 import { isMetaCloudInstanceName } from "@/lib/chat/meta-cloud/meta-cloud.constants";
 import { isMetaCloudConfigured, toPublicMetaEsConfig } from "@/lib/chat/meta-cloud/meta-config";
+import { pullRecentEvolutionInbound } from "@/lib/chat/evolution-inbound-sync";
 import {
   syncRegisteredCloudNumbersToWaba,
   unregisterSomaCloudNumberOnWaba,
@@ -122,6 +123,9 @@ async function requireChatBotSettingsUser(): Promise<SessionData> {
 
 export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(async () => {
   const user = await requireChatUser();
+  await pullRecentEvolutionInbound().catch((error) => {
+    console.warn("[chat] pull inbound Evolution falhou", error);
+  });
   const [conversations, aiSettings, instances] = await Promise.all([
     listConversations(),
     getChatAiSettings(),
@@ -153,6 +157,9 @@ export const getChatBootstrapFn = createServerFn({ method: "GET" }).handler(asyn
 
 export const listChatConversationsFn = createServerFn({ method: "GET" }).handler(async () => {
   await requireChatUser();
+  void pullRecentEvolutionInbound().catch((error) => {
+    console.warn("[chat] pull inbound Evolution falhou", error);
+  });
   return listConversations();
 });
 
