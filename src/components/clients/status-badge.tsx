@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { normalizeStatusColor, softStatusBackground } from "@/lib/config/status-colors";
+import { cn } from "@/lib/utils";
 
 type Props = {
   label: string;
